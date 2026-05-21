@@ -119,4 +119,5 @@ if not DEBUG:
 # Seguridad
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', default=['https://*.ondigitalocean.app'])
+_csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = _csrf_raw.split(',') if _csrf_raw else ['https://*.ondigitalocean.app']
