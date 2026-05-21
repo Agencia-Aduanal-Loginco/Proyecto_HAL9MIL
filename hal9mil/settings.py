@@ -116,3 +116,7 @@ if not DEBUG:
     CSRF_COOKIE_SECURE         = True
     SECURE_HSTS_SECONDS        = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# Seguridad
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', default=['https://*.ondigitalocean.app'])
