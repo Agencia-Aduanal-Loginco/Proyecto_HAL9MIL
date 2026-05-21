@@ -144,7 +144,6 @@ ENV/
 env.bak/
 venv.bak/
 datos_casa/
-sync_agent/
 
 # Spyder project settings
 .spyderproject
