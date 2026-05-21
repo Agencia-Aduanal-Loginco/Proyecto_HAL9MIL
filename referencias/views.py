@@ -56,7 +56,7 @@ def dashboard(request):
     pred_avg = avg25 * (1 + growth)
 
     def seasonality(i):
-        return (m24[i] + m25[i]) / (avg24 + avg25) if base > 0 else 1.0
+        return (m24[i] + m25[i]) / (avg24 + avg25) if (avg24 + avg25) > 0 else 1.0
 
     projected_full = [int(pred_avg * seasonality(i)) for i in range(12)]
     real_2026      = monthly[2026]
