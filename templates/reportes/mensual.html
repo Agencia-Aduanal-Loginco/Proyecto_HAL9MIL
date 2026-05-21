@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte Mensual HAL9MIL</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;">
+<tr><td align="center" style="padding:32px 16px;">
+
+  <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%;">
+
+    <!-- HEADER -->
+    <tr>
+      <td style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);border-radius:12px 12px 0 0;padding:28px 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td>
+              <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;">Loginco · Reporte Mensual de Operaciones</div>
+              <div style="color:#f8fafc;font-size:24px;font-weight:800;margin-top:6px;">{{ nombre_mes }} {{ datos.year }}</div>
+              <div style="color:#64748b;font-size:13px;margin-top:4px;">{{ datos.inicio|date:"d/m/Y" }} – {{ datos.fin|date:"d/m/Y" }}</div>
+            </td>
+            <td align="right">
+              <div style="text-align:center;">
+                <div style="color:#7dd3fc;font-size:11px;font-weight:600;letter-spacing:1px;">PEDIMENTOS PAGADOS</div>
+                <div style="color:#f0f9ff;font-size:40px;font-weight:900;line-height:1.1;">{{ datos.real }}</div>
+                <div style="color:{% if datos.delta_proyectado >= 0 %}#4ade80{% else %}#f87171{% endif %};font-size:13px;font-weight:600;">
+                  {% if datos.delta_proyectado >= 0 %}▲{% else %}▼{% endif %}
+                  {{ datos.delta_proyectado|stringformat:"+d" }} vs proyectado
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- REAL VS PROYECTADO -->
+    <tr>
+      <td style="background:#ffffff;padding:24px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Desempeño vs Proyección</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="48%" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;">
+              <div style="color:#16a34a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Real {{ nombre_mes }}</div>
+              <div style="color:#14532d;font-size:32px;font-weight:900;">{{ datos.real }}</div>
+              <div style="color:#16a34a;font-size:11px;">pedimentos pagados</div>
+            </td>
+            <td width="4%"></td>
+            <td width="48%" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center;">
+              <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Proyectado</div>
+              <div style="color:#1e293b;font-size:32px;font-weight:900;">{{ datos.proyectado }}</div>
+              <div style="color:{% if datos.pct_proyectado >= 100 %}#16a34a{% elif datos.pct_proyectado >= 90 %}#d97706{% else %}#dc2626{% endif %};font-size:13px;font-weight:700;">{{ datos.pct_proyectado }}% del objetivo</div>
+            </td>
+          </tr>
+        </table>
+        <!-- Barra de progreso -->
+        <div style="margin-top:12px;background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden;">
+          <div style="background:{% if datos.pct_proyectado >= 100 %}#22c55e{% elif datos.pct_proyectado >= 90 %}#f59e0b{% else %}#ef4444{% endif %};height:10px;width:{% if datos.pct_proyectado > 100 %}100{% else %}{{ datos.pct_proyectado }}{% endif %}%;border-radius:6px;transition:width 0.3s;"></div>
+        </div>
+      </td>
+    </tr>
+
+    <!-- COMPARATIVAS -->
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Comparativas</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <!-- vs Mes anterior -->
+            <td width="48%" style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+              <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">vs Mes Anterior</div>
+              <div style="color:#94a3b8;font-size:11px;margin-top:2px;">{{ datos.nombre_mes_anterior }} {{ datos.prev_year_of_prev_month }}</div>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+                <tr>
+                  <td>
+                    <div style="font-size:13px;color:#94a3b8;">Anterior</div>
+                    <div style="font-size:22px;font-weight:700;color:#475569;">{{ datos.real_mes_anterior }}</div>
+                  </td>
+                  <td align="center" style="font-size:20px;color:#e2e8f0;">→</td>
+                  <td align="right">
+                    <div style="font-size:13px;color:#94a3b8;">Actual</div>
+                    <div style="font-size:22px;font-weight:700;color:#0f172a;">{{ datos.real }}</div>
+                  </td>
+                </tr>
+              </table>
+              <div style="margin-top:8px;text-align:center;">
+                <span style="background:{% if datos.delta_mes_anterior >= 0 %}#dcfce7{% else %}#fee2e2{% endif %};color:{% if datos.delta_mes_anterior >= 0 %}#16a34a{% else %}#dc2626{% endif %};font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;">
+                  {% if datos.delta_mes_anterior >= 0 %}▲{% else %}▼{% endif %} {{ datos.delta_mes_anterior|stringformat:"+d" }} ({{ datos.pct_mes_anterior }}%)
+                </span>
+              </div>
+            </td>
+            <td width="4%"></td>
+            <!-- vs Año anterior mismo mes -->
+            <td width="48%" style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+              <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">vs Año Anterior</div>
+              <div style="color:#94a3b8;font-size:11px;margin-top:2px;">{{ nombre_mes }} {{ datos.prev_year }}</div>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+                <tr>
+                  <td>
+                    <div style="font-size:13px;color:#94a3b8;">{{ datos.prev_year }}</div>
+                    <div style="font-size:22px;font-weight:700;color:#475569;">{{ datos.real_año_pasado }}</div>
+                  </td>
+                  <td align="center" style="font-size:20px;color:#e2e8f0;">→</td>
+                  <td align="right">
+                    <div style="font-size:13px;color:#94a3b8;">{{ datos.year }}</div>
+                    <div style="font-size:22px;font-weight:700;color:#0f172a;">{{ datos.real }}</div>
+                  </td>
+                </tr>
+              </table>
+              <div style="margin-top:8px;text-align:center;">
+                <span style="background:{% if datos.delta_año_pasado >= 0 %}#dcfce7{% else %}#fee2e2{% endif %};color:{% if datos.delta_año_pasado >= 0 %}#16a34a{% else %}#dc2626{% endif %};font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;">
+                  {% if datos.delta_año_pasado >= 0 %}▲{% else %}▼{% endif %} {{ datos.delta_año_pasado|stringformat:"+d" }} ({{ datos.pct_año_pasado }}%)
+                </span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- ACUMULADO AÑO -->
+    {% if datos.acumulado_año %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Acumulado {{ datos.year }} (mes a mes)</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr style="background:#f8fafc;">
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Mes</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:right;">Real</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:right;">Proyectado</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:right;">Variación</td>
+          </tr>
+          {% for fila in datos.acumulado_año %}
+          <tr style="background:{% if forloop.last %}#f0fdf4{% else %}#ffffff{% endif %};">
+            <td style="padding:7px 8px;font-size:12px;font-weight:{% if forloop.last %}700{% else %}400{% endif %};color:#334155;border-bottom:1px solid #f1f5f9;">{{ fila.mes }}</td>
+            <td style="padding:7px 8px;font-size:12px;font-weight:{% if forloop.last %}700{% else %}400{% endif %};color:#0f172a;text-align:right;border-bottom:1px solid #f1f5f9;">{{ fila.real }}</td>
+            <td style="padding:7px 8px;font-size:12px;color:#64748b;text-align:right;border-bottom:1px solid #f1f5f9;">{{ fila.proyectado }}</td>
+            <td style="padding:7px 8px;font-size:12px;font-weight:600;text-align:right;border-bottom:1px solid #f1f5f9;color:{% if fila.real >= fila.proyectado %}#16a34a{% else %}#dc2626{% endif %};">
+              {% if fila.real >= fila.proyectado %}▲{% else %}▼{% endif %}
+              {{ fila.real|add:"-0" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- KPIs OPERACIONALES -->
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Indicadores Operacionales del Mes</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:0 4px 0 0;" width="33%">
+              <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#0284c7;font-size:10px;font-weight:700;text-transform:uppercase;">Validadas</div>
+                <div style="color:#0c4a6e;font-size:22px;font-weight:800;">{{ datos.validadas_mes }}</div>
+              </div>
+            </td>
+            <td style="padding:0 4px;" width="33%">
+              <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#d97706;font-size:10px;font-weight:700;text-transform:uppercase;">Contenedores</div>
+                <div style="color:#78350f;font-size:22px;font-weight:800;">{{ datos.contenedores_total }}</div>
+              </div>
+            </td>
+            <td style="padding:0 0 0 4px;" width="33%">
+              <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#9333ea;font-size:10px;font-weight:700;text-transform:uppercase;">Guías BL</div>
+                <div style="color:#581c87;font-size:22px;font-weight:800;">{{ datos.guias_total }}</div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 4px 0 0;" width="33%">
+              <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#ea580c;font-size:10px;font-weight:700;text-transform:uppercase;">Rectificaciones</div>
+                <div style="color:#7c2d12;font-size:22px;font-weight:800;">{{ datos.rectificaciones_mes }}</div>
+              </div>
+            </td>
+            <td style="padding:8px 4px 0;" width="33%">
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#dc2626;font-size:10px;font-weight:700;text-transform:uppercase;">Pend. de Pago</div>
+                <div style="color:#7f1d1d;font-size:22px;font-weight:800;">{{ datos.pendientes_pago }}</div>
+              </div>
+            </td>
+            <td style="padding:8px 0 0 4px;" width="33%">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;text-align:center;">
+                <div style="color:#16a34a;font-size:10px;font-weight:700;text-transform:uppercase;">Real / Proy.</div>
+                <div style="color:#14532d;font-size:22px;font-weight:800;">{{ datos.pct_proyectado }}%</div>
+              </div>
+            </td>
+          </tr>
+          <!-- Promedio días despacho -->
+          {% if datos.promedio_dias_despacho %}
+          <tr>
+            <td colspan="3" style="padding-top:8px;">
+              <div style="background:linear-gradient(135deg,#0c4a6e 0%,#075985 100%);border-radius:10px;padding:14px 18px;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td>
+                      <div style="color:#7dd3fc;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Promedio Días de Despacho</div>
+                      <div style="color:#bae6fd;font-size:11px;margin-top:2px;">Arribo → Pago real (con N° operación y línea de captura)</div>
+                    </td>
+                    <td align="right" style="white-space:nowrap;">
+                      <span style="color:#f0f9ff;font-size:32px;font-weight:900;line-height:1;">{{ datos.promedio_dias_despacho }}</span>
+                      <span style="color:#7dd3fc;font-size:14px;font-weight:600;margin-left:4px;">días</span>
+                      <div style="color:#93c5fd;font-size:10px;margin-top:2px;text-align:right;">sobre {{ datos.pedimentos_con_pago_real }} pedimentos</div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+        </table>
+      </td>
+    </tr>
+
+    <!-- POR PATENTE -->
+    {% if datos.por_patente %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Pagadas por Patente</div>
+        {% for p in datos.por_patente %}
+        <div style="margin-bottom:8px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="80">
+                <span style="display:inline-block;background:{% if p.patente == '1627' %}#0ea5e9{% elif p.patente == '1656' %}#10b981{% else %}#8b5cf6{% endif %};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;">{{ p.prefijo }}</span>
+              </td>
+              <td>
+                <div style="background:#e2e8f0;border-radius:4px;height:14px;overflow:hidden;">
+                  <div style="background:{% if p.patente == '1627' %}#0ea5e9{% elif p.patente == '1656' %}#10b981{% else %}#8b5cf6{% endif %};height:14px;width:{% widthratio p.total datos.real 100 %}%;border-radius:4px;"></div>
+                </div>
+              </td>
+              <td width="60" align="right" style="font-size:14px;font-weight:700;color:#1e293b;padding-left:8px;">{{ p.total }}</td>
+            </tr>
+          </table>
+        </div>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- CLAVES DE PEDIMENTO -->
+    {% if datos.claves_pedimento %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Claves de Pedimento</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            {% for c in datos.claves_pedimento %}
+            <td style="padding:0 4px;text-align:center;">
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 8px;">
+                <div style="font-size:14px;font-weight:700;color:#334155;">{{ c.clave_pedimento|default:"—" }}</div>
+                <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px;">{{ c.total }}</div>
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- TOP CLIENTES -->
+    {% if datos.top_clientes %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Top 8 Clientes del Mes</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          {% for c in datos.top_clientes %}
+          <tr>
+            <td style="padding:7px 0;border-bottom:1px solid #f1f5f9;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="22" style="color:#94a3b8;font-size:11px;font-weight:600;">{{ forloop.counter }}.</td>
+                  <td style="font-size:12px;color:#334155;">{{ c.nombre_cliente|default:"—" }}</td>
+                  <td align="right">
+                    <span style="background:#f1f5f9;color:#475569;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;">{{ c.total }}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- ANÁLISIS IA -->
+    {% if analisis_ia %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);border-radius:12px;padding:20px 22px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td>
+                <div style="color:#7dd3fc;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">Análisis Ejecutivo · Claude AI</div>
+                <div style="color:#e2e8f0;font-size:13px;line-height:1.8;">{{ analisis_ia }}</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- FOOTER -->
+    <tr>
+      <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:20px 32px 28px;">
+        <div style="border-top:1px solid #e2e8f0;padding-top:16px;text-align:center;">
+          <div style="color:#94a3b8;font-size:11px;">Generado automáticamente por <strong>HAL9MIL</strong> · Loginco Agencia Aduanal</div>
+          <div style="color:#cbd5e1;font-size:10px;margin-top:4px;">Para agregar destinatarios o solicitar nuevos reportes, accede al panel de administración</div>
+        </div>
+      </td>
+    </tr>
+
+  </table>
+</td></tr>
+</table>
+
+</body>
+</html>

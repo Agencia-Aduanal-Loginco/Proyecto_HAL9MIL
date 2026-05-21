@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}{{ ref.num_refe }} · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-5">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm text-slate-500">
+    <a href="{% url 'lista' %}" class="hover:text-sky-600">Referencias</a>
+    <span>/</span>
+    <span class="text-slate-800 font-mono font-semibold">{{ ref.num_refe }}</span>
+    {% if ref.es_rectificacion %}
+      <span class="text-xs text-violet-600 bg-violet-100 px-2 py-0.5 rounded">RECTIFICACIÓN</span>
+    {% endif %}
+  </div>
+
+  <!-- Header card -->
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-slate-500 text-xs font-medium uppercase tracking-wide mb-1">Referencia</p>
+        <h1 class="text-3xl font-bold text-slate-800 font-mono">{{ ref.num_refe }}</h1>
+        <p class="text-slate-500 mt-1">{{ ref.nombre_cliente|default:"Cliente no registrado" }}</p>
+      </div>
+      <div class="text-right">
+        <span class="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full
+          {% if ref.patente == '1627' %}bg-sky-100 text-sky-700
+          {% elif ref.patente == '1656' %}bg-emerald-100 text-emerald-700
+          {% else %}bg-violet-100 text-violet-700{% endif %}">
+          <span class="w-2 h-2 rounded-full
+            {% if ref.patente == '1627' %}bg-sky-500
+            {% elif ref.patente == '1656' %}bg-emerald-500
+            {% else %}bg-violet-500{% endif %}"></span>
+          {{ ref.prefijo }} · Patente {{ ref.patente }}
+        </span>
+        {% if ref.clave_pedimento %}
+          <p class="text-slate-400 text-xs mt-2">Clave: <span class="font-mono font-bold text-slate-700">{{ ref.clave_pedimento }}</span></p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Fechas timeline -->
+    <div class="mt-6 grid grid-cols-3 gap-4">
+      <div class="bg-slate-50 rounded-lg p-4">
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wide">Fecha Arribo</p>
+        <p class="text-slate-800 font-mono font-bold text-lg mt-1">{{ ref.fecha_arribo|default:"—" }}</p>
+        <p class="text-slate-400 text-xs">FEC_ENTR · CTRAO_EMBAR</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-4">
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wide">Fecha Validación</p>
+        <p class="text-slate-800 font-mono font-bold text-lg mt-1">{{ ref.fecha_validacion|default:"—" }}</p>
+        <p class="text-slate-400 text-xs">FEC_ENTR · SAAIO_PEDIME</p>
+      </div>
+      <div class="{% if ref.linea_captura %}bg-emerald-50 border border-emerald-200{% elif ref.fecha_pago %}bg-sky-50 border border-sky-200{% else %}bg-slate-50{% endif %} rounded-lg p-4">
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wide">Fecha Pago</p>
+        <p class="{% if ref.fecha_pago %}text-sky-700{% else %}text-slate-400{% endif %} font-mono font-bold text-lg mt-1">
+          {{ ref.fecha_pago|default:"Pendiente" }}
+        </p>
+
+        {% if ref.num_operacion %}
+          <p class="text-slate-500 text-xs mt-3 uppercase tracking-wide font-medium">No. Operación</p>
+          <p class="font-mono font-semibold text-slate-800 text-sm mt-0.5">{{ ref.num_operacion }}</p>
+        {% endif %}
+
+        {% if ref.linea_captura %}
+          <p class="text-slate-500 text-xs mt-2 uppercase tracking-wide font-medium">Línea de captura</p>
+          <p class="font-mono font-semibold text-emerald-700 text-sm mt-0.5 break-all">{{ ref.linea_captura }}</p>
+          <span class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            Pago confirmado
+          </span>
+        {% elif ref.fecha_pago %}
+          <span class="inline-flex items-center gap-1 mt-3 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
+            </svg>
+            Sin línea de captura
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-5">
+
+    <!-- Pedimento -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <h2 class="text-slate-700 font-semibold text-sm mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Pedimento
+      </h2>
+      <dl class="space-y-2.5">
+        <div>
+          <dt class="text-xs text-slate-400">Número</dt>
+          <dd class="font-mono font-bold text-slate-800">{{ ref.num_pedimento|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-slate-400">Clave</dt>
+          <dd class="font-mono text-slate-700">{{ ref.clave_pedimento|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-slate-400">Tipo</dt>
+          <dd class="font-mono text-slate-700">{{ ref.tipo_pedimento|default:"Original" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-slate-400">Aduana</dt>
+          <dd class="font-mono text-slate-700">{{ ref.aduana|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-slate-400">Régimen</dt>
+          <dd class="font-mono text-slate-700">{{ ref.regimen|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-slate-400">Capturista</dt>
+          <dd class="text-slate-700 text-sm">{{ ref.nombre_capturista|default:"—" }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Contenedores -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <h2 class="text-slate-700 font-semibold text-sm mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Contenedores ({{ ref.contenedores.count }})
+      </h2>
+      {% if ref.contenedores.all %}
+        <div class="space-y-2">
+          {% for cont in ref.contenedores.all %}
+          <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+            <span class="font-mono text-xs font-bold text-slate-700">{{ cont.num_cont }}</span>
+            {% if cont.tipo %}
+              <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-mono">
+                {{ cont.tipo }}
+              </span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-slate-400 text-xs">Sin contenedores registrados</p>
+      {% endif %}
+    </div>
+
+    <!-- Guías BL -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <h2 class="text-slate-700 font-semibold text-sm mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        Guías BL ({{ ref.guias.count }})
+      </h2>
+      {% if ref.guias.all %}
+        <div class="space-y-2">
+          {% for guia in ref.guias.all %}
+          <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+            <span class="font-mono text-xs font-bold text-slate-700">{{ guia.numero_guia }}</span>
+            <span class="text-xs px-2 py-0.5 rounded font-mono
+              {% if guia.tipo_guia == 'M' %}bg-violet-100 text-violet-700{% else %}bg-amber-100 text-amber-700{% endif %}">
+              {% if guia.tipo_guia == 'M' %}MBL{% else %}HBL{% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-slate-400 text-xs">Sin guías registradas</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Back -->
+  <div>
+    <a href="{% url 'lista' %}" class="text-sm text-slate-500 hover:text-sky-600 flex items-center gap-1">
+      ← Volver a referencias
+    </a>
+  </div>
+
+</div>
+{% endblock %}

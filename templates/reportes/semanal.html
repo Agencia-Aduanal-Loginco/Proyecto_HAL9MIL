@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte Semanal HAL9MIL</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;">
+<tr><td align="center" style="padding:32px 16px;">
+
+  <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%;">
+
+    <!-- HEADER -->
+    <tr>
+      <td style="background:#0f172a;border-radius:12px 12px 0 0;padding:28px 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td>
+              <div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;">Loginco · Agencia Aduanal</div>
+              <div style="color:#f8fafc;font-size:22px;font-weight:700;margin-top:6px;">Reporte Semanal</div>
+              <div style="color:#64748b;font-size:13px;margin-top:4px;">{{ semana_str }}</div>
+            </td>
+            <td align="right">
+              <div style="background:#1e3a5f;border-radius:8px;padding:10px 16px;display:inline-block;">
+                <div style="color:#7dd3fc;font-size:10px;font-weight:600;letter-spacing:1px;">HAL9MIL</div>
+                <div style="color:#f0f9ff;font-size:18px;font-weight:700;">{{ datos.pagadas_total }}</div>
+                <div style="color:#94a3b8;font-size:10px;">pagadas</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- KPI CARDS -->
+    <tr>
+      <td style="background:#ffffff;padding:24px 32px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:0 6px 0 0;" width="25%">
+              <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;text-align:center;">
+                <div style="color:#0284c7;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Validadas</div>
+                <div style="color:#0c4a6e;font-size:26px;font-weight:800;margin-top:4px;">{{ datos.validadas_total }}</div>
+              </div>
+            </td>
+            <td style="padding:0 6px;" width="25%">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;text-align:center;">
+                <div style="color:#16a34a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Pagadas</div>
+                <div style="color:#14532d;font-size:26px;font-weight:800;margin-top:4px;">{{ datos.pagadas_total }}</div>
+              </div>
+            </td>
+            <td style="padding:0 6px;" width="25%">
+              <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:14px;text-align:center;">
+                <div style="color:#d97706;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Contenedores</div>
+                <div style="color:#78350f;font-size:26px;font-weight:800;margin-top:4px;">{{ datos.contenedores_total }}</div>
+              </div>
+            </td>
+            <td style="padding:0 0 0 6px;" width="25%">
+              <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:10px;padding:14px;text-align:center;">
+                <div style="color:#9333ea;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Pendientes</div>
+                <div style="color:#581c87;font-size:26px;font-weight:800;margin-top:4px;">{{ datos.pendientes_pago }}</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- DESGLOSE POR PATENTE -->
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Validadas por Patente</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          {% for p in datos.validadas_por_patente %}
+          <tr>
+            <td style="padding:6px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="80">
+                    <span style="display:inline-block;background:{% if p.patente == '1627' %}#0ea5e9{% elif p.patente == '1656' %}#10b981{% else %}#8b5cf6{% endif %};color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">{{ p.prefijo }}</span>
+                  </td>
+                  <td>
+                    <div style="background:#e2e8f0;border-radius:4px;height:12px;overflow:hidden;">
+                      {% with pct=p.total|add:"0" %}
+                      <div style="background:{% if p.patente == '1627' %}#0ea5e9{% elif p.patente == '1656' %}#10b981{% else %}#8b5cf6{% endif %};height:12px;width:{% widthratio p.total datos.validadas_total 100 %}%;border-radius:4px;"></div>
+                      {% endwith %}
+                    </div>
+                  </td>
+                  <td width="50" align="right" style="font-size:13px;font-weight:700;color:#1e293b;padding-left:8px;">{{ p.total }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+
+    <!-- CONTENEDORES POR TIPO -->
+    {% if datos.contenedores_por_tipo %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Contenedores por Tipo</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            {% for c in datos.contenedores_por_tipo %}
+            <td style="padding:0 4px;text-align:center;">
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 6px;">
+                <div style="font-size:11px;font-weight:700;color:#475569;">{{ c.tipo|default:"N/D" }}</div>
+                <div style="font-size:18px;font-weight:800;color:#1e293b;margin-top:2px;">{{ c.total }}</div>
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- TOP CLIENTES -->
+    {% if datos.top_clientes %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Top 5 Clientes (semana)</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          {% for c in datos.top_clientes %}
+          <tr>
+            <td style="padding:5px 0;border-bottom:1px solid #f1f5f9;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="width:22px;color:#94a3b8;font-size:11px;font-weight:600;">{{ forloop.counter }}.</td>
+                  <td style="font-size:12px;color:#334155;">{{ c.nombre_cliente|default:"—" }}</td>
+                  <td align="right" style="font-size:13px;font-weight:700;color:#0f172a;">{{ c.total }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- POR CAPTURISTA -->
+    {% if datos.por_capturista %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Referencias por Usuario (semana)</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <!-- Encabezado -->
+          <tr style="background:#f8fafc;">
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Usuario</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Capturadas</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Pagadas</td>
+            <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Pendientes</td>
+          </tr>
+          {% for u in datos.por_capturista %}
+          <tr>
+            <td style="padding:8px 8px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;">{{ u.nombre_capturista|default:"Sin asignar" }}</td>
+            <td style="padding:8px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+              <span style="background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:700;padding:2px 10px;border-radius:4px;">{{ u.capturadas }}</span>
+            </td>
+            <td style="padding:8px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+              <span style="background:#dcfce7;color:#16a34a;font-size:12px;font-weight:700;padding:2px 10px;border-radius:4px;">{{ u.pagadas }}</span>
+            </td>
+            <td style="padding:8px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+              {% if u.pendientes %}
+              <span style="background:#fee2e2;color:#dc2626;font-size:12px;font-weight:700;padding:2px 10px;border-radius:4px;">{{ u.pendientes }}</span>
+              {% else %}
+              <span style="color:#94a3b8;font-size:12px;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- DATOS ADICIONALES -->
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;padding:14px;">
+          <tr>
+            <td style="padding:0 4px;">
+              <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Guías BL</div>
+              <div style="font-size:16px;font-weight:700;color:#1e293b;">{{ datos.guias_total }}</div>
+            </td>
+            <td style="padding:0 4px;border-left:1px solid #e2e8f0;">
+              <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:12px;">Rectificaciones</div>
+              <div style="font-size:16px;font-weight:700;color:#1e293b;padding-left:12px;">{{ datos.rectificaciones_semana }}</div>
+            </td>
+            <td style="padding:0 4px;border-left:1px solid #e2e8f0;">
+              <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:12px;">Pendientes pago</div>
+              <div style="font-size:16px;font-weight:700;color:#dc2626;padding-left:12px;">{{ datos.pendientes_pago }}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- ANÁLISIS IA -->
+    {% if analisis_ia %}
+    <tr>
+      <td style="background:#ffffff;padding:20px 32px 0;">
+        <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e293b 100%);border-radius:10px;padding:18px 20px;">
+          <div style="color:#7dd3fc;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Análisis Ejecutivo · Claude AI</div>
+          <div style="color:#e2e8f0;font-size:13px;line-height:1.7;">{{ analisis_ia }}</div>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- FOOTER -->
+    <tr>
+      <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:20px 32px 28px;">
+        <div style="border-top:1px solid #e2e8f0;padding-top:16px;text-align:center;">
+          <div style="color:#94a3b8;font-size:11px;">Generado automáticamente por <strong>HAL9MIL</strong> · Loginco Agencia Aduanal</div>
+          <div style="color:#cbd5e1;font-size:10px;margin-top:4px;">Para gestionar destinatarios, accede al panel de administración</div>
+        </div>
+      </td>
+    </tr>
+
+  </table>
+</td></tr>
+</table>
+
+</body>
+</html>

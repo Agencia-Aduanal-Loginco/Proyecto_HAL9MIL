@@ -1,0 +1,61 @@
+name: hal9mil
+region: sfo  # San Francisco — el más cercano a México
+
+services:
+- name: web
+  github:
+    repo: OWNER/Proyecto_HAL9MIL   # <-- reemplazar con usuario/repo de GitHub
+    branch: main
+    deploy_on_push: true
+
+  # Instalar dependencias + compilar archivos estáticos
+  build_command: pip install -r requirements.txt && python manage.py collectstatic --noinput
+
+  # Migrar BD y arrancar servidor
+  run_command: python manage.py migrate --noinput && gunicorn hal9mil.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs   # ~$5/mes
+  http_port: 8080
+
+  envs:
+  # Las variables marcadas como SECRET deben configurarse en el dashboard de
+  # App Platform (Settings → Environment Variables) — NO poner valores reales aquí.
+
+  - key: DEBUG
+    value: "False"
+
+  - key: ALLOWED_HOSTS
+    # Llenar después del primer deploy con el dominio asignado por App Platform
+    # Ejemplo: hal9mil-xxxxx.ondigitalocean.app,hal9mil.loginco.com.mx
+    value: ""
+
+  - key: SECRET_KEY
+    type: SECRET
+    value: ""    # configurar en App Platform dashboard
+
+  - key: DBURL
+    type: SECRET
+    value: ""    # configurar en App Platform dashboard — URL completa de PostgreSQL
+
+  - key: SYNC_SECRET_KEY
+    type: SECRET
+    value: ""    # configurar en App Platform dashboard — misma clave que en .env de servidores Windows
+
+  - key: SENDGRID_API_KEY
+    type: SECRET
+    value: ""    # configurar en App Platform dashboard
+
+  - key: FROM_EMAIL
+    value: "seguimientov2@loginco.com.mx"
+
+  - key: ANTHROPIC_API_KEY
+    type: SECRET
+    value: ""    # configurar en App Platform dashboard
+
+  - key: IA_HABILITADA
+    value: "True"
+
+  - key: IA_SCORE_MINIMO_CLAUDE
+    value: "ALTO"
