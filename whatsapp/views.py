@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 def webhook(request):
     secret = getattr(settings, 'WA_WEBHOOK_SECRET', '')
     if secret:
-        sig = request.headers.get('X-Webhook-Hmac', '')
+        raw_sig = request.headers.get('X-Openwa-Signature', '')
+        sig = raw_sig.removeprefix('sha256=')
         expected = hmac.new(secret.encode(), request.body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
             return HttpResponse('Unauthorized', status=401)
