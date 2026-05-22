@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'django_apscheduler',
     'referencias',
     'reportes',
+    'whatsapp',
 ]
 
 MIDDLEWARE = [
@@ -107,6 +108,14 @@ APSCHEDULER_RUN_NOW_TIMEOUT = 25
 # ── Sync Agent ────────────────────────────────────────────────────────────────
 # Token compartido con el agente local en Windows (sync_agent/.env)
 SYNC_SECRET_KEY = os.getenv('SYNC_SECRET_KEY', '')
+
+# ── WhatsApp (OpenWA) ─────────────────────────────────────────────────────────
+WA_API_URL        = os.getenv('WA_API_URL', '')
+WA_API_KEY        = os.getenv('WA_API_KEY', '')
+WA_SESSION_ID     = os.getenv('WA_SESSION_ID', '')
+WA_ADMIN_CHAT     = os.getenv('WA_ADMIN_CHAT', '')
+WA_WEBHOOK_SECRET = os.getenv('WA_WEBHOOK_SECRET', '')
+WA_ALLOWED_NUMBERS = [n.strip() for n in os.getenv('WA_ALLOWED_NUMBERS', '').split(',') if n.strip()]
 
 # ── Seguridad HTTPS (solo en producción) ──────────────────────────────────────
 # App Platform termina SSL en el load balancer y pasa HTTP internamente.
