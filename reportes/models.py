@@ -9,6 +9,10 @@ class Destinatario(models.Model):
     activo = models.BooleanField(default=True)
     recibe_semanal = models.BooleanField(default=True)
     recibe_mensual = models.BooleanField(default=True)
+    # WhatsApp — número en formato internacional sin + (ej. 5217535342088)
+    whatsapp = models.CharField(max_length=20, blank=True, help_text='Número internacional sin + (ej. 5217535342088)')
+    recibe_wa_semanal = models.BooleanField(default=False, verbose_name='WA Semanal')
+    recibe_wa_mensual = models.BooleanField(default=False, verbose_name='WA Mensual')
     notas = models.CharField(max_length=255, blank=True)
 
     class Meta:

@@ -15,9 +15,22 @@ logger = logging.getLogger(__name__)
 DESTINATARIOS_BASE = ['xoyocl2@gmail.com', 'f.suarez@loginco.com.mx']
 
 
+def _get_wa_destinatarios(tipo: str) -> list:
+    campo = f'recibe_wa_{tipo}'
+    return list(
+        Destinatario.objects
+        .filter(activo=True, **{campo: True})
+        .exclude(whatsapp='')
+        .values_list('whatsapp', flat=True)
+    )
+
+
 def _wa_semanal(datos: dict, semana_str: str):
     try:
-        from whatsapp.client import send_to_admin
+        from whatsapp.client import send_text
+        numeros = _get_wa_destinatarios('semanal')
+        if not numeros:
+            return
         por_patente = {r['prefijo']: r['total'] for r in datos['pagadas_por_patente']}
         patentes = '  ' + ' | '.join(
             f"{p}: {por_patente.get(p, 0)}"
@@ -35,14 +48,19 @@ def _wa_semanal(datos: dict, semana_str: str):
             f"Por patente:\n{patentes}"
             f"{top_str}"
         )
-        send_to_admin(texto)
+        for numero in numeros:
+            send_text(f"{numero}@c.us", texto)
+        logger.info("[WA Semanal] Enviado a %d números.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp semanal no enviado: %s", e)
 
 
 def _wa_mensual(datos: dict):
     try:
-        from whatsapp.client import send_to_admin
+        from whatsapp.client import send_text
+        numeros = _get_wa_destinatarios('mensual')
+        if not numeros:
+            return
         pct = datos['pct_proyectado']
         icono_proy = '✅' if pct >= 95 else '⚠️' if pct >= 80 else '🔴'
         delta_ant = datos['delta_mes_anterior']
@@ -63,7 +81,9 @@ def _wa_mensual(datos: dict):
             f"{prom}\n\n"
             f"Por patente:\n{patentes}"
         )
-        send_to_admin(texto)
+        for numero in numeros:
+            send_text(f"{numero}@c.us", texto)
+        logger.info("[WA Mensual] Enviado a %d números.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp mensual no enviado: %s", e)
 
