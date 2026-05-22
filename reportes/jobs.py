@@ -15,6 +15,59 @@ logger = logging.getLogger(__name__)
 DESTINATARIOS_BASE = ['xoyocl2@gmail.com', 'f.suarez@loginco.com.mx']
 
 
+def _wa_semanal(datos: dict, semana_str: str):
+    try:
+        from whatsapp.client import send_to_admin
+        por_patente = {r['prefijo']: r['total'] for r in datos['pagadas_por_patente']}
+        patentes = '  ' + ' | '.join(
+            f"{p}: {por_patente.get(p, 0)}"
+            for p in ['LCLF', 'LCRR', 'LCMJ']
+        )
+        top = datos['top_clientes']
+        top_str = f"\n🏆 Top: {top[0]['nombre_cliente']} ({top[0]['total']})" if top else ''
+        texto = (
+            f"📊 *Reporte Semanal HAL9MIL*\n"
+            f"Semana: {semana_str}\n\n"
+            f"✅ Pagadas:      *{datos['pagadas_total']}*\n"
+            f"📋 Validadas:    {datos['validadas_total']}\n"
+            f"📦 Contenedores: {datos['contenedores_total']}\n"
+            f"⏳ Pendientes:   {datos['pendientes_pago']}\n\n"
+            f"Por patente:\n{patentes}"
+            f"{top_str}"
+        )
+        send_to_admin(texto)
+    except Exception as e:
+        logger.warning("WhatsApp semanal no enviado: %s", e)
+
+
+def _wa_mensual(datos: dict):
+    try:
+        from whatsapp.client import send_to_admin
+        pct = datos['pct_proyectado']
+        icono_proy = '✅' if pct >= 95 else '⚠️' if pct >= 80 else '🔴'
+        delta_ant = datos['delta_mes_anterior']
+        icono_ant = '↗' if delta_ant >= 0 else '↘'
+        delta_año = datos['delta_año_pasado']
+        icono_año = '↗' if delta_año >= 0 else '↘'
+        por_patente = {r['prefijo']: r['total'] for r in datos['por_patente']}
+        patentes = '  ' + ' | '.join(
+            f"{p}: {por_patente.get(p, 0)}"
+            for p in ['LCLF', 'LCRR', 'LCMJ']
+        )
+        prom = f"\n⏱ Promedio despacho: {datos['promedio_dias_despacho']} días" if datos['promedio_dias_despacho'] else ''
+        texto = (
+            f"📅 *{datos['nombre_mes']} {datos['year']}* — HAL9MIL\n\n"
+            f"{icono_proy} Real: *{datos['real']}* | Proyectado: {datos['proyectado']} ({pct}%)\n"
+            f"{icono_ant} vs {datos['nombre_mes_anterior']}:   {delta_ant:+d}\n"
+            f"{icono_año} vs {datos['nombre_mes']} {datos['prev_year']}: {delta_año:+d}"
+            f"{prom}\n\n"
+            f"Por patente:\n{patentes}"
+        )
+        send_to_admin(texto)
+    except Exception as e:
+        logger.warning("WhatsApp mensual no enviado: %s", e)
+
+
 def _get_destinatarios(tipo: str) -> list:
     campo = f'recibe_{tipo}'
     db_emails = list(
@@ -68,6 +121,7 @@ def enviar_reporte_semanal():
 
         _guardar_historial('semanal', last_monday, last_sunday, destinatarios, True)
         logger.info(f'[Semanal] Enviado a {len(destinatarios)} destinatarios.')
+        _wa_semanal(datos, semana_str)
 
     except Exception as e:
         logger.error(f'[Semanal] Error: {e}')
@@ -111,6 +165,7 @@ def enviar_reporte_mensual():
 
         _guardar_historial('mensual', inicio, fin, destinatarios, True)
         logger.info(f'[Mensual] Enviado a {len(destinatarios)} destinatarios.')
+        _wa_mensual(datos)
 
     except Exception as e:
         logger.error(f'[Mensual] Error: {e}')
