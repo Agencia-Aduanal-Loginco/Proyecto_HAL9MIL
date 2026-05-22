@@ -63,6 +63,7 @@ AGENT_ID        = os.environ.get('AGENT_ID', f'servidor-{PATENTE}')
 
 REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '120'))
 MAX_RETRIES     = int(os.environ.get('MAX_RETRIES', '2'))
+CHUNK_SIZE      = int(os.environ.get('CHUNK_SIZE', '500'))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -301,11 +302,13 @@ def build_payload(clientes, capturistas, embar, pedimentos,
     conts_list = [
         {'num_refe': ref, **c}
         for ref, conts in contenedores.items()
+        if ref in all_refs
         for c in conts
     ]
     guias_list = [
         {'num_refe': ref, **g}
         for ref, bls in guias.items()
+        if ref in all_refs
         for g in bls
     ]
 
@@ -434,18 +437,31 @@ def main():
         log.info('══════════════════════════════════════════════════════════')
         return 0
 
-    # Construcción y envío
-    payload = build_payload(clientes, capturistas, embar, pedimentos,
-                            all_refs, pedime2, contenedores, guias)
-    log.info(f'Enviando payload a Django...')
+    # Construcción y envío en lotes
+    refs_sorted = sorted(all_refs)
+    chunks      = [refs_sorted[i:i+CHUNK_SIZE] for i in range(0, len(refs_sorted), CHUNK_SIZE)]
+    n_chunks    = len(chunks)
+    log.info(f'Enviando a Django en {n_chunks} lote(s) de hasta {CHUNK_SIZE} refs...')
+
+    totales = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
     try:
-        resp    = send_payload(payload)
+        for idx, chunk_refs in enumerate(chunks, 1):
+            chunk_set = set(chunk_refs)
+            payload   = build_payload(clientes, capturistas, embar, pedimentos,
+                                      chunk_set, pedime2, contenedores, guias)
+            log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
+                     f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
+            resp = send_payload(payload)
+            totales['creadas']      += resp.get('creadas', 0)
+            totales['actualizadas'] += resp.get('actualizadas', 0)
+            totales['errores']      += resp.get('errores', 0)
+
         elapsed = time.time() - t0
         log.info(
             f'Sync completado ✔ | '
-            f'creadas={resp.get("creadas", 0)} '
-            f'actualizadas={resp.get("actualizadas", 0)} '
-            f'errores={resp.get("errores", 0)} '
+            f'creadas={totales["creadas"]} '
+            f'actualizadas={totales["actualizadas"]} '
+            f'errores={totales["errores"]} '
             f'[{elapsed:.1f}s]'
         )
     except Exception as e:
