@@ -63,7 +63,7 @@ def dashboard(request):
 
     real_chart = [v if i < month else None for i, v in enumerate(real_2026)]
     proj_chart = [
-        real_2026[i] if i < month else projected_full[i]
+        real_2026[i] if i < month - 1 else projected_full[i]
         for i in range(12)
     ]
 
