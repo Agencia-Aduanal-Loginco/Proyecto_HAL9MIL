@@ -120,13 +120,14 @@ def sync_endpoint(request):
     )
 
     return JsonResponse({
-        'patente':      patente,
-        'creadas':      stats['creadas'],
-        'actualizadas': stats['actualizadas'],
-        'procesados':   stats['creadas'] + stats['actualizadas'],
-        'errores':      stats['errores'],
-        'duracion_seg': round(duracion, 2),
-        'timestamp':    t0.isoformat(),
+        'patente':       patente,
+        'creadas':       stats['creadas'],
+        'actualizadas':  stats['actualizadas'],
+        'procesados':    stats['creadas'] + stats['actualizadas'],
+        'errores':       stats['errores'],
+        'error_detalle': error_msgs[:10],
+        'duracion_seg':  round(duracion, 2),
+        'timestamp':     t0.isoformat(),
     })
 
 

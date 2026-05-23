@@ -455,6 +455,8 @@ def main():
             totales['creadas']      += resp.get('creadas', 0)
             totales['actualizadas'] += resp.get('actualizadas', 0)
             totales['errores']      += resp.get('errores', 0)
+            for detalle in resp.get('error_detalle', []):
+                log.warning(f'  ERROR DETALLE: {detalle}')
 
         elapsed = time.time() - t0
         log.info(
