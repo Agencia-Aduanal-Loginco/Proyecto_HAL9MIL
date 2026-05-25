@@ -17,7 +17,7 @@ staticfiles/
 # Sync agent — logs y estado local
 sync_agent/logs/
 sync_agent/last_sync.json
-sync_agent/.env
+sync_agent/config.ini
 
 ### Django.Python Stack ###
 # Byte-compiled / optimized / DLL files
@@ -287,6 +287,6 @@ estructura_bd_casa.md
 Up_BD_CASA.md
 plan_owa.md
 context.md
-sync_agent/
+#sync_agent/
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,django

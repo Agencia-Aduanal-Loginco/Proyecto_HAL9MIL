@@ -7,12 +7,19 @@ from django_apscheduler.jobstores import DjangoJobStore
 logger = logging.getLogger(__name__)
 
 
+_SKIP_COMMANDS = {
+    'migrate', 'makemigrations', 'collectstatic', 'shell',
+    'test', 'createsuperuser', 'check', 'showmigrations',
+    'dbshell', 'dumpdata', 'loaddata',
+}
+
+
 def start():
     import sys
-    # Solo iniciar cuando corre el servidor web, no en comandos manage.py
-    if len(sys.argv) > 1 and sys.argv[1] != 'runserver':
+    # Saltar en comandos de gestión que no necesitan el scheduler
+    if len(sys.argv) > 1 and sys.argv[1] in _SKIP_COMMANDS:
         return
-    # Evitar doble arranque en el auto-reloader de Django
+    # Evitar doble arranque en el auto-reloader de Django (desarrollo)
     if os.environ.get('RUN_MAIN') == 'true':
         return
 
