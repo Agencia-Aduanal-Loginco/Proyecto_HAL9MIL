@@ -5,15 +5,16 @@ sync_agent.py — HAL9MIL Sync Agent (un servidor por patente)
 Extrae referencias de CASA.GDB local (Firebird) y las sincroniza con
 el servidor Django en la nube vía HTTPS POST.
 
-Cada servidor Windows tiene su propio .env con la patente y ruta a
+Cada servidor Windows tiene su propio config.ini con la patente y ruta a
 CASA.GDB que le corresponde. El script se copia idéntico en los 3
-servidores; solo cambia el .env.
+servidores; solo cambia el config.ini.
 
 Dependencias:  pip install fdb requests
-Configuración: copiar .env.example → .env  y ajustar valores
+Configuración: copiar config.ini.example → config.ini  y ajustar valores
 
 Uso:
-    python sync_agent.py              # sync normal
+    python sync_agent.py              # sync incremental (solo cambios)
+    python sync_agent.py --full-sync  # sync completo de todos los registros
     python sync_agent.py --dry-run    # extrae pero no envía
 """
 
@@ -24,46 +25,52 @@ import time
 import logging
 import datetime
 import argparse
+import configparser
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Cargar .env (mini-parser, sin dependencia de python-dotenv)
+# Cargar config.ini
 # ─────────────────────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, 'config.ini')
 
-_env_file = os.path.join(BASE_DIR, '.env')
-if os.path.exists(_env_file):
-    with open(_env_file, encoding='utf-8') as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith('#') and '=' in _line:
-                _k, _v = _line.split('=', 1)
-                os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+_cfg = configparser.ConfigParser()
+
+if os.path.exists(CONFIG_FILE):
+    # Intentar múltiples encodings — Windows puede guardar el archivo en distintas
+    # codificaciones dependiendo del editor (Bloc de notas, VS Code, etc.)
+    for _enc in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
+        try:
+            _cfg.read(CONFIG_FILE, encoding=_enc)
+            break
+        except UnicodeDecodeError:
+            continue
+
+def _get(section, key, fallback=''):
+    return _cfg.get(section, key, fallback=fallback).strip()
+
+def _getint(section, key, fallback=0):
+    return _cfg.getint(section, key, fallback=fallback)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Configuración — todas las variables vienen del .env
+# Configuración — todas las variables vienen de config.ini
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Patente de ESTE servidor: '1627', '1656' o '1927'
-PATENTE = os.environ.get('PATENTE', '').strip()
+PATENTE = _get('servidor', 'patente')
+DB_PATH = _get('firebird', 'db_path')
 
-# Ruta directa a CASA.GDB en este servidor (cada servidor tiene la suya)
-DB_PATH = os.environ.get('DB_PATH', '').strip()
-
-# Conexión Firebird
-FB_HOST     = os.environ.get('FB_HOST', 'localhost')
-FB_PORT     = int(os.environ.get('FB_PORT', '3050'))
-FB_USER     = os.environ.get('FB_USER', 'SYSDBA')
-FB_PASSWORD = os.environ.get('FB_PASSWORD', 'masterkey')
+FB_HOST     = _get('firebird', 'host',     'localhost')
+FB_PORT     = _getint('firebird', 'port',  3050)
+FB_USER     = _get('firebird', 'user',     'SYSDBA')
+FB_PASSWORD = _get('firebird', 'password', 'masterkey')
 FB_CHARSET  = 'WIN1252'
 
-# Django en la nube
-DJANGO_SYNC_URL = os.environ.get('DJANGO_SYNC_URL', '').strip()
-SYNC_SECRET_KEY = os.environ.get('SYNC_SECRET_KEY', '').strip()
-AGENT_ID        = os.environ.get('AGENT_ID', f'servidor-{PATENTE}')
+DJANGO_SYNC_URL = _get('django', 'sync_url')
+SYNC_SECRET_KEY = _get('django', 'secret_key')
+AGENT_ID        = _get('servidor', 'agent_id') or f'servidor-{PATENTE}'
 
-REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '120'))
-MAX_RETRIES     = int(os.environ.get('MAX_RETRIES', '2'))
-CHUNK_SIZE      = int(os.environ.get('CHUNK_SIZE', '500'))
+REQUEST_TIMEOUT = _getint('opciones', 'request_timeout', 120)
+MAX_RETRIES     = _getint('opciones', 'max_retries',     2)
+CHUNK_SIZE      = _getint('opciones', 'chunk_size',      500)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -136,8 +143,7 @@ def connect_fb():
     """Conecta a CASA.GDB usando la ruta configurada en DB_PATH."""
     import fdb
 
-    # Buscar fbclient.dll de 64-bit para evitar WinError 193 (mismatch 32/64-bit)
-    fb_client = os.environ.get('FB_CLIENT_PATH', '').strip()
+    fb_client = _get('firebird', 'fb_client_path')
     if fb_client:
         if os.path.exists(fb_client):
             fdb.load_api(fb_client)
@@ -164,43 +170,104 @@ def connect_fb():
         charset=FB_CHARSET,
     )
 
+
+def _fetch_rows(cur, sql_all, sql_filtered_tpl, refs_filter):
+    """
+    Ejecuta sql_all si refs_filter es None, o sql_filtered_tpl en lotes de
+    500 refs si se especifica un filtro. sql_filtered_tpl debe contener {phs}
+    donde irá la lista de parámetros IN.
+    """
+    if refs_filter is None:
+        cur.execute(sql_all)
+        return cur.fetchall()
+    refs = list(refs_filter)
+    if not refs:
+        return []
+    rows = []
+    for i in range(0, len(refs), 500):
+        chunk = refs[i:i + 500]
+        phs = ','.join('?' * len(chunk))
+        cur.execute(sql_filtered_tpl.format(phs=phs), chunk)
+        rows.extend(cur.fetchall())
+    return rows
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Detección de cambios (solo sync incremental)
+# ─────────────────────────────────────────────────────────────────────────────
+def fetch_changed_refs_since(cur, since_dt):
+    """
+    Retorna el conjunto de NUM_REFE que cambiaron desde since_dt.
+
+    Fuentes de cambio:
+      - CTRAO_EMBAR.APE_REFE  — se actualiza cada vez que se modifica el embarque
+      - SAAIO_PEDIME.DIA_PAGO — se establece cuando se paga el pedimento
+        (el pago no actualiza CTRAO_EMBAR, por eso se revisa por separado)
+    """
+    since_str = since_dt.strftime('%Y-%m-%d %H:%M:%S')
+    cur.execute("""
+        SELECT DISTINCT NUM_REFE FROM (
+            SELECT NUM_REFE FROM CTRAO_EMBAR
+            WHERE APE_REFE >= ? AND NUM_REFE IS NOT NULL
+            UNION
+            SELECT NUM_REFE FROM SAAIO_PEDIME
+            WHERE DIA_PAGO >= ? AND NUM_REFE IS NOT NULL
+        )
+    """, (since_str, since_str))
+    return {clean(r[0]) for r in cur.fetchall() if r[0]}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Extracción desde Firebird
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_clientes(cur):
+    # Catálogo pequeño (~130 filas) — siempre completo
     cur.execute("SELECT CVE_IMP, NOM_IMP FROM CTRAC_CLIENT WHERE NOM_IMP IS NOT NULL")
     return {clean(r[0]): clean(r[1], 255) for r in cur.fetchall()}
 
 
 def fetch_capturistas(cur):
+    # Catálogo pequeño (~42 filas) — siempre completo
     cur.execute("SELECT LOGIN, NOMBRE FROM SISSEG_USUARI WHERE LOGIN IS NOT NULL")
     return {clean(r[0]).upper(): clean(r[1], 150) for r in cur.fetchall()}
 
 
-def fetch_embar(cur):
-    cur.execute("SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL")
-    return {clean(r[0]): fb_date_str(r[1]) for r in cur.fetchall()}
+def fetch_embar(cur, refs_filter=None):
+    rows = _fetch_rows(
+        cur,
+        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
+        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
+        refs_filter,
+    )
+    return {clean(r[0]): fb_date_str(r[1]) for r in rows}
 
 
-def fetch_pedimentos(cur):
+def fetch_pedimentos(cur, refs_filter=None):
     """
     Retorna (dict_por_ref, set_de_todas_las_refs).
     Para cada NUM_REFE toma el primer registro (pedimento original, no rect.).
     """
-    cur.execute("""
-        SELECT
-            NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
-            NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
-            REG_ADUA, NUM_OPER, CVE_CAPT
-        FROM SAAIO_PEDIME
-        WHERE NUM_REFE IS NOT NULL
-        ORDER BY NUM_REFE,
-                 CASE WHEN TIP_PEDI IS NULL THEN 0 ELSE 1 END,
-                 FEC_PAGO NULLS LAST
-    """)
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
+                  NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
+                  REG_ADUA, NUM_OPER, CVE_CAPT
+           FROM SAAIO_PEDIME
+           WHERE NUM_REFE IS NOT NULL
+           ORDER BY NUM_REFE,
+                    CASE WHEN TIP_PEDI IS NULL THEN 0 ELSE 1 END,
+                    FEC_PAGO NULLS LAST""",
+        """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
+                  NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
+                  REG_ADUA, NUM_OPER, CVE_CAPT
+           FROM SAAIO_PEDIME
+           WHERE NUM_REFE IN ({phs})
+           ORDER BY NUM_REFE,
+                    CASE WHEN TIP_PEDI IS NULL THEN 0 ELSE 1 END,
+                    FEC_PAGO NULLS LAST""",
+        refs_filter,
+    )
     result   = {}
     all_refs = set()
-    for row in cur.fetchall():
+    for row in rows:
         (num_refe, cve_impo, fec_entr, fec_pago,
          num_pedi, cve_pedi, tip_pedi, adu_desp,
          reg_adua, num_oper, cve_capt) = row
@@ -225,24 +292,30 @@ def fetch_pedimentos(cur):
     return result, all_refs
 
 
-def fetch_pedime2(cur):
+def fetch_pedime2(cur, refs_filter=None):
     """Línea de captura SAT desde SAAIO_PEDIME2."""
-    cur.execute("""
-        SELECT NUM_REFE, PAG_LCAP
-        FROM SAAIO_PEDIME2
-        WHERE PAG_LCAP IS NOT NULL AND PAG_LCAP <> ''
-    """)
-    return {clean(r[0], 50): clean(r[1], 30) for r in cur.fetchall()}
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, PAG_LCAP FROM SAAIO_PEDIME2
+           WHERE PAG_LCAP IS NOT NULL AND PAG_LCAP <> ''""",
+        """SELECT NUM_REFE, PAG_LCAP FROM SAAIO_PEDIME2
+           WHERE NUM_REFE IN ({phs}) AND PAG_LCAP IS NOT NULL AND PAG_LCAP <> ''""",
+        refs_filter,
+    )
+    return {clean(r[0], 50): clean(r[1], 30) for r in rows}
 
 
-def fetch_contenedores(cur):
-    cur.execute("""
-        SELECT NUM_REFE, NUM_CONT, CVE_CONT
-        FROM SAAIO_CONTEN
-        WHERE NUM_REFE IS NOT NULL AND NUM_CONT IS NOT NULL
-    """)
+def fetch_contenedores(cur, refs_filter=None):
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, NUM_CONT, CVE_CONT FROM SAAIO_CONTEN
+           WHERE NUM_REFE IS NOT NULL AND NUM_CONT IS NOT NULL""",
+        """SELECT NUM_REFE, NUM_CONT, CVE_CONT FROM SAAIO_CONTEN
+           WHERE NUM_REFE IN ({phs}) AND NUM_CONT IS NOT NULL""",
+        refs_filter,
+    )
     result = {}
-    for num_refe, num_cont, cve_cont in cur.fetchall():
+    for num_refe, num_cont, cve_cont in rows:
         ref  = clean(num_refe, 50)
         cont = clean(num_cont, 20)
         tipo = CVE_CONT_TIPO.get(cve_cont, '')
@@ -251,14 +324,17 @@ def fetch_contenedores(cur):
     return result
 
 
-def fetch_guias(cur):
-    cur.execute("""
-        SELECT NUM_REFE, GUIA, IDE_MH
-        FROM SAAIO_GUIAS
-        WHERE NUM_REFE IS NOT NULL AND GUIA IS NOT NULL
-    """)
+def fetch_guias(cur, refs_filter=None):
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, GUIA, IDE_MH FROM SAAIO_GUIAS
+           WHERE NUM_REFE IS NOT NULL AND GUIA IS NOT NULL""",
+        """SELECT NUM_REFE, GUIA, IDE_MH FROM SAAIO_GUIAS
+           WHERE NUM_REFE IN ({phs}) AND GUIA IS NOT NULL""",
+        refs_filter,
+    )
     result = {}
-    for num_refe, guia, ide_mh in cur.fetchall():
+    for num_refe, guia, ide_mh in rows:
         ref  = clean(num_refe, 50)
         bl   = clean(guia, 60)
         tipo = clean(ide_mh, 5) or 'M'
@@ -359,16 +435,19 @@ def send_payload(payload):
 # ─────────────────────────────────────────────────────────────────────────────
 def validar_config():
     errores = []
+    if not os.path.exists(CONFIG_FILE):
+        errores.append(f'No se encontró config.ini en {BASE_DIR} — copiar config.ini.example y ajustar valores')
+        return errores
     if not PATENTE:
-        errores.append('PATENTE no configurada en .env (valores válidos: 1627, 1656, 1927)')
+        errores.append('[servidor] patente no configurada en config.ini (valores válidos: 1627, 1656, 1927)')
     elif PATENTE not in PATENTES_VALIDAS:
-        errores.append(f'PATENTE={PATENTE!r} no válida (debe ser 1627, 1656 o 1927)')
+        errores.append(f'[servidor] patente={PATENTE!r} no válida (debe ser 1627, 1656 o 1927)')
     if not DB_PATH:
-        errores.append('DB_PATH no configurada en .env (ruta directa a CASA.GDB)')
+        errores.append('[firebird] db_path no configurado en config.ini (ruta directa a CASA.GDB)')
     if not DJANGO_SYNC_URL:
-        errores.append('DJANGO_SYNC_URL no configurada en .env')
+        errores.append('[django] sync_url no configurada en config.ini')
     if not SYNC_SECRET_KEY or SYNC_SECRET_KEY == 'CAMBIAR-ESTA-CLAVE':
-        errores.append('SYNC_SECRET_KEY no configurada o usa el valor de ejemplo en .env')
+        errores.append('[django] secret_key no configurada o usa el valor de ejemplo en config.ini')
     return errores
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -378,6 +457,8 @@ def main():
     parser = argparse.ArgumentParser(description='HAL9MIL Sync Agent')
     parser.add_argument('--dry-run', action='store_true',
                         help='Extraer de Firebird pero no enviar a Django')
+    parser.add_argument('--full-sync', action='store_true',
+                        help='Forzar sincronización completa ignorando last_sync.json')
     args = parser.parse_args()
 
     log.info('══════════════════════════════════════════════════════════')
@@ -388,17 +469,31 @@ def main():
     log.info(f'Destino  : {DJANGO_SYNC_URL}')
     if args.dry_run:
         log.info('MODO DRY-RUN — no se enviarán datos')
+    if args.full_sync:
+        log.info('MODO FULL-SYNC — se sincronizarán todos los registros')
     log.info('══════════════════════════════════════════════════════════')
 
-    # Validar configuración antes de intentar nada
     errores_cfg = validar_config()
     if errores_cfg:
         for e in errores_cfg:
             log.error(f'  CONFIG ERROR: {e}')
-        log.error('Corregir el archivo .env y volver a ejecutar.')
+        log.error('Corregir el archivo config.ini y volver a ejecutar.')
         return 1
 
     t0 = time.time()
+
+    # Determinar si es sync incremental o completo
+    state         = load_last_sync()
+    last_sync_dt  = None
+    refs_filter   = None   # None = sin filtro = sync completo
+
+    if not args.full_sync:
+        ts = state.get(PATENTE)
+        if ts:
+            try:
+                last_sync_dt = datetime.datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
+                log.warning(f'Timestamp inválido en last_sync.json: {ts!r} — se hará sync completo')
 
     # Conexión a Firebird
     log.info('Conectando a Firebird...')
@@ -411,17 +506,33 @@ def main():
         log.error('  Verificar que el servicio Firebird esté activo y que DB_PATH sea correcto.')
         return 1
 
-    # Extracción
     try:
         cur = con.cursor()
+
+        # Detección de cambios (solo en modo incremental)
+        if last_sync_dt:
+            log.info(f'Sync incremental desde {last_sync_dt.strftime("%Y-%m-%d %H:%M:%S")}')
+            refs_filter = fetch_changed_refs_since(cur, last_sync_dt)
+            if not refs_filter:
+                log.info('Sin cambios detectados desde el último sync.')
+                log.info('══════════════════════════════════════════════════════════')
+                state[PATENTE] = datetime.datetime.now().isoformat()
+                save_last_sync(state)
+                return 0
+            log.info(f'Referencias con cambios: {len(refs_filter)}')
+        else:
+            log.info('Sync completo (primera ejecución o --full-sync)')
+
+        # Extracción
         log.info('Extrayendo datos de CASA.GDB...')
         clientes     = fetch_clientes(cur)
         capturistas  = fetch_capturistas(cur)
-        embar        = fetch_embar(cur)
-        pedimentos, all_refs = fetch_pedimentos(cur)
-        pedime2      = fetch_pedime2(cur)
-        contenedores = fetch_contenedores(cur)
-        guias        = fetch_guias(cur)
+        embar        = fetch_embar(cur, refs_filter)
+        pedimentos, all_refs = fetch_pedimentos(cur, refs_filter)
+        pedime2      = fetch_pedime2(cur, refs_filter)
+        contenedores = fetch_contenedores(cur, refs_filter)
+        guias        = fetch_guias(cur, refs_filter)
+
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
         return 1
@@ -435,6 +546,13 @@ def main():
     if args.dry_run:
         log.info('[DRY-RUN] Extracción OK, no se envía payload.')
         log.info('══════════════════════════════════════════════════════════')
+        return 0
+
+    if not all_refs:
+        log.info('No hay referencias con pedimentos en el filtro — nada que enviar.')
+        log.info('══════════════════════════════════════════════════════════')
+        state[PATENTE] = datetime.datetime.now().isoformat()
+        save_last_sync(state)
         return 0
 
     # Construcción y envío en lotes
@@ -470,10 +588,14 @@ def main():
         log.error(f'Error al enviar a Django: {e}')
         return 1
 
-    # Guardar timestamp del último sync exitoso
-    state = load_last_sync()
-    state[PATENTE] = datetime.datetime.now().isoformat()
-    save_last_sync(state)
+    if totales['errores'] == 0:
+        state[PATENTE] = datetime.datetime.now().isoformat()
+        save_last_sync(state)
+    else:
+        log.warning(
+            f'{totales["errores"]} ref(s) con error — last_sync.json NO actualizado. '
+            'Las refs fallidas serán reintentadas en el próximo ciclo.'
+        )
 
     log.info('══════════════════════════════════════════════════════════')
     return 0

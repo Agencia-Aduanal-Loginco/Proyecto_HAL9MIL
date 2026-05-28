@@ -3,8 +3,8 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
-from django.db.models.functions import TruncMonth
+from django.db.models import Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models.functions import Coalesce, Now, TruncMonth
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
@@ -244,3 +244,77 @@ def detalle(request, num_refe):
         num_refe=num_refe,
     )
     return render(request, 'referencias/detalle.html', {'ref': ref})
+
+
+# ---------------------------------------------------------------------------
+# Glosa — pedimentos sin pagar del año en curso
+# ---------------------------------------------------------------------------
+
+@login_required
+def glosa(request):
+    now  = timezone.localtime()
+    year = now.year
+
+    base_qs = Referencia.objects.filter(
+        fecha_pago__isnull=True,
+        es_rectificacion=False,
+    ).filter(
+        Q(fecha_arribo__year=year) | Q(fecha_validacion__year=year)
+    )
+
+    qs = base_qs.prefetch_related('contenedores', 'guias').annotate(
+        fecha_ref=Coalesce('fecha_arribo', 'fecha_validacion'),
+        antiguedad=ExpressionWrapper(
+            Now() - Coalesce(F('fecha_arribo'), F('fecha_validacion')),
+            output_field=DurationField(),
+        ),
+    )
+
+    # Búsqueda
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(num_refe__icontains=q)
+            | Q(num_pedimento__icontains=q)
+            | Q(nombre_cliente__icontains=q)
+            | Q(contenedores__num_cont__icontains=q)
+            | Q(guias__numero_guia__icontains=q)
+        ).distinct()
+
+    # Filtro patente
+    patente = request.GET.get('patente', '')
+    if patente:
+        qs = qs.filter(patente=patente)
+
+    # Ordenamiento
+    orden = request.GET.get('orden', 'fecha_arribo')
+    campos_validos = {
+        'fecha_arribo', '-fecha_arribo', 'num_refe', '-num_refe',
+        'nombre_cliente', '-nombre_cliente', 'fecha_validacion', '-fecha_validacion',
+        'patente', '-patente',
+    }
+    if orden not in campos_validos:
+        orden = 'fecha_arribo'
+    qs = qs.order_by(orden)
+
+    # KPIs por patente (sobre base sin paginación)
+    por_patente = (
+        base_qs
+        .values('patente', 'prefijo')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+
+    paginador = Paginator(qs, 50)
+    pagina    = paginador.get_page(request.GET.get('page', 1))
+
+    ctx = {
+        'page':           pagina,
+        'q':              q,
+        'filtro_patente': patente,
+        'orden':          orden,
+        'total':          qs.count(),
+        'por_patente':    list(por_patente),
+        'año':            year,
+    }
+    return render(request, 'referencias/glosa.html', ctx)

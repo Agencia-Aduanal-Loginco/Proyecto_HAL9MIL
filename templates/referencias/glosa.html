@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Glosa {{ año }} · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-4">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Glosa <span class="text-slate-400 font-normal">{{ año }}</span></h1>
+      <p class="text-slate-500 text-sm mt-0.5">
+        {{ total }} pedimento{% if total != 1 %}s{% endif %} sin pagar del año en curso
+        {% if q %} · búsqueda: "{{ q }}"{% endif %}
+      </p>
+    </div>
+
+    <!-- KPIs por patente -->
+    <div class="flex items-center gap-2">
+      {% for p in por_patente %}
+      <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border
+        {% if p.patente == '1627' %}bg-sky-50 border-sky-200
+        {% elif p.patente == '1656' %}bg-emerald-50 border-emerald-200
+        {% else %}bg-violet-50 border-violet-200{% endif %}">
+        <span class="text-xs font-medium
+          {% if p.patente == '1627' %}text-sky-700
+          {% elif p.patente == '1656' %}text-emerald-700
+          {% else %}text-violet-700{% endif %}">
+          {{ p.prefijo }}
+        </span>
+        <span class="text-sm font-bold
+          {% if p.patente == '1627' %}text-sky-800
+          {% elif p.patente == '1656' %}text-emerald-800
+          {% else %}text-violet-800{% endif %}">
+          {{ p.total }}
+        </span>
+      </div>
+      {% endfor %}
+      <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200">
+        <span class="text-xs font-medium text-amber-700">Total</span>
+        <span class="text-sm font-bold text-amber-800">{{ total }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerta visual si hay pedimentos -->
+  {% if total > 0 %}
+  <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+    <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <p class="text-sm text-amber-800">
+      <span class="font-semibold">{{ total }} pedimento{% if total != 1 %}s{% endif %}</span>
+      con pago pendiente en {{ año }}.
+      La antigüedad se calcula desde la fecha de arribo (o validación si no hay arribo).
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- Filtros -->
+  <form method="get" class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+    <div class="grid grid-cols-4 gap-3">
+      <!-- Búsqueda -->
+      <div class="col-span-2">
+        <label class="text-xs text-slate-500 font-medium block mb-1">Buscar</label>
+        <input type="text" name="q" value="{{ q }}"
+          placeholder="Referencia, pedimento, cliente, contenedor, BL…"
+          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
+                 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
+      </div>
+      <!-- Patente -->
+      <div>
+        <label class="text-xs text-slate-500 font-medium block mb-1">Patente</label>
+        <select name="patente"
+          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
+                 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          <option value="">Todas</option>
+          <option value="1627" {% if filtro_patente == '1627' %}selected{% endif %}>1627 · LCLF</option>
+          <option value="1656" {% if filtro_patente == '1656' %}selected{% endif %}>1656 · LCRR</option>
+          <option value="1927" {% if filtro_patente == '1927' %}selected{% endif %}>1927 · LCMJ</option>
+        </select>
+      </div>
+      <!-- Acciones -->
+      <div class="flex items-end gap-2">
+        <a href="{% url 'glosa' %}"
+          class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+          Limpiar
+        </a>
+        <button type="submit"
+          class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-400 font-medium">
+          Buscar
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Tabla -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+          <tr>
+            <th class="px-4 py-3 text-left">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'num_refe' %}-{% endif %}num_refe&patente={{ filtro_patente }}"
+                 class="hover:text-slate-800">Referencia</a>
+            </th>
+            <th class="px-4 py-3 text-center">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'patente' %}-{% endif %}patente&patente={{ filtro_patente }}"
+                 class="hover:text-slate-800">Patente</a>
+            </th>
+            <th class="px-4 py-3 text-left">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'nombre_cliente' %}-{% endif %}nombre_cliente&patente={{ filtro_patente }}"
+                 class="hover:text-slate-800">Cliente</a>
+            </th>
+            <th class="px-4 py-3 text-right">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}"
+                 class="hover:text-slate-800">F. Arribo</a>
+            </th>
+            <th class="px-4 py-3 text-right">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_validacion' %}-{% endif %}fecha_validacion&patente={{ filtro_patente }}"
+                 class="hover:text-slate-800">F. Validación</a>
+            </th>
+            <th class="px-4 py-3 text-left">Num. Pedimento</th>
+            <th class="px-4 py-3 text-center">Clave</th>
+            <th class="px-4 py-3 text-center">Conts.</th>
+            <th class="px-4 py-3 text-right">Antigüedad</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for ref in page %}
+          {% with dias=ref.antiguedad.days %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3">
+              <a href="{% url 'detalle' ref.num_refe %}"
+                 class="text-sky-600 hover:text-sky-700 font-mono text-xs font-bold">
+                {{ ref.num_refe }}
+              </a>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <span class="text-xs font-medium px-2 py-0.5 rounded-full
+                {% if ref.patente == '1627' %}bg-sky-100 text-sky-700
+                {% elif ref.patente == '1656' %}bg-emerald-100 text-emerald-700
+                {% else %}bg-violet-100 text-violet-700{% endif %}">
+                {{ ref.prefijo }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-slate-600 text-xs max-w-[180px] truncate" title="{{ ref.nombre_cliente }}">
+              {{ ref.nombre_cliente|default:"—" }}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ ref.fecha_arribo|default:"—" }}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ ref.fecha_validacion|default:"—" }}
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600">
+              {{ ref.num_pedimento|default:"—" }}
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% if ref.clave_pedimento %}
+                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                  {{ ref.clave_pedimento }}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-center text-xs text-slate-600">
+              {% with cnt=ref.contenedores.count %}
+              {% if cnt %}{{ cnt }}{% else %}—{% endif %}
+              {% endwith %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              {% if dias is not None %}
+                <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full
+                  {% if dias >= 60 %}bg-red-100 text-red-700
+                  {% elif dias >= 30 %}bg-amber-100 text-amber-700
+                  {% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                  {{ dias }}d
+                </span>
+              {% else %}
+                <span class="text-slate-300 text-xs">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+          {% empty %}
+          <tr>
+            <td colspan="9" class="px-4 py-12 text-center text-slate-400">
+              {% if q or filtro_patente %}
+                No se encontraron pedimentos con los filtros actuales.
+              {% else %}
+                No hay pedimentos sin pagar en {{ año }}. ¡Todo al corriente!
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginación -->
+    {% if page.has_other_pages %}
+    <div class="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
+      <p class="text-xs text-slate-500">
+        Página {{ page.number }} de {{ page.paginator.num_pages }}
+        · {{ total }} resultados
+      </p>
+      <div class="flex gap-1">
+        {% if page.has_previous %}
+          <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.previous_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+             class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
+            ← Anterior
+          </a>
+        {% endif %}
+        {% for num in page.paginator.page_range %}
+          {% if page.number == num %}
+            <span class="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg">{{ num }}</span>
+          {% elif num > page.number|add:'-3' and num < page.number|add:'3' %}
+            <a href="?{% if q %}q={{ q }}&{% endif %}page={{ num }}&patente={{ filtro_patente }}&orden={{ orden }}"
+               class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
+              {{ num }}
+            </a>
+          {% endif %}
+        {% endfor %}
+        {% if page.has_next %}
+          <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.next_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+             class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
+            Siguiente →
+          </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

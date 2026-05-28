@@ -1,0 +1,43 @@
+# HAL9MIL Sync Agent — Configuración por servidor
+# Copiar este archivo a config.ini y ajustar TODOS los valores marcados con <--
+
+[servidor]
+# Patente de ESTE servidor:   <-- REQUERIDO
+patente = 9999
+
+# Nombre para identificar este servidor en los logs de Django
+agent_id = servidor-9999-loginco
+
+[firebird]
+# Ruta completa al archivo CASA.GDB  <-- REQUERIDO: ajustar al path real
+# Ejemplos:
+#   db_path = C:\SAAI\CASA.GDB
+#   db_path = D:\Bases\CASA.GDB
+db_path = C:\ruta\a\CASA.GDB
+
+# Conexión Firebird — en la mayoría de los casos no hay que cambiar estos valores
+host     = localhost
+port     = 3050
+user     = administrador    
+password = administardor
+
+# Ruta al fbclient.dll de 64-bit (solo si aparece el error "[WinError 193]")
+# Descomenta y ajusta si Python es 64-bit y Firebird es 32-bit:
+# fb_client_path = C:\Program Files\Firebird\Firebird_2_5\bin\fbclient.dll
+
+[django]
+# URL del endpoint en producción  <-- ajustar al dominio real
+sync_url   = http://127.0.0.1:8001/api/sync/
+# Para pruebas locales:
+# sync_url = http://127.0.0.1:8001/api/sync/
+
+# Token secreto — debe ser EXACTAMENTE el mismo que SYNC_SECRET_KEY en Django  <-- REQUERIDO
+secret_key = CAMBIAR-ESTA-CLAVE
+
+[opciones]
+# Segundos de espera máxima por petición HTTP
+request_timeout = 120
+# Reintentos en caso de timeout o error de red
+max_retries     = 2
+# Máximo de referencias por lote enviado a Django
+chunk_size      = 500
