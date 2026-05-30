@@ -301,14 +301,14 @@ def glosa(request):
         qs = qs.filter(patente=patente)
 
     # Ordenamiento
-    orden = request.GET.get('orden', 'fecha_arribo')
+    orden = request.GET.get('orden', '-fecha_arribo')
     campos_validos = {
         'fecha_arribo', '-fecha_arribo', 'num_refe', '-num_refe',
         'nombre_cliente', '-nombre_cliente', 'fecha_validacion', '-fecha_validacion',
         'patente', '-patente',
     }
     if orden not in campos_validos:
-        orden = 'fecha_arribo'
+        orden = '-fecha_arribo'
     qs = qs.order_by(orden)
 
     # KPIs por patente (sobre base sin paginación ni búsqueda)

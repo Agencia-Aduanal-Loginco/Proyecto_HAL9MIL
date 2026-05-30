@@ -112,7 +112,7 @@
             </th>
             <th class="px-4 py-3 text-right">
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">F. Arribo</a>
+                 class="hover:text-slate-800">F. Arribo {% if orden == '-fecha_arribo' %}↓{% elif orden == 'fecha_arribo' %}↑{% endif %}</a>
             </th>
             <th class="px-4 py-3 text-right">
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_validacion' %}-{% endif %}fecha_validacion&patente={{ filtro_patente }}"
