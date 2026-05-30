@@ -9,7 +9,7 @@
     <div>
       <h1 class="text-2xl font-bold text-slate-800">Glosa</h1>
       <p class="text-slate-500 text-sm mt-0.5">
-        Pendientes de validación aduanera (sin FIR_ELEC) · <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
+        Sin FIR_ELEC y sin pago confirmado · <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
         · {{ total }} registro{% if total != 1 %}s{% endif %}
         {% if q %} · búsqueda: "{{ q }}"{% endif %}
       </p>
@@ -52,7 +52,7 @@
     </svg>
     <p class="text-sm text-amber-800">
       <span class="font-semibold">{{ total }} pedimento{% if total != 1 %}s{% endif %}</span>
-      pendiente{% if total != 1 %}s{% endif %} de validación aduanera (sin FIR_ELEC) en {{ mes_anterior }}–{{ mes_actual }}.
+      sin FIR_ELEC y sin pago confirmado en {{ mes_anterior }}–{{ mes_actual }}.
       La antigüedad se calcula desde la fecha de arribo (o validación si no hay arribo).
     </p>
   </div>

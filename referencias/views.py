@@ -266,6 +266,8 @@ def glosa(request):
 
     base_qs = Referencia.objects.filter(
         fir_elec='',
+        num_operacion='',
+        linea_captura='',
         es_rectificacion=False,
     ).filter(
         Q(fecha_arribo__year=year,      fecha_arribo__month=month)       |
