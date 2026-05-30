@@ -328,7 +328,7 @@ def glosa(request):
                                .select_related('usuario_entrada', 'usuario_conclusion')
     }
     for ref in pagina:
-        ref._glosa = glosas_map.get(ref.id)
+        ref.glosa_reg = glosas_map.get(ref.id)
 
     ctx = {
         'page':           pagina,

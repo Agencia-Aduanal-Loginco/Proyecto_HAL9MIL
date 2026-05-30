@@ -181,8 +181,8 @@
 
             <!-- Estado -->
             <td class="px-4 py-3 text-center">
-              {% if ref._glosa %}
-                {% if ref._glosa.concluida %}
+              {% if ref.glosa_reg %}
+                {% if ref.glosa_reg.concluida %}
                   <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Concluida</span>
                 {% else %}
                   <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">En proceso</span>
@@ -194,7 +194,7 @@
 
             <!-- Acciones -->
             <td class="px-4 py-3 text-center">
-              {% if not ref._glosa %}
+              {% if not ref.glosa_reg %}
                 <form method="post" action="{% url 'glosa_registrar' ref.id %}">
                   {% csrf_token %}
                   <button type="submit"
@@ -203,11 +203,11 @@
                   </button>
                 </form>
 
-              {% elif not ref._glosa.concluida %}
+              {% elif not ref.glosa_reg.concluida %}
                 <div class="text-xs text-slate-500 mb-1.5">
-                  Entrada: <span class="font-medium">{{ ref._glosa.fecha_entrada|date:"d/m H:i" }}</span>
-                  {% if ref._glosa.usuario_entrada %}
-                    · {{ ref._glosa.usuario_entrada.get_short_name|default:ref._glosa.usuario_entrada.username }}
+                  Entrada: <span class="font-medium">{{ ref.glosa_reg.fecha_entrada|date:"d/m H:i" }}</span>
+                  {% if ref.glosa_reg.usuario_entrada %}
+                    · {{ ref.glosa_reg.usuario_entrada.get_short_name|default:ref.glosa_reg.usuario_entrada.username }}
                   {% endif %}
                 </div>
                 <button type="button"
@@ -248,15 +248,15 @@
 
               {% else %}
                 <div class="text-xs text-slate-500">
-                  <span class="font-medium text-emerald-700">{{ ref._glosa.fecha_conclusion|date:"d/m/Y H:i" }}</span>
-                  {% if ref._glosa.usuario_conclusion %}
-                    <br>{{ ref._glosa.usuario_conclusion.get_short_name|default:ref._glosa.usuario_conclusion.username }}
+                  <span class="font-medium text-emerald-700">{{ ref.glosa_reg.fecha_conclusion|date:"d/m/Y H:i" }}</span>
+                  {% if ref.glosa_reg.usuario_conclusion %}
+                    <br>{{ ref.glosa_reg.usuario_conclusion.get_short_name|default:ref.glosa_reg.usuario_conclusion.username }}
                   {% endif %}
                 </div>
-                {% if ref._glosa.nota %}
+                {% if ref.glosa_reg.nota %}
                   <div class="mt-1 text-xs text-slate-400 italic max-w-[150px] truncate"
-                       title="{{ ref._glosa.nota }}">
-                    "{{ ref._glosa.nota }}"
+                       title="{{ ref.glosa_reg.nota }}">
+                    "{{ ref.glosa_reg.nota }}"
                   </div>
                 {% endif %}
               {% endif %}
