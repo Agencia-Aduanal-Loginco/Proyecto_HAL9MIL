@@ -132,7 +132,7 @@
         <tbody class="divide-y divide-slate-50">
           {% for ref in page %}
           {% with dias=ref.antiguedad.days %}
-          <tr class="hover:bg-slate-50 transition-colors align-top">
+          <tr class="hover:bg-slate-50 transition-colors align-middle">
             <td class="px-4 py-3">
               <a href="{% url 'detalle' ref.num_refe %}"
                  class="text-sky-600 hover:text-sky-700 font-mono text-xs font-bold">
@@ -195,51 +195,63 @@
             </td>
 
             <!-- Acciones -->
-            <td class="px-4 py-3 text-center">
-              <!-- Botón urgente (disponible siempre que no esté concluida) -->
-              {% if not ref.glosa_reg or not ref.glosa_reg.concluida %}
-              <form method="post" action="{% url 'glosa_urgente' ref.id %}" class="inline mb-1.5">
-                {% csrf_token %}
-                <button type="submit" title="{% if ref.glosa_reg and ref.glosa_reg.urgente %}Quitar urgente{% else %}Marcar como urgente{% endif %}"
-                        class="px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors
-                          {% if ref.glosa_reg and ref.glosa_reg.urgente %}
-                            bg-red-100 text-red-700 border-red-200 hover:bg-red-200
-                          {% else %}
-                            bg-white text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300
-                          {% endif %}">
-                  {% if ref.glosa_reg and ref.glosa_reg.urgente %}⚠ Urgente{% else %}⚑{% endif %}
-                </button>
-              </form>
-              {% endif %}
+            <td class="px-4 py-2.5">
 
               {% if not ref.glosa_reg %}
-                <form method="post" action="{% url 'glosa_registrar' ref.id %}">
-                  {% csrf_token %}
-                  <button type="submit"
-                          class="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-400 font-medium whitespace-nowrap">
-                    Registrar entrada
-                  </button>
-                </form>
+                <!-- Sin registrar: bandera + registrar en línea -->
+                <div class="flex items-center gap-2">
+                  <form method="post" action="{% url 'glosa_urgente' ref.id %}">
+                    {% csrf_token %}
+                    <button type="submit" title="Marcar como urgente"
+                            class="p-1.5 rounded-lg border bg-white text-slate-400 border-slate-200
+                                   hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 transition-colors">
+                      ⚑
+                    </button>
+                  </form>
+                  <form method="post" action="{% url 'glosa_registrar' ref.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-400 font-medium whitespace-nowrap">
+                      Registrar entrada
+                    </button>
+                  </form>
+                </div>
 
               {% elif not ref.glosa_reg.concluida %}
-                <div class="text-xs text-slate-500 mb-1.5">
-                  Entrada: <span class="font-medium">{{ ref.glosa_reg.fecha_entrada|date:"d/m H:i" }}</span>
+                <!-- En proceso: fecha entrada arriba, bandera + concluir en línea -->
+                <p class="text-xs text-slate-400 mb-1.5">
+                  {{ ref.glosa_reg.fecha_entrada|date:"d/m H:i" }}
                   {% if ref.glosa_reg.usuario_entrada %}
                     · {{ ref.glosa_reg.usuario_entrada.get_short_name|default:ref.glosa_reg.usuario_entrada.username }}
                   {% endif %}
+                </p>
+                <div class="flex items-center gap-2">
+                  <form method="post" action="{% url 'glosa_urgente' ref.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            title="{% if ref.glosa_reg.urgente %}Quitar urgente{% else %}Marcar como urgente{% endif %}"
+                            class="p-1.5 rounded-lg border font-medium transition-colors
+                              {% if ref.glosa_reg.urgente %}
+                                bg-red-100 text-red-600 border-red-200 hover:bg-red-200
+                              {% else %}
+                                bg-white text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300
+                              {% endif %}">
+                      {% if ref.glosa_reg.urgente %}⚠{% else %}⚑{% endif %}
+                    </button>
+                  </form>
+                  <button type="button"
+                          onclick="document.getElementById('modal-{{ ref.id }}').showModal()"
+                          class="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
+                    Concluir
+                  </button>
                 </div>
-                <button type="button"
-                        onclick="document.getElementById('modal-{{ ref.id }}').showModal()"
-                        class="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
-                  Concluir
-                </button>
 
                 <!-- Modal de conclusión -->
                 <dialog id="modal-{{ ref.id }}"
                         class="rounded-xl p-0 shadow-2xl w-96 border-0 backdrop:bg-black/40">
                   <div class="p-6">
                     <h3 class="text-base font-semibold text-slate-800">Concluir revisión de glosa</h3>
-                    <p class="text-xs text-slate-500 mt-1 font-mono">{{ ref.num_refe }} · {{ ref.nombre_cliente|truncatechars:40 }}</p>
+                    <p class="text-xs text-slate-500 mt-1 font-mono">{{ ref.num_refe }}</p>
                     <form method="post" action="{% url 'glosa_concluir' ref.id %}" class="mt-4 space-y-3">
                       {% csrf_token %}
                       <div>
@@ -257,7 +269,7 @@
                         </button>
                         <button type="submit"
                                 class="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
-                          Confirmar conclusión
+                          Confirmar
                         </button>
                       </div>
                     </form>
@@ -265,19 +277,18 @@
                 </dialog>
 
               {% else %}
-                <div class="text-xs text-slate-500">
-                  <span class="font-medium text-emerald-700">{{ ref.glosa_reg.fecha_conclusion|date:"d/m/Y H:i" }}</span>
-                  {% if ref.glosa_reg.usuario_conclusion %}
-                    <br>{{ ref.glosa_reg.usuario_conclusion.get_short_name|default:ref.glosa_reg.usuario_conclusion.username }}
-                  {% endif %}
-                </div>
+                <!-- Concluida: info de cierre -->
+                <p class="text-xs font-medium text-emerald-700">{{ ref.glosa_reg.fecha_conclusion|date:"d/m/Y H:i" }}</p>
+                {% if ref.glosa_reg.usuario_conclusion %}
+                  <p class="text-xs text-slate-500">{{ ref.glosa_reg.usuario_conclusion.get_short_name|default:ref.glosa_reg.usuario_conclusion.username }}</p>
+                {% endif %}
                 {% if ref.glosa_reg.nota %}
-                  <div class="mt-1 text-xs text-slate-400 italic max-w-[150px] truncate"
-                       title="{{ ref.glosa_reg.nota }}">
+                  <p class="text-xs text-slate-400 italic mt-0.5 max-w-[180px] truncate" title="{{ ref.glosa_reg.nota }}">
                     "{{ ref.glosa_reg.nota }}"
-                  </div>
+                  </p>
                 {% endif %}
               {% endif %}
+
             </td>
           </tr>
           {% endwith %}
