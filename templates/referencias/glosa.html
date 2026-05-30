@@ -15,6 +15,17 @@
       </p>
     </div>
 
+    <!-- Tabs -->
+    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1 mr-3">
+      <span class="px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
+        Lista
+      </span>
+      <a href="{% url 'glosa_dashboard' %}"
+         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
+        Dashboard
+      </a>
+    </div>
+
     <!-- KPIs por patente -->
     <div class="flex items-center gap-2">
       {% for p in por_patente %}
@@ -187,6 +198,11 @@
                 {% else %}
                   <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">En proceso</span>
                 {% endif %}
+                {% if ref.glosa_reg.urgente %}
+                  <br><span class="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                    ⚠ Urgente
+                  </span>
+                {% endif %}
               {% else %}
                 <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sin registrar</span>
               {% endif %}
@@ -194,6 +210,22 @@
 
             <!-- Acciones -->
             <td class="px-4 py-3 text-center">
+              <!-- Botón urgente (disponible siempre que no esté concluida) -->
+              {% if not ref.glosa_reg or not ref.glosa_reg.concluida %}
+              <form method="post" action="{% url 'glosa_urgente' ref.id %}" class="inline mb-1.5">
+                {% csrf_token %}
+                <button type="submit" title="{% if ref.glosa_reg and ref.glosa_reg.urgente %}Quitar urgente{% else %}Marcar como urgente{% endif %}"
+                        class="px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors
+                          {% if ref.glosa_reg and ref.glosa_reg.urgente %}
+                            bg-red-100 text-red-700 border-red-200 hover:bg-red-200
+                          {% else %}
+                            bg-white text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300
+                          {% endif %}">
+                  {% if ref.glosa_reg and ref.glosa_reg.urgente %}⚠ Urgente{% else %}⚑{% endif %}
+                </button>
+              </form>
+              {% endif %}
+
               {% if not ref.glosa_reg %}
                 <form method="post" action="{% url 'glosa_registrar' ref.id %}">
                   {% csrf_token %}

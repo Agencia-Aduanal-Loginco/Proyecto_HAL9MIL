@@ -91,7 +91,8 @@ class GlosaRegistro(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='glosas_concluidas'
     )
-    nota = models.TextField(blank=True)
+    nota    = models.TextField(blank=True)
+    urgente = models.BooleanField(default=False)
 
     class Meta:
         ordering            = ['-fecha_entrada']

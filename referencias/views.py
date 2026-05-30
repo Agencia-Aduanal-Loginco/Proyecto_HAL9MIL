@@ -1,9 +1,9 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.db.models.functions import Coalesce, Now, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -362,6 +362,22 @@ def glosa_registrar(request, pk):
 
 @login_required
 @require_POST
+def glosa_urgente(request, pk):
+    ref = get_object_or_404(Referencia, pk=pk)
+    registro, _ = GlosaRegistro.objects.get_or_create(
+        referencia=ref,
+        defaults={
+            'fecha_entrada':   timezone.now(),
+            'usuario_entrada': request.user,
+        },
+    )
+    registro.urgente = not registro.urgente
+    registro.save(update_fields=['urgente'])
+    return redirect('glosa')
+
+
+@login_required
+@require_POST
 def glosa_concluir(request, pk):
     registro = get_object_or_404(GlosaRegistro, referencia_id=pk)
     if not registro.concluida:
@@ -370,3 +386,188 @@ def glosa_concluir(request, pk):
         registro.nota               = request.POST.get('nota', '').strip()
         registro.save()
     return redirect('glosa')
+
+
+# ---------------------------------------------------------------------------
+# Glosa — Dashboard estadístico
+# ---------------------------------------------------------------------------
+
+@login_required
+def glosa_dashboard(request):
+    now   = timezone.localtime()
+    year  = now.year
+    month = now.month
+    meses_nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+
+    base_qs = Referencia.objects.filter(
+        fir_elec='',
+        num_operacion='',
+        linea_captura='',
+        es_rectificacion=False,
+    ).filter(
+        Q(fecha_arribo__year=year,      fecha_arribo__month=month)      |
+        Q(fecha_arribo__year=prev_year, fecha_arribo__month=prev_month) |
+        Q(fecha_validacion__year=year,      fecha_validacion__month=month)      |
+        Q(fecha_validacion__year=prev_year, fecha_validacion__month=prev_month)
+    )
+
+    base_ann = base_qs.annotate(
+        antiguedad=ExpressionWrapper(
+            Now() - Coalesce(F('fecha_arribo'), F('fecha_validacion')),
+            output_field=DurationField(),
+        ),
+    )
+
+    total = base_qs.count()
+
+    # GlosaRegistro dentro de la ventana
+    glosas_qs = (
+        GlosaRegistro.objects
+        .filter(referencia__in=base_qs)
+        .select_related('referencia', 'usuario_entrada', 'usuario_conclusion')
+    )
+    registradas_ids = set(glosas_qs.values_list('referencia_id', flat=True))
+    concluidas_ids  = set(
+        glosas_qs.filter(fecha_conclusion__isnull=False)
+        .values_list('referencia_id', flat=True)
+    )
+
+    sin_registrar = total - len(registradas_ids)
+    en_proceso    = len(registradas_ids - concluidas_ids)
+    concluidas    = len(concluidas_ids)
+
+    # Urgentes: marcados manualmente en GlosaRegistro
+    urgentes_ids = set(
+        glosas_qs.filter(urgente=True).values_list('referencia_id', flat=True)
+    )
+    urgentes_count = len(urgentes_ids)
+    # Críticos: urgente + ≥ 60 días (urgente manual + antigüedad severa)
+    criticos_count = (
+        base_ann
+        .filter(id__in=urgentes_ids, antiguedad__gte=timedelta(days=60))
+        .count()
+    )
+
+    # Distribución de antigüedad
+    dist = {
+        'verde':    base_ann.filter(antiguedad__lt=timedelta(days=15)).count(),
+        'amarillo': base_ann.filter(
+                        antiguedad__gte=timedelta(days=15),
+                        antiguedad__lt=timedelta(days=30)).count(),
+        'naranja':  base_ann.filter(
+                        antiguedad__gte=timedelta(days=30),
+                        antiguedad__lt=timedelta(days=60)).count(),
+        'rojo':     base_ann.filter(antiguedad__gte=timedelta(days=60)).count(),
+    }
+
+    avg_ant = base_ann.aggregate(avg=Avg('antiguedad'))['avg']
+    avg_antiguedad_dias = avg_ant.days if avg_ant else 0
+
+    # Tiempos: arribo → entrada glosa  |  entrada → conclusión
+    tiempos_entrada  = []
+    tiempos_proceso  = []
+    for g in glosas_qs:
+        ref_date = g.referencia.fecha_arribo or g.referencia.fecha_validacion
+        if ref_date:
+            d = (g.fecha_entrada.date() - ref_date).days
+            if d >= 0:
+                tiempos_entrada.append(d)
+        if g.concluida:
+            d2 = (g.fecha_conclusion - g.fecha_entrada).days
+            if d2 >= 0:
+                tiempos_proceso.append(d2)
+
+    avg_tiempo_entrada = round(sum(tiempos_entrada) / len(tiempos_entrada), 1) if tiempos_entrada else None
+    avg_tiempo_proceso = round(sum(tiempos_proceso) / len(tiempos_proceso), 1) if tiempos_proceso else None
+
+    # Por patente
+    por_patente = (
+        base_qs.values('patente', 'prefijo')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+
+    # Top urgentes
+    urgentes_list = list(
+        base_ann
+        .filter(id__in=urgentes_ids)
+        .prefetch_related('contenedores')
+        .order_by('-antiguedad')[:15]
+    )
+    urg_glosas_map = {
+        g.referencia_id: g
+        for g in GlosaRegistro.objects.filter(
+            referencia_id__in=[r.id for r in urgentes_list]
+        ).select_related('usuario_entrada')
+    }
+    for ref in urgentes_list:
+        ref.glosa_reg = urg_glosas_map.get(ref.id)
+
+    # Por usuario
+    por_usuario_reg = (
+        GlosaRegistro.objects
+        .filter(referencia__in=base_qs)
+        .values('usuario_entrada__username',
+                'usuario_entrada__first_name',
+                'usuario_entrada__last_name')
+        .annotate(registradas=Count('id'))
+        .order_by('-registradas')
+    )
+    conc_map = {
+        d['usuario_conclusion__username']: d['concluidas']
+        for d in GlosaRegistro.objects
+            .filter(referencia__in=base_qs, fecha_conclusion__isnull=False)
+            .values('usuario_conclusion__username')
+            .annotate(concluidas=Count('id'))
+    }
+    por_usuario = []
+    for u in por_usuario_reg:
+        username = u['usuario_entrada__username'] or ''
+        nombre = (
+            ((u['usuario_entrada__first_name'] or '') + ' ' +
+             (u['usuario_entrada__last_name'] or '')).strip()
+            or username
+        )
+        reg  = u['registradas']
+        conc = conc_map.get(username, 0)
+        por_usuario.append({
+            'nombre':      nombre,
+            'username':    username,
+            'registradas': reg,
+            'concluidas':  conc,
+            'pendientes':  reg - conc,
+        })
+
+    # Actividad reciente (últimas 10 acciones)
+    recientes = (
+        GlosaRegistro.objects
+        .filter(referencia__in=base_qs)
+        .select_related('referencia', 'usuario_entrada', 'usuario_conclusion')
+        .order_by('-fecha_entrada')[:10]
+    )
+
+    ctx = {
+        'total':               total,
+        'sin_registrar':       sin_registrar,
+        'en_proceso':          en_proceso,
+        'concluidas':          concluidas,
+        'urgentes_count':      urgentes_count,
+        'criticos_count':      criticos_count,
+        'dist':                dist,
+        'avg_antiguedad_dias': avg_antiguedad_dias,
+        'avg_tiempo_entrada':  avg_tiempo_entrada,
+        'avg_tiempo_proceso':  avg_tiempo_proceso,
+        'por_patente':         list(por_patente),
+        'urgentes_list':       urgentes_list,
+        'por_usuario':         por_usuario,
+        'recientes':           recientes,
+        'mes_actual':          meses_nombres[month - 1],
+        'mes_anterior':        meses_nombres[prev_month - 1],
+        'año':                 year,
+    }
+    return render(request, 'referencias/glosa_dashboard.html', ctx)

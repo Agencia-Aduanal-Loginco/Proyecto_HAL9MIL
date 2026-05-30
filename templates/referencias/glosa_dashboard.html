@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block title %}Glosa · Dashboard · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header + tabs -->
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Glosa — Dashboard</h1>
+      <p class="text-slate-500 text-sm mt-0.5">
+        Ventana activa: <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
+        · {{ total }} pedimento{% if total != 1 %}s{% endif %} en seguimiento
+      </p>
+    </div>
+    <!-- Tabs -->
+    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+      <a href="{% url 'glosa' %}"
+         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
+        Lista
+      </a>
+      <span class="px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
+        Dashboard
+      </span>
+    </div>
+  </div>
+
+  <!-- KPI row -->
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+
+    <!-- Total -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-center">
+      <p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Total</p>
+      <p class="text-3xl font-bold text-slate-800">{{ total }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">en ventana</p>
+    </div>
+
+    <!-- Sin registrar -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 text-center">
+      <p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Sin registrar</p>
+      <p class="text-3xl font-bold text-slate-600">{{ sin_registrar }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">pendientes de atención</p>
+    </div>
+
+    <!-- En proceso -->
+    <div class="bg-white rounded-xl border border-blue-200 shadow-sm p-4 text-center">
+      <p class="text-xs text-blue-400 uppercase tracking-wide mb-1">En proceso</p>
+      <p class="text-3xl font-bold text-blue-600">{{ en_proceso }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">en revisión activa</p>
+    </div>
+
+    <!-- Concluidas (equipo) -->
+    <div class="bg-white rounded-xl border border-emerald-200 shadow-sm p-4 text-center">
+      <p class="text-xs text-emerald-400 uppercase tracking-wide mb-1">Concluidas</p>
+      <p class="text-3xl font-bold text-emerald-600">{{ concluidas }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">equipo terminó</p>
+    </div>
+
+    <!-- Urgentes -->
+    <div class="bg-white rounded-xl border {% if urgentes_count > 0 %}border-amber-300 bg-amber-50{% else %}border-slate-100{% endif %} shadow-sm p-4 text-center">
+      <p class="text-xs {% if urgentes_count > 0 %}text-amber-500{% else %}text-slate-400{% endif %} uppercase tracking-wide mb-1">Urgentes</p>
+      <p class="text-3xl font-bold {% if urgentes_count > 0 %}text-amber-600{% else %}text-slate-400{% endif %}">{{ urgentes_count }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">≥ 30 días sin concluir</p>
+    </div>
+
+    <!-- Críticos -->
+    <div class="bg-white rounded-xl border {% if criticos_count > 0 %}border-red-300 bg-red-50{% else %}border-slate-100{% endif %} shadow-sm p-4 text-center">
+      <p class="text-xs {% if criticos_count > 0 %}text-red-500{% else %}text-slate-400{% endif %} uppercase tracking-wide mb-1">Críticos</p>
+      <p class="text-3xl font-bold {% if criticos_count > 0 %}text-red-600{% else %}text-slate-400{% endif %}">{{ criticos_count }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">≥ 60 días sin concluir</p>
+    </div>
+
+  </div>
+
+  <!-- Segunda fila: distribución + tiempos + patentes -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- Distribución de antigüedad -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Antigüedad de pedimentos</h2>
+      {% with tot_dist=dist.verde|add:dist.amarillo|add:dist.naranja|add:dist.rojo %}
+      <div class="space-y-3">
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Frescos &lt; 15 días</span>
+            <span class="font-semibold text-emerald-700">{{ dist.verde }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot_dist > 0 %}
+            <div class="h-full bg-emerald-400 rounded-full"
+                 style="width: {% widthratio dist.verde tot_dist 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-yellow-400 inline-block"></span>Moderados 15–30 días</span>
+            <span class="font-semibold text-yellow-700">{{ dist.amarillo }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot_dist > 0 %}
+            <div class="h-full bg-yellow-400 rounded-full"
+                 style="width: {% widthratio dist.amarillo tot_dist 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>Urgentes 30–60 días</span>
+            <span class="font-semibold text-amber-700">{{ dist.naranja }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot_dist > 0 %}
+            <div class="h-full bg-amber-500 rounded-full"
+                 style="width: {% widthratio dist.naranja tot_dist 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Críticos &gt; 60 días</span>
+            <span class="font-semibold text-red-700">{{ dist.rojo }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot_dist > 0 %}
+            <div class="h-full bg-red-500 rounded-full"
+                 style="width: {% widthratio dist.rojo tot_dist 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+      {% endwith %}
+      <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-500">
+        <span>Promedio de antigüedad</span>
+        <span class="font-semibold text-slate-700">{{ avg_antiguedad_dias }} días</span>
+      </div>
+    </div>
+
+    <!-- Tiempos de proceso -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Tiempos de proceso</h2>
+      <div class="space-y-4">
+
+        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+          <div>
+            <p class="text-xs text-slate-500">Arribo → Entrada en glosa</p>
+            <p class="text-xs text-slate-400 mt-0.5">Días desde arribo hasta que se registra en el sistema</p>
+          </div>
+          <div class="text-right ml-4">
+            {% if avg_tiempo_entrada is not None %}
+              <p class="text-2xl font-bold text-blue-600">{{ avg_tiempo_entrada }}</p>
+              <p class="text-xs text-slate-400">días prom.</p>
+            {% else %}
+              <p class="text-lg font-medium text-slate-300">—</p>
+              <p class="text-xs text-slate-400">sin datos</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+          <div>
+            <p class="text-xs text-slate-500">Entrada → Conclusión de glosa</p>
+            <p class="text-xs text-slate-400 mt-0.5">Días que tarda el equipo en procesar la revisión</p>
+          </div>
+          <div class="text-right ml-4">
+            {% if avg_tiempo_proceso is not None %}
+              <p class="text-2xl font-bold text-emerald-600">{{ avg_tiempo_proceso }}</p>
+              <p class="text-xs text-slate-400">días prom.</p>
+            {% else %}
+              <p class="text-lg font-medium text-slate-300">—</p>
+              <p class="text-xs text-slate-400">sin datos</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-100">
+          <p class="text-xs text-amber-700 font-medium">Nota sobre FIR_ELEC y pagos</p>
+          <p class="text-xs text-amber-600 mt-1">
+            Los pedimentos desaparecen de esta vista cuando reciben FIR_ELEC o confirmación de pago
+            vía sincronización con CASA.GDB. El tiempo de resolución final depende de aduana.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Por patente -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Por patente</h2>
+      <div class="space-y-3">
+        {% for p in por_patente %}
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-semibold px-2 py-1 rounded-lg min-w-[52px] text-center
+            {% if p.patente == '1627' %}bg-sky-100 text-sky-700
+            {% elif p.patente == '1656' %}bg-emerald-100 text-emerald-700
+            {% else %}bg-violet-100 text-violet-700{% endif %}">
+            {{ p.prefijo }}
+          </span>
+          <div class="flex-1">
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Patente {{ p.patente }}</span>
+              <span class="font-semibold text-slate-700">{{ p.total }}</span>
+            </div>
+            {% if total > 0 %}
+            <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full
+                {% if p.patente == '1627' %}bg-sky-400
+                {% elif p.patente == '1656' %}bg-emerald-400
+                {% else %}bg-violet-400{% endif %}"
+                   style="width: {% widthratio p.total total 100 %}%"></div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-xs text-slate-400">No hay datos por patente.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Tabla de urgentes -->
+  {% if urgentes_list %}
+  <div class="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-amber-100 flex items-center justify-between bg-amber-50">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h2 class="text-sm font-semibold text-amber-800">Pedimentos urgentes sin concluir</h2>
+        <span class="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold">{{ urgentes_count }}</span>
+      </div>
+      <a href="{% url 'glosa' %}" class="text-xs text-amber-700 hover:text-amber-900 font-medium">
+        Ver lista completa →
+      </a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+          <tr>
+            <th class="px-4 py-2.5 text-left">Referencia</th>
+            <th class="px-4 py-2.5 text-center">Patente</th>
+            <th class="px-4 py-2.5 text-left">Cliente</th>
+            <th class="px-4 py-2.5 text-right">F. Arribo</th>
+            <th class="px-4 py-2.5 text-right">Antigüedad</th>
+            <th class="px-4 py-2.5 text-center">Estado glosa</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for ref in urgentes_list %}
+          {% with dias=ref.antiguedad.days %}
+          <tr class="hover:bg-amber-50 transition-colors">
+            <td class="px-4 py-2.5">
+              <a href="{% url 'detalle' ref.num_refe %}"
+                 class="text-sky-600 hover:text-sky-700 font-mono text-xs font-bold">
+                {{ ref.num_refe }}
+              </a>
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              <span class="text-xs font-medium px-2 py-0.5 rounded-full
+                {% if ref.patente == '1627' %}bg-sky-100 text-sky-700
+                {% elif ref.patente == '1656' %}bg-emerald-100 text-emerald-700
+                {% else %}bg-violet-100 text-violet-700{% endif %}">
+                {{ ref.prefijo }}
+              </span>
+            </td>
+            <td class="px-4 py-2.5 text-xs text-slate-600 max-w-[200px] truncate" title="{{ ref.nombre_cliente }}">
+              {{ ref.nombre_cliente|default:"—" }}
+            </td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs text-slate-500">
+              {{ ref.fecha_arribo|default:"—" }}
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full
+                {% if dias >= 60 %}bg-red-100 text-red-700
+                {% else %}bg-amber-100 text-amber-700{% endif %}">
+                {{ dias }}d
+              </span>
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              {% if ref.glosa_reg %}
+                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">En proceso</span>
+                <div class="text-xs text-slate-400 mt-0.5">
+                  {{ ref.glosa_reg.fecha_entrada|date:"d/m" }}
+                  {% if ref.glosa_reg.usuario_entrada %}· {{ ref.glosa_reg.usuario_entrada.get_short_name|default:ref.glosa_reg.usuario_entrada.username }}{% endif %}
+                </div>
+              {% else %}
+                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin registrar</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Fila inferior: por usuario + actividad reciente -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    <!-- Por usuario -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700">Actividad por usuario</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Registros de glosa en la ventana activa</p>
+      </div>
+      {% if por_usuario %}
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+          <tr>
+            <th class="px-4 py-2.5 text-left">Usuario</th>
+            <th class="px-4 py-2.5 text-right">Registradas</th>
+            <th class="px-4 py-2.5 text-right">Concluidas</th>
+            <th class="px-4 py-2.5 text-right">Pendientes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for u in por_usuario %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2.5">
+              <p class="text-xs font-medium text-slate-700">{{ u.nombre }}</p>
+              {% if u.nombre != u.username %}
+              <p class="text-xs text-slate-400">{{ u.username }}</p>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="text-sm font-semibold text-slate-700">{{ u.registradas }}</span>
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="text-sm font-semibold text-emerald-600">{{ u.concluidas }}</span>
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="text-sm font-semibold {% if u.pendientes > 0 %}text-amber-600{% else %}text-slate-400{% endif %}">
+                {{ u.pendientes }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="px-5 py-8 text-center text-slate-400 text-sm">
+        No hay actividad de glosa registrada en esta ventana.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Actividad reciente -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700">Actividad reciente</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Últimas entradas de glosa registradas</p>
+      </div>
+      {% if recientes %}
+      <div class="divide-y divide-slate-50">
+        {% for g in recientes %}
+        <div class="px-5 py-3 flex items-start justify-between hover:bg-slate-50">
+          <div>
+            <a href="{% url 'detalle' g.referencia.num_refe %}"
+               class="text-xs font-mono font-bold text-sky-600 hover:text-sky-700">
+              {{ g.referencia.num_refe }}
+            </a>
+            <p class="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]" title="{{ g.referencia.nombre_cliente }}">
+              {{ g.referencia.nombre_cliente|default:"—" }}
+            </p>
+            {% if g.concluida %}
+            <span class="inline-block text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 mt-1">
+              Concluida {{ g.fecha_conclusion|date:"d/m H:i" }}
+            </span>
+            {% endif %}
+          </div>
+          <div class="text-right ml-3 flex-shrink-0">
+            <p class="text-xs text-slate-400">{{ g.fecha_entrada|date:"d/m H:i" }}</p>
+            {% if g.usuario_entrada %}
+            <p class="text-xs text-slate-500 font-medium mt-0.5">
+              {{ g.usuario_entrada.get_short_name|default:g.usuario_entrada.username }}
+            </p>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-5 py-8 text-center text-slate-400 text-sm">
+        Sin actividad registrada aún.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
