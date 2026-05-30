@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -32,6 +33,7 @@ class Referencia(models.Model):
     linea_captura     = models.CharField(max_length=30, blank=True)
     cve_capturista    = models.CharField(max_length=20, blank=True)
     nombre_capturista = models.CharField(max_length=150, blank=True)
+    fir_elec          = models.CharField(max_length=255, blank=True)
     es_rectificacion  = models.BooleanField(default=False)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
@@ -73,6 +75,35 @@ class GuiaBL(models.Model):
 
     def __str__(self):
         return self.numero_guia
+
+
+class GlosaRegistro(models.Model):
+    referencia         = models.OneToOneField(
+        Referencia, on_delete=models.CASCADE, related_name='glosa'
+    )
+    fecha_entrada      = models.DateTimeField()
+    usuario_entrada    = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='glosas_recibidas'
+    )
+    fecha_conclusion   = models.DateTimeField(null=True, blank=True)
+    usuario_conclusion = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='glosas_concluidas'
+    )
+    nota = models.TextField(blank=True)
+
+    class Meta:
+        ordering            = ['-fecha_entrada']
+        verbose_name        = 'Registro de glosa'
+        verbose_name_plural = 'Registros de glosa'
+
+    def __str__(self):
+        return f'{self.referencia} | {self.fecha_entrada:%Y-%m-%d %H:%M}'
+
+    @property
+    def concluida(self):
+        return self.fecha_conclusion is not None
 
 
 class LogSync(models.Model):

@@ -118,7 +118,7 @@ def fetch_pedimentos(cur):
             FEC_ENTR, FEC_PAGO,
             NUM_PEDI, CVE_PEDI, TIP_PEDI,
             ADU_DESP, REG_ADUA, PAT_AGEN,
-            NUM_OPER, CVE_CAPT
+            NUM_OPER, CVE_CAPT, FIR_ELEC
         FROM SAAIO_PEDIME
         WHERE NUM_REFE IS NOT NULL
         ORDER BY NUM_REFE,
@@ -133,7 +133,7 @@ def fetch_pedimentos(cur):
          fec_entr, fec_pago,
          num_pedi, cve_pedi, tip_pedi,
          adu_desp, reg_adua, _pat_agen,
-         num_oper, cve_capt) = row
+         num_oper, cve_capt, fir_elec) = row
 
         ref = clean(num_refe, 50)
         if not ref:
@@ -153,6 +153,7 @@ def fetch_pedimentos(cur):
             'regimen':          clean(reg_adua, 10),
             'num_operacion':    clean(num_oper, 100),
             'cve_capturista':   clean(cve_capt, 20).upper(),
+            'fir_elec':         clean(fir_elec, 255),
         }
     return result, all_refs
 
@@ -242,6 +243,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             linea_captura=pedime2.get(ref, ''),
             cve_capturista=cve_capt,
             nombre_capturista=nombre_capt,
+            fir_elec=ped.get('fir_elec', ''),
             es_rectificacion=es_rect,
         ))
 

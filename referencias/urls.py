@@ -5,6 +5,8 @@ urlpatterns = [
     path('',                             views.dashboard,          name='dashboard'),
     path('referencias/',                 views.lista,              name='lista'),
     path('referencias/<path:num_refe>/', views.detalle,            name='detalle'),
-    path('glosa/',                       views.glosa,              name='glosa'),
+    path('glosa/',                            views.glosa,              name='glosa'),
+    path('glosa/registrar/<int:pk>/',         views.glosa_registrar,    name='glosa_registrar'),
+    path('glosa/concluir/<int:pk>/',          views.glosa_concluir,     name='glosa_concluir'),
     path('api/sync/',                    sync_views.sync_endpoint, name='api_sync'),
 ]

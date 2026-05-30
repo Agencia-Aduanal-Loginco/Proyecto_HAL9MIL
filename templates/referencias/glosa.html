@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Glosa {{ año }} · HAL9MIL{% endblock %}
+{% block title %}Glosa · HAL9MIL{% endblock %}
 
 {% block content %}
 <div class="p-6 space-y-4">
@@ -7,9 +7,10 @@
   <!-- Header -->
   <div class="flex items-start justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800">Glosa <span class="text-slate-400 font-normal">{{ año }}</span></h1>
+      <h1 class="text-2xl font-bold text-slate-800">Glosa</h1>
       <p class="text-slate-500 text-sm mt-0.5">
-        {{ total }} pedimento{% if total != 1 %}s{% endif %} sin pagar del año en curso
+        Pendientes de validación aduanera (sin FIR_ELEC) · <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
+        · {{ total }} registro{% if total != 1 %}s{% endif %}
         {% if q %} · búsqueda: "{{ q }}"{% endif %}
       </p>
     </div>
@@ -51,7 +52,7 @@
     </svg>
     <p class="text-sm text-amber-800">
       <span class="font-semibold">{{ total }} pedimento{% if total != 1 %}s{% endif %}</span>
-      con pago pendiente en {{ año }}.
+      pendiente{% if total != 1 %}s{% endif %} de validación aduanera (sin FIR_ELEC) en {{ mes_anterior }}–{{ mes_actual }}.
       La antigüedad se calcula desde la fecha de arribo (o validación si no hay arribo).
     </p>
   </div>
@@ -60,7 +61,6 @@
   <!-- Filtros -->
   <form method="get" class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
     <div class="grid grid-cols-4 gap-3">
-      <!-- Búsqueda -->
       <div class="col-span-2">
         <label class="text-xs text-slate-500 font-medium block mb-1">Buscar</label>
         <input type="text" name="q" value="{{ q }}"
@@ -68,7 +68,6 @@
           class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
                  focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
       </div>
-      <!-- Patente -->
       <div>
         <label class="text-xs text-slate-500 font-medium block mb-1">Patente</label>
         <select name="patente"
@@ -80,7 +79,6 @@
           <option value="1927" {% if filtro_patente == '1927' %}selected{% endif %}>1927 · LCMJ</option>
         </select>
       </div>
-      <!-- Acciones -->
       <div class="flex items-end gap-2">
         <a href="{% url 'glosa' %}"
           class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
@@ -120,16 +118,18 @@
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_validacion' %}-{% endif %}fecha_validacion&patente={{ filtro_patente }}"
                  class="hover:text-slate-800">F. Validación</a>
             </th>
-            <th class="px-4 py-3 text-left">Num. Pedimento</th>
+            <th class="px-4 py-3 text-left">Pedimento</th>
+            <th class="px-4 py-3 text-left">FIR_ELEC</th>
             <th class="px-4 py-3 text-center">Clave</th>
-            <th class="px-4 py-3 text-center">Conts.</th>
             <th class="px-4 py-3 text-right">Antigüedad</th>
+            <th class="px-4 py-3 text-center">Estado</th>
+            <th class="px-4 py-3 text-center min-w-[160px]">Acciones</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-50">
           {% for ref in page %}
           {% with dias=ref.antiguedad.days %}
-          <tr class="hover:bg-slate-50 transition-colors">
+          <tr class="hover:bg-slate-50 transition-colors align-top">
             <td class="px-4 py-3">
               <a href="{% url 'detalle' ref.num_refe %}"
                  class="text-sky-600 hover:text-sky-700 font-mono text-xs font-bold">
@@ -144,7 +144,7 @@
                 {{ ref.prefijo }}
               </span>
             </td>
-            <td class="px-4 py-3 text-slate-600 text-xs max-w-[180px] truncate" title="{{ ref.nombre_cliente }}">
+            <td class="px-4 py-3 text-slate-600 text-xs max-w-[160px] truncate" title="{{ ref.nombre_cliente }}">
               {{ ref.nombre_cliente|default:"—" }}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
@@ -156,17 +156,15 @@
             <td class="px-4 py-3 font-mono text-xs text-slate-600">
               {{ ref.num_pedimento|default:"—" }}
             </td>
+            <td class="px-4 py-3 text-xs text-slate-500 max-w-[120px] truncate" title="{{ ref.fir_elec }}">
+              {{ ref.fir_elec|default:"—" }}
+            </td>
             <td class="px-4 py-3 text-center">
               {% if ref.clave_pedimento %}
                 <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                   {{ ref.clave_pedimento }}
                 </span>
               {% else %}—{% endif %}
-            </td>
-            <td class="px-4 py-3 text-center text-xs text-slate-600">
-              {% with cnt=ref.contenedores.count %}
-              {% if cnt %}{{ cnt }}{% else %}—{% endif %}
-              {% endwith %}
             </td>
             <td class="px-4 py-3 text-right">
               {% if dias is not None %}
@@ -180,15 +178,98 @@
                 <span class="text-slate-300 text-xs">—</span>
               {% endif %}
             </td>
+
+            <!-- Estado -->
+            <td class="px-4 py-3 text-center">
+              {% if ref._glosa %}
+                {% if ref._glosa.concluida %}
+                  <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Concluida</span>
+                {% else %}
+                  <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">En proceso</span>
+                {% endif %}
+              {% else %}
+                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sin registrar</span>
+              {% endif %}
+            </td>
+
+            <!-- Acciones -->
+            <td class="px-4 py-3 text-center">
+              {% if not ref._glosa %}
+                <form method="post" action="{% url 'glosa_registrar' ref.id %}">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-400 font-medium whitespace-nowrap">
+                    Registrar entrada
+                  </button>
+                </form>
+
+              {% elif not ref._glosa.concluida %}
+                <div class="text-xs text-slate-500 mb-1.5">
+                  Entrada: <span class="font-medium">{{ ref._glosa.fecha_entrada|date:"d/m H:i" }}</span>
+                  {% if ref._glosa.usuario_entrada %}
+                    · {{ ref._glosa.usuario_entrada.get_short_name|default:ref._glosa.usuario_entrada.username }}
+                  {% endif %}
+                </div>
+                <button type="button"
+                        onclick="document.getElementById('modal-{{ ref.id }}').showModal()"
+                        class="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
+                  Concluir
+                </button>
+
+                <!-- Modal de conclusión -->
+                <dialog id="modal-{{ ref.id }}"
+                        class="rounded-xl p-0 shadow-2xl w-96 border-0 backdrop:bg-black/40">
+                  <div class="p-6">
+                    <h3 class="text-base font-semibold text-slate-800">Concluir revisión de glosa</h3>
+                    <p class="text-xs text-slate-500 mt-1 font-mono">{{ ref.num_refe }} · {{ ref.nombre_cliente|truncatechars:40 }}</p>
+                    <form method="post" action="{% url 'glosa_concluir' ref.id %}" class="mt-4 space-y-3">
+                      {% csrf_token %}
+                      <div>
+                        <label class="text-xs text-slate-500 font-medium block mb-1">Nota o comentario (opcional)</label>
+                        <textarea name="nota" rows="3"
+                          placeholder="Describe el resultado de la revisión…"
+                          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
+                                 focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"></textarea>
+                      </div>
+                      <div class="flex justify-end gap-2 pt-1">
+                        <button type="button"
+                                onclick="document.getElementById('modal-{{ ref.id }}').close()"
+                                class="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50">
+                          Cancelar
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
+                          Confirmar conclusión
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </dialog>
+
+              {% else %}
+                <div class="text-xs text-slate-500">
+                  <span class="font-medium text-emerald-700">{{ ref._glosa.fecha_conclusion|date:"d/m/Y H:i" }}</span>
+                  {% if ref._glosa.usuario_conclusion %}
+                    <br>{{ ref._glosa.usuario_conclusion.get_short_name|default:ref._glosa.usuario_conclusion.username }}
+                  {% endif %}
+                </div>
+                {% if ref._glosa.nota %}
+                  <div class="mt-1 text-xs text-slate-400 italic max-w-[150px] truncate"
+                       title="{{ ref._glosa.nota }}">
+                    "{{ ref._glosa.nota }}"
+                  </div>
+                {% endif %}
+              {% endif %}
+            </td>
           </tr>
           {% endwith %}
           {% empty %}
           <tr>
-            <td colspan="9" class="px-4 py-12 text-center text-slate-400">
+            <td colspan="11" class="px-4 py-12 text-center text-slate-400">
               {% if q or filtro_patente %}
                 No se encontraron pedimentos con los filtros actuales.
               {% else %}
-                No hay pedimentos sin pagar en {{ año }}. ¡Todo al corriente!
+                No hay pedimentos pendientes de validación aduanera en {{ mes_anterior }}–{{ mes_actual }}. ¡Todo al corriente!
               {% endif %}
             </td>
           </tr>

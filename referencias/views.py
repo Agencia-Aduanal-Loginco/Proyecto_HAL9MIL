@@ -5,10 +5,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, DurationField, ExpressionWrapper, F, Q
 from django.db.models.functions import Coalesce, Now, TruncMonth
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
-from .models import Referencia
+from .models import GlosaRegistro, Referencia
 
 
 # ---------------------------------------------------------------------------
@@ -247,19 +248,30 @@ def detalle(request, num_refe):
 
 
 # ---------------------------------------------------------------------------
-# Glosa — pedimentos sin pagar del año en curso
+# Glosa — pedimentos sin pagar (ventana deslizante: mes actual + mes anterior)
 # ---------------------------------------------------------------------------
 
 @login_required
 def glosa(request):
-    now  = timezone.localtime()
-    year = now.year
+    now   = timezone.localtime()
+    year  = now.year
+    month = now.month
+
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+
+    meses_nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
     base_qs = Referencia.objects.filter(
-        fecha_pago__isnull=True,
+        fir_elec='',
         es_rectificacion=False,
     ).filter(
-        Q(fecha_arribo__year=year) | Q(fecha_validacion__year=year)
+        Q(fecha_arribo__year=year,      fecha_arribo__month=month)       |
+        Q(fecha_arribo__year=prev_year, fecha_arribo__month=prev_month)  |
+        Q(fecha_validacion__year=year,      fecha_validacion__month=month)      |
+        Q(fecha_validacion__year=prev_year, fecha_validacion__month=prev_month)
     )
 
     qs = base_qs.prefetch_related('contenedores', 'guias').annotate(
@@ -297,7 +309,7 @@ def glosa(request):
         orden = 'fecha_arribo'
     qs = qs.order_by(orden)
 
-    # KPIs por patente (sobre base sin paginación)
+    # KPIs por patente (sobre base sin paginación ni búsqueda)
     por_patente = (
         base_qs
         .values('patente', 'prefijo')
@@ -308,6 +320,16 @@ def glosa(request):
     paginador = Paginator(qs, 50)
     pagina    = paginador.get_page(request.GET.get('page', 1))
 
+    # Cargar registros de glosa para la página actual (1 query adicional)
+    ref_ids    = [ref.id for ref in pagina]
+    glosas_map = {
+        g.referencia_id: g
+        for g in GlosaRegistro.objects.filter(referencia_id__in=ref_ids)
+                               .select_related('usuario_entrada', 'usuario_conclusion')
+    }
+    for ref in pagina:
+        ref._glosa = glosas_map.get(ref.id)
+
     ctx = {
         'page':           pagina,
         'q':              q,
@@ -315,6 +337,34 @@ def glosa(request):
         'orden':          orden,
         'total':          qs.count(),
         'por_patente':    list(por_patente),
+        'mes_actual':     meses_nombres[month - 1],
+        'mes_anterior':   meses_nombres[prev_month - 1],
         'año':            year,
     }
     return render(request, 'referencias/glosa.html', ctx)
+
+
+@login_required
+@require_POST
+def glosa_registrar(request, pk):
+    ref = get_object_or_404(Referencia, pk=pk)
+    GlosaRegistro.objects.get_or_create(
+        referencia=ref,
+        defaults={
+            'fecha_entrada':   timezone.now(),
+            'usuario_entrada': request.user,
+        },
+    )
+    return redirect('glosa')
+
+
+@login_required
+@require_POST
+def glosa_concluir(request, pk):
+    registro = get_object_or_404(GlosaRegistro, referencia_id=pk)
+    if not registro.concluida:
+        registro.fecha_conclusion   = timezone.now()
+        registro.usuario_conclusion = request.user
+        registro.nota               = request.POST.get('nota', '').strip()
+        registro.save()
+    return redirect('glosa')

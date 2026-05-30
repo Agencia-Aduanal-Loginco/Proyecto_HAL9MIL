@@ -158,6 +158,7 @@ def _upsert_referencias(patente, referencias, stats, error_msgs):
                 'linea_captura':    str(item.get('linea_captura', ''))[:30],
                 'cve_capturista':   str(item.get('cve_capturista', ''))[:20],
                 'nombre_capturista': str(item.get('nombre_capturista', ''))[:150],
+                'fir_elec':         str(item.get('fir_elec', ''))[:255],
                 'es_rectificacion': bool(item.get('es_rectificacion', False)),
             }
             _, created = Referencia.objects.update_or_create(

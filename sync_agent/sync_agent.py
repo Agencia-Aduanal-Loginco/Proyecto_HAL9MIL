@@ -249,7 +249,7 @@ def fetch_pedimentos(cur, refs_filter=None):
         cur,
         """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
                   NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
-                  REG_ADUA, NUM_OPER, CVE_CAPT
+                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC
            FROM SAAIO_PEDIME
            WHERE NUM_REFE IS NOT NULL
            ORDER BY NUM_REFE,
@@ -257,7 +257,7 @@ def fetch_pedimentos(cur, refs_filter=None):
                     FEC_PAGO NULLS LAST""",
         """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
                   NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
-                  REG_ADUA, NUM_OPER, CVE_CAPT
+                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC
            FROM SAAIO_PEDIME
            WHERE NUM_REFE IN ({phs})
            ORDER BY NUM_REFE,
@@ -270,7 +270,7 @@ def fetch_pedimentos(cur, refs_filter=None):
     for row in rows:
         (num_refe, cve_impo, fec_entr, fec_pago,
          num_pedi, cve_pedi, tip_pedi, adu_desp,
-         reg_adua, num_oper, cve_capt) = row
+         reg_adua, num_oper, cve_capt, fir_elec) = row
         ref = clean(num_refe, 50)
         if not ref:
             continue
@@ -288,6 +288,7 @@ def fetch_pedimentos(cur, refs_filter=None):
             'regimen':          clean(reg_adua, 10),
             'num_operacion':    clean(num_oper, 100),
             'cve_capturista':   clean(cve_capt, 20).upper(),
+            'fir_elec':         clean(fir_elec, 255),
         }
     return result, all_refs
 
@@ -372,6 +373,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
             'linea_captura':     pedime2.get(ref, ''),
             'cve_capturista':    cve_capt,
             'nombre_capturista': capturistas.get(cve_capt, ''),
+            'fir_elec':          ped.get('fir_elec', ''),
             'es_rectificacion':  ref.startswith('R') and len(ref) > 5,
         })
 
