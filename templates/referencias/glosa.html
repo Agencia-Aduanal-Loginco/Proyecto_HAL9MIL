@@ -4,168 +4,290 @@
 {% block content %}
 <div class="p-6 space-y-4">
 
-  <!-- Header -->
-  <div class="flex items-start justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-800">Glosa</h1>
-      <p class="text-slate-500 text-sm mt-0.5">
-        Sin FIR_ELEC y sin pago confirmado · <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
-        · {{ total }} registro{% if total != 1 %}s{% endif %}
-        {% if q %} · búsqueda: "{{ q }}"{% endif %}
+  <!-- ── Header ──────────────────────────────────────────────── -->
+  <div class="flex items-center justify-between gap-4 flex-wrap">
+
+    <div class="min-w-0">
+      <div class="flex items-center gap-2.5">
+        <h1 class="text-xl font-bold text-slate-800 tracking-tight">Glosa</h1>
+        {% if total > 0 %}
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+          {{ total }} pendiente{% if total != 1 %}s{% endif %}
+        </span>
+        {% endif %}
+      </div>
+      <p class="text-slate-400 text-xs mt-0.5">
+        Sin FIR_ELEC ni pago confirmado ·
+        <span class="font-medium text-slate-600">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
+        {% if q %} · búsqueda: <span class="font-medium text-slate-700">"{{ q }}"</span>{% endif %}
       </p>
     </div>
 
-    <!-- Tabs -->
-    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1 mr-3">
-      <span class="px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
-        Lista
-      </span>
-      <a href="{% url 'glosa_dashboard' %}"
-         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
-        Dashboard
-      </a>
-    </div>
+    <div class="flex items-center gap-3 flex-shrink-0">
 
-    <!-- KPIs por patente -->
-    <div class="flex items-center gap-2">
+      <!-- KPIs por patente -->
       {% for p in por_patente %}
-      <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border
+      <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border
         {% if p.patente == '1627' %}bg-sky-50 border-sky-200
         {% elif p.patente == '1656' %}bg-emerald-50 border-emerald-200
         {% else %}bg-violet-50 border-violet-200{% endif %}">
-        <span class="text-xs font-medium
+        <span class="text-xs font-semibold
           {% if p.patente == '1627' %}text-sky-700
           {% elif p.patente == '1656' %}text-emerald-700
-          {% else %}text-violet-700{% endif %}">
-          {{ p.prefijo }}
-        </span>
-        <span class="text-sm font-bold
+          {% else %}text-violet-700{% endif %}">{{ p.prefijo }}</span>
+        <span class="text-sm font-bold tabular-nums
           {% if p.patente == '1627' %}text-sky-800
           {% elif p.patente == '1656' %}text-emerald-800
-          {% else %}text-violet-800{% endif %}">
-          {{ p.total }}
-        </span>
+          {% else %}text-violet-800{% endif %}">{{ p.total }}</span>
       </div>
       {% endfor %}
-      <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200">
-        <span class="text-xs font-medium text-amber-700">Total</span>
-        <span class="text-sm font-bold text-amber-800">{{ total }}</span>
+
+      <div class="w-px h-5 bg-slate-200 self-center"></div>
+
+      <!-- Tabs Lista / Dashboard -->
+      <div class="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+        <span class="px-3.5 py-1.5 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm select-none">
+          Lista
+        </span>
+        <a href="{% url 'glosa_dashboard' %}"
+           class="px-3.5 py-1.5 text-xs font-medium rounded-md text-slate-500
+                  hover:bg-white/70 hover:text-slate-800
+                  cursor-pointer transition-all duration-150">
+          Dashboard
+        </a>
       </div>
+
     </div>
   </div>
 
-  <!-- Alerta visual si hay pedimentos -->
+  <!-- ── Banner de alerta ─────────────────────────────────────── -->
   {% if total > 0 %}
-  <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-    <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+  <div class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+    <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/>
     </svg>
-    <p class="text-sm text-amber-800">
+    <p class="text-xs text-amber-800 leading-relaxed">
       <span class="font-semibold">{{ total }} pedimento{% if total != 1 %}s{% endif %}</span>
-      sin FIR_ELEC y sin pago confirmado en {{ mes_anterior }}–{{ mes_actual }}.
-      La antigüedad se calcula desde la fecha de arribo (o validación si no hay arribo).
+      sin FIR_ELEC ni pago confirmado en la ventana {{ mes_anterior }}–{{ mes_actual }}.
+      La antigüedad se calcula desde la fecha de arribo (o validación como respaldo).
     </p>
   </div>
   {% endif %}
 
-  <!-- Filtros -->
-  <form method="get" class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-    <div class="grid grid-cols-4 gap-3">
-      <div class="col-span-2">
-        <label class="text-xs text-slate-500 font-medium block mb-1">Buscar</label>
-        <input type="text" name="q" value="{{ q }}"
-          placeholder="Referencia, pedimento, cliente, contenedor, BL…"
-          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
-                 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
+  <!-- ── Filtros ──────────────────────────────────────────────── -->
+  <form method="get" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-end gap-3 px-4 py-3">
+
+      <!-- Búsqueda con icono embebido -->
+      <div class="flex-1">
+        <label for="id_q" class="block text-xs font-medium text-slate-500 mb-1.5">Buscar</label>
+        <div class="relative">
+          <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400"
+               fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+          </svg>
+          <input id="id_q" type="text" name="q" value="{{ q }}"
+            placeholder="Referencia, pedimento, cliente, contenedor, BL…"
+            class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400
+                   focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent
+                   transition-shadow duration-150">
+        </div>
       </div>
-      <div>
-        <label class="text-xs text-slate-500 font-medium block mb-1">Patente</label>
-        <select name="patente"
-          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
-                 focus:outline-none focus:ring-2 focus:ring-amber-400">
-          <option value="">Todas</option>
+
+      <!-- Patente -->
+      <div class="w-48">
+        <label for="id_patente" class="block text-xs font-medium text-slate-500 mb-1.5">Patente</label>
+        <select id="id_patente" name="patente"
+          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white
+                 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400
+                 transition-shadow duration-150">
+          <option value="">Todas las patentes</option>
           <option value="1627" {% if filtro_patente == '1627' %}selected{% endif %}>1627 · LCLF</option>
           <option value="1656" {% if filtro_patente == '1656' %}selected{% endif %}>1656 · LCRR</option>
           <option value="1927" {% if filtro_patente == '1927' %}selected{% endif %}>1927 · LCMJ</option>
         </select>
       </div>
-      <div class="flex items-end gap-2">
+
+      <!-- Botones -->
+      <div class="flex items-center gap-2 pb-px">
+        {% if q or filtro_patente %}
         <a href="{% url 'glosa' %}"
-          class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-500
+                  border border-slate-200 rounded-lg
+                  hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300
+                  cursor-pointer transition-colors duration-150">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+          </svg>
           Limpiar
         </a>
+        {% endif %}
         <button type="submit"
-          class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-400 font-medium">
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold
+                 bg-amber-500 text-white rounded-lg
+                 hover:bg-amber-400 active:bg-amber-600
+                 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1
+                 cursor-pointer transition-colors duration-150">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+          </svg>
           Buscar
         </button>
       </div>
+
     </div>
   </form>
 
-  <!-- Tabla -->
-  <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+  <!-- ── Tabla ────────────────────────────────────────────────── -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
-          <tr>
-            <th class="px-4 py-3 text-left">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'num_refe' %}-{% endif %}num_refe&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">Referencia</a>
+
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50">
+
+            {# Macro: sort header con flecha activa/inactiva #}
+            {% with sort_field="num_refe" label="Referencia" align="left" %}
+            <th class="px-4 py-2.5 text-left">
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == sort_field %}-{% endif %}{{ sort_field }}&patente={{ filtro_patente }}"
+                 class="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
+                        hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
+                {{ label }}
+                {% if orden == sort_field or orden == '-'|add:sort_field %}
+                  <svg class="w-3 h-3 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    {% if orden == sort_field %}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5"/>
+                    {% else %}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
+                    {% endif %}
+                  </svg>
+                {% else %}
+                  <svg class="w-3 h-3 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/>
+                  </svg>
+                {% endif %}
+              </a>
             </th>
-            <th class="px-4 py-3 text-center">
+            {% endwith %}
+
+            <th class="px-4 py-2.5 text-center">
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'patente' %}-{% endif %}patente&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">Patente</a>
+                 class="inline-flex items-center justify-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
+                        hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
+                Patente
+                {% if orden == 'patente' or orden == '-patente' %}
+                  <svg class="w-3 h-3 text-amber-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    {% if orden == 'patente' %}<path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5"/>
+                    {% else %}<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>{% endif %}
+                  </svg>
+                {% else %}
+                  <svg class="w-3 h-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/>
+                  </svg>
+                {% endif %}
+              </a>
             </th>
-            <th class="px-4 py-3 text-right">
+
+            <th class="px-4 py-2.5 text-right">
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">F. Arribo {% if orden == '-fecha_arribo' %}↓{% elif orden == 'fecha_arribo' %}↑{% endif %}</a>
+                 class="inline-flex items-center justify-end gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
+                        hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
+                F. Arribo
+                {% if orden == 'fecha_arribo' or orden == '-fecha_arribo' %}
+                  <svg class="w-3 h-3 text-amber-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    {% if orden == 'fecha_arribo' %}<path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5"/>
+                    {% else %}<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>{% endif %}
+                  </svg>
+                {% else %}
+                  <svg class="w-3 h-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/>
+                  </svg>
+                {% endif %}
+              </a>
             </th>
-            <th class="px-4 py-3 text-left">Pedimento</th>
-            <th class="px-4 py-3 text-left">FIR_ELEC</th>
-            <th class="px-4 py-3 text-center">Clave</th>
-            <th class="px-4 py-3 text-right">Antigüedad</th>
-            <th class="px-4 py-3 text-center">Estado</th>
-            <th class="px-4 py-3 text-center min-w-[160px]">Acciones</th>
+
+            <th class="px-4 py-2.5 text-left">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pedimento</span>
+            </th>
+            <th class="px-4 py-2.5 text-left">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">FIR_ELEC</span>
+            </th>
+            <th class="px-4 py-2.5 text-center">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Clave</span>
+            </th>
+            <th class="px-4 py-2.5 text-right">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Antigüedad</span>
+            </th>
+            <th class="px-4 py-2.5 text-left">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</span>
+            </th>
+            <th class="px-4 py-2.5 text-left">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Acciones</span>
+            </th>
+
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-50">
+
+        <tbody class="divide-y divide-slate-100">
           {% for ref in page %}
-          {% with dias=ref.antiguedad.days %}
-          <tr class="hover:bg-slate-50 transition-colors align-middle">
-            <td class="px-4 py-3">
+          {% with dias=ref.antiguedad.days is_urgente=ref.glosa_reg.urgente %}
+          <tr class="group align-middle transition-colors duration-150
+            {% if is_urgente %}bg-red-50 hover:bg-red-50{% else %}hover:bg-slate-50{% endif %}">
+
+            <!-- Referencia — borde izquierdo para urgentes -->
+            <td class="py-2.5 pr-4
+              {% if is_urgente %}pl-3 border-l-4 border-l-red-400{% else %}pl-4{% endif %}">
               <a href="{% url 'detalle' ref.num_refe %}"
-                 class="text-sky-600 hover:text-sky-700 font-mono text-xs font-bold">
+                 class="font-mono text-xs font-bold text-sky-600 hover:text-sky-800
+                        cursor-pointer transition-colors duration-150">
                 {{ ref.num_refe }}
               </a>
             </td>
-            <td class="px-4 py-3 text-center">
-              <span class="text-xs font-medium px-2 py-0.5 rounded-full
+
+            <!-- Patente -->
+            <td class="px-4 py-2.5 text-center">
+              <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-md
                 {% if ref.patente == '1627' %}bg-sky-100 text-sky-700
                 {% elif ref.patente == '1656' %}bg-emerald-100 text-emerald-700
                 {% else %}bg-violet-100 text-violet-700{% endif %}">
                 {{ ref.prefijo }}
               </span>
             </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
-              {{ ref.fecha_arribo|default:"—" }}
+
+            <!-- F. Arribo -->
+            <td class="px-4 py-2.5 text-right">
+              <span class="font-mono text-xs text-slate-600 tabular-nums">{{ ref.fecha_arribo|default:"—" }}</span>
             </td>
-            <td class="px-4 py-3 font-mono text-xs text-slate-600">
-              {{ ref.num_pedimento|default:"—" }}
+
+            <!-- Pedimento -->
+            <td class="px-4 py-2.5">
+              <span class="font-mono text-xs text-slate-600 tabular-nums">{{ ref.num_pedimento|default:"—" }}</span>
             </td>
-            <td class="px-4 py-3 text-xs text-slate-500 max-w-[120px] truncate" title="{{ ref.fir_elec }}">
-              {{ ref.fir_elec|default:"—" }}
+
+            <!-- FIR_ELEC -->
+            <td class="px-4 py-2.5 max-w-[100px]">
+              <span class="text-xs text-slate-400 truncate block" title="{{ ref.fir_elec }}">
+                {{ ref.fir_elec|default:"—" }}
+              </span>
             </td>
-            <td class="px-4 py-3 text-center">
+
+            <!-- Clave -->
+            <td class="px-4 py-2.5 text-center">
               {% if ref.clave_pedimento %}
-                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                <span class="inline-block text-xs font-mono font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
                   {{ ref.clave_pedimento }}
                 </span>
-              {% else %}—{% endif %}
+              {% else %}
+                <span class="text-slate-300 text-xs">—</span>
+              {% endif %}
             </td>
-            <td class="px-4 py-3 text-right">
+
+            <!-- Antigüedad -->
+            <td class="px-4 py-2.5 text-right">
               {% if dias is not None %}
-                <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full
+                <span class="inline-flex items-center justify-center text-xs font-semibold tabular-nums
+                             px-2 py-0.5 rounded-full min-w-[36px]
                   {% if dias >= 60 %}bg-red-100 text-red-700
                   {% elif dias >= 30 %}bg-amber-100 text-amber-700
                   {% else %}bg-emerald-100 text-emerald-700{% endif %}">
@@ -177,20 +299,49 @@
             </td>
 
             <!-- Estado -->
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-2.5">
               {% if ref.glosa_reg %}
                 {% if ref.glosa_reg.concluida %}
-                  <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Concluida</span>
-                {% else %}
-                  <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">En proceso</span>
-                {% endif %}
-                {% if ref.glosa_reg.urgente %}
-                  <br><span class="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                    ⚠ Urgente
+                  <span class="inline-flex items-center gap-1.5 text-xs font-medium
+                               px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                    Concluida
                   </span>
+                {% else %}
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="inline-flex items-center gap-1.5 text-xs font-medium
+                                 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 animate-pulse"></span>
+                      En proceso
+                    </span>
+                    {% if ref.glosa_reg.urgente %}
+                    <span class="inline-flex items-center gap-1 text-xs font-semibold
+                                 px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                      <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M3 2.25a.75.75 0 0 1 .75.75v.54l1.838-.46a9.75 9.75 0 0 1 6.725.738l.108.054A8.25 8.25 0 0 0 18 4.524l3.11-.732a.75.75 0 0 1 .917.81 47.784 47.784 0 0 0 .005 10.337.75.75 0 0 1-.574.812l-3.114.733a9.75 9.75 0 0 1-6.594-.77l-.108-.054a8.25 8.25 0 0 0-5.69-.625l-2.202.55V21a.75.75 0 0 1-1.5 0V3A.75.75 0 0 1 3 2.25Z" clip-rule="evenodd"/>
+                      </svg>
+                      Urgente
+                    </span>
+                    {% endif %}
+                  </div>
                 {% endif %}
               {% else %}
-                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sin registrar</span>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="inline-flex items-center gap-1.5 text-xs font-medium
+                               px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                    <span class="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0"></span>
+                    Sin registrar
+                  </span>
+                  {% if ref.glosa_reg and ref.glosa_reg.urgente %}
+                  <span class="inline-flex items-center gap-1 text-xs font-semibold
+                               px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M3 2.25a.75.75 0 0 1 .75.75v.54l1.838-.46a9.75 9.75 0 0 1 6.725.738l.108.054A8.25 8.25 0 0 0 18 4.524l3.11-.732a.75.75 0 0 1 .917.81 47.784 47.784 0 0 0 .005 10.337.75.75 0 0 1-.574.812l-3.114.733a9.75 9.75 0 0 1-6.594-.77l-.108-.054a8.25 8.25 0 0 0-5.69-.625l-2.202.55V21a.75.75 0 0 1-1.5 0V3A.75.75 0 0 1 3 2.25Z" clip-rule="evenodd"/>
+                    </svg>
+                    Urgente
+                  </span>
+                  {% endif %}
+                </div>
               {% endif %}
             </td>
 
@@ -198,95 +349,156 @@
             <td class="px-4 py-2.5">
 
               {% if not ref.glosa_reg %}
-                <!-- Sin registrar: bandera + registrar en línea -->
-                <div class="flex items-center gap-2">
-                  <form method="post" action="{% url 'glosa_urgente' ref.id %}">
-                    {% csrf_token %}
-                    <button type="submit" title="Marcar como urgente"
-                            class="p-1.5 rounded-lg border bg-white text-slate-400 border-slate-200
-                                   hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 transition-colors">
-                      ⚑
-                    </button>
-                  </form>
-                  <form method="post" action="{% url 'glosa_registrar' ref.id %}">
-                    {% csrf_token %}
-                    <button type="submit"
-                            class="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-400 font-medium whitespace-nowrap">
-                      Registrar entrada
-                    </button>
-                  </form>
-                </div>
+              <!-- Sin registrar -->
+              <div class="flex items-center gap-2">
+                <form method="post" action="{% url 'glosa_urgente' ref.id %}">
+                  {% csrf_token %}
+                  <button type="submit" title="Marcar como urgente"
+                          class="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400
+                                 hover:bg-amber-50 hover:text-amber-500 hover:border-amber-300
+                                 focus:outline-none focus:ring-2 focus:ring-amber-400
+                                 cursor-pointer transition-colors duration-150">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5"/>
+                    </svg>
+                  </button>
+                </form>
+                <form method="post" action="{% url 'glosa_registrar' ref.id %}">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold
+                                 bg-blue-500 text-white rounded-lg
+                                 hover:bg-blue-600 active:bg-blue-700
+                                 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1
+                                 cursor-pointer transition-colors duration-150 whitespace-nowrap">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                    </svg>
+                    Registrar
+                  </button>
+                </form>
+              </div>
 
               {% elif not ref.glosa_reg.concluida %}
-                <!-- En proceso: fecha entrada arriba, bandera + concluir en línea -->
-                <p class="text-xs text-slate-400 mb-1.5">
-                  {{ ref.glosa_reg.fecha_entrada|date:"d/m H:i" }}
-                  {% if ref.glosa_reg.usuario_entrada %}
-                    · {{ ref.glosa_reg.usuario_entrada.get_short_name|default:ref.glosa_reg.usuario_entrada.username }}
-                  {% endif %}
-                </p>
-                <div class="flex items-center gap-2">
-                  <form method="post" action="{% url 'glosa_urgente' ref.id %}">
-                    {% csrf_token %}
-                    <button type="submit"
-                            title="{% if ref.glosa_reg.urgente %}Quitar urgente{% else %}Marcar como urgente{% endif %}"
-                            class="p-1.5 rounded-lg border font-medium transition-colors
-                              {% if ref.glosa_reg.urgente %}
-                                bg-red-100 text-red-600 border-red-200 hover:bg-red-200
-                              {% else %}
-                                bg-white text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300
-                              {% endif %}">
-                      {% if ref.glosa_reg.urgente %}⚠{% else %}⚑{% endif %}
-                    </button>
-                  </form>
-                  <button type="button"
-                          onclick="document.getElementById('modal-{{ ref.id }}').showModal()"
-                          class="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
-                    Concluir
+              <!-- En proceso -->
+              <p class="text-xs text-slate-400 mb-1.5 tabular-nums">
+                {{ ref.glosa_reg.fecha_entrada|date:"d/m H:i" }}
+                {% if ref.glosa_reg.usuario_entrada %}
+                  <span class="font-medium text-slate-500">· {{ ref.glosa_reg.usuario_entrada.get_short_name|default:ref.glosa_reg.usuario_entrada.username }}</span>
+                {% endif %}
+              </p>
+              <div class="flex items-center gap-2">
+                <!-- Toggle urgente -->
+                <form method="post" action="{% url 'glosa_urgente' ref.id %}">
+                  {% csrf_token %}
+                  <button type="submit"
+                          title="{% if ref.glosa_reg.urgente %}Quitar urgente{% else %}Marcar como urgente{% endif %}"
+                          class="p-1.5 rounded-lg border cursor-pointer transition-colors duration-150
+                                 focus:outline-none focus:ring-2 focus:ring-offset-1
+                            {% if ref.glosa_reg.urgente %}
+                              bg-red-100 text-red-600 border-red-200 hover:bg-red-200 focus:ring-red-400
+                            {% else %}
+                              bg-white text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-500 hover:border-amber-300 focus:ring-amber-400
+                            {% endif %}">
+                    {% if ref.glosa_reg.urgente %}
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M3 2.25a.75.75 0 0 1 .75.75v.54l1.838-.46a9.75 9.75 0 0 1 6.725.738l.108.054A8.25 8.25 0 0 0 18 4.524l3.11-.732a.75.75 0 0 1 .917.81 47.784 47.784 0 0 0 .005 10.337.75.75 0 0 1-.574.812l-3.114.733a9.75 9.75 0 0 1-6.594-.77l-.108-.054a8.25 8.25 0 0 0-5.69-.625l-2.202.55V21a.75.75 0 0 1-1.5 0V3A.75.75 0 0 1 3 2.25Z" clip-rule="evenodd"/>
+                    </svg>
+                    {% else %}
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5"/>
+                    </svg>
+                    {% endif %}
                   </button>
-                </div>
+                </form>
+                <!-- Concluir -->
+                <button type="button"
+                        onclick="document.getElementById('modal-{{ ref.id }}').showModal()"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold
+                               bg-emerald-500 text-white rounded-lg
+                               hover:bg-emerald-600 active:bg-emerald-700
+                               focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-1
+                               cursor-pointer transition-colors duration-150">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+                  </svg>
+                  Concluir
+                </button>
+              </div>
 
-                <!-- Modal de conclusión -->
-                <dialog id="modal-{{ ref.id }}"
-                        class="rounded-xl p-0 shadow-2xl w-96 border-0 backdrop:bg-black/40">
-                  <div class="p-6">
-                    <h3 class="text-base font-semibold text-slate-800">Concluir revisión de glosa</h3>
-                    <p class="text-xs text-slate-500 mt-1 font-mono">{{ ref.num_refe }}</p>
-                    <form method="post" action="{% url 'glosa_concluir' ref.id %}" class="mt-4 space-y-3">
-                      {% csrf_token %}
-                      <div>
-                        <label class="text-xs text-slate-500 font-medium block mb-1">Nota o comentario (opcional)</label>
-                        <textarea name="nota" rows="3"
-                          placeholder="Describe el resultado de la revisión…"
-                          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700
-                                 focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"></textarea>
-                      </div>
-                      <div class="flex justify-end gap-2 pt-1">
-                        <button type="button"
-                                onclick="document.getElementById('modal-{{ ref.id }}').close()"
-                                class="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50">
-                          Cancelar
-                        </button>
-                        <button type="submit"
-                                class="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 font-medium">
-                          Confirmar
-                        </button>
-                      </div>
-                    </form>
+              <!-- Modal de conclusión -->
+              <dialog id="modal-{{ ref.id }}"
+                      class="rounded-2xl p-0 shadow-2xl w-[400px] max-w-[92vw] border border-slate-200
+                             backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm">
+                <div class="p-6 space-y-4">
+                  <!-- Modal header -->
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 class="text-sm font-bold text-slate-800">Concluir revisión de glosa</h3>
+                      <p class="text-xs text-slate-400 font-mono mt-0.5">{{ ref.num_refe }}</p>
+                    </div>
+                    <button type="button"
+                            onclick="document.getElementById('modal-{{ ref.id }}').close()"
+                            class="flex-shrink-0 p-1.5 rounded-lg text-slate-400
+                                   hover:text-slate-600 hover:bg-slate-100
+                                   cursor-pointer transition-colors duration-150
+                                   focus:outline-none focus:ring-2 focus:ring-slate-400"
+                            aria-label="Cerrar">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
                   </div>
-                </dialog>
+                  <!-- Modal form -->
+                  <form method="post" action="{% url 'glosa_concluir' ref.id %}" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                      <label class="block text-xs font-medium text-slate-600 mb-1.5">
+                        Nota o comentario
+                        <span class="text-slate-400 font-normal ml-1">(opcional)</span>
+                      </label>
+                      <textarea name="nota" rows="3"
+                        placeholder="Describe el resultado de la revisión…"
+                        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 placeholder-slate-400
+                               focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent
+                               resize-none transition-shadow duration-150"></textarea>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                      <button type="button"
+                              onclick="document.getElementById('modal-{{ ref.id }}').close()"
+                              class="px-4 py-2 text-xs font-medium border border-slate-200 rounded-lg
+                                     text-slate-600 hover:bg-slate-50
+                                     cursor-pointer transition-colors duration-150
+                                     focus:outline-none focus:ring-2 focus:ring-slate-400">
+                        Cancelar
+                      </button>
+                      <button type="submit"
+                              class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold
+                                     bg-emerald-500 text-white rounded-lg
+                                     hover:bg-emerald-600 active:bg-emerald-700
+                                     cursor-pointer transition-colors duration-150
+                                     focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-1">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+                        </svg>
+                        Confirmar conclusión
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </dialog>
 
               {% else %}
-                <!-- Concluida: info de cierre -->
-                <p class="text-xs font-medium text-emerald-700">{{ ref.glosa_reg.fecha_conclusion|date:"d/m/Y H:i" }}</p>
-                {% if ref.glosa_reg.usuario_conclusion %}
-                  <p class="text-xs text-slate-500">{{ ref.glosa_reg.usuario_conclusion.get_short_name|default:ref.glosa_reg.usuario_conclusion.username }}</p>
-                {% endif %}
-                {% if ref.glosa_reg.nota %}
-                  <p class="text-xs text-slate-400 italic mt-0.5 max-w-[180px] truncate" title="{{ ref.glosa_reg.nota }}">
-                    "{{ ref.glosa_reg.nota }}"
-                  </p>
-                {% endif %}
+              <!-- Concluida -->
+              <p class="text-xs font-semibold text-emerald-700 tabular-nums">{{ ref.glosa_reg.fecha_conclusion|date:"d/m/Y H:i" }}</p>
+              {% if ref.glosa_reg.usuario_conclusion %}
+                <p class="text-xs text-slate-500 mt-0.5">{{ ref.glosa_reg.usuario_conclusion.get_short_name|default:ref.glosa_reg.usuario_conclusion.username }}</p>
+              {% endif %}
+              {% if ref.glosa_reg.nota %}
+                <p class="text-xs text-slate-400 italic mt-0.5 max-w-[180px] truncate" title="{{ ref.glosa_reg.nota }}">
+                  "{{ ref.glosa_reg.nota }}"
+                </p>
+              {% endif %}
               {% endif %}
 
             </td>
@@ -294,12 +506,35 @@
           {% endwith %}
           {% empty %}
           <tr>
-            <td colspan="9" class="px-4 py-12 text-center text-slate-400">
-              {% if q or filtro_patente %}
-                No se encontraron pedimentos con los filtros actuales.
-              {% else %}
-                No hay pedimentos pendientes de validación aduanera en {{ mes_anterior }}–{{ mes_actual }}. ¡Todo al corriente!
-              {% endif %}
+            <td colspan="9" class="py-16 text-center">
+              <div class="flex flex-col items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                  {% if q or filtro_patente %}
+                  <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+                  </svg>
+                  {% else %}
+                  <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.745 3.745 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.745 3.745 0 0 1 3.296-1.043A3.745 3.745 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.745 3.745 0 0 1 3.296 1.043 3.745 3.745 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z"/>
+                  </svg>
+                  {% endif %}
+                </div>
+                {% if q or filtro_patente %}
+                  <div>
+                    <p class="text-sm font-semibold text-slate-600">Sin resultados</p>
+                    <p class="text-xs text-slate-400 mt-0.5">No hay pedimentos con los filtros aplicados.</p>
+                  </div>
+                  <a href="{% url 'glosa' %}"
+                     class="text-xs font-medium text-amber-600 hover:text-amber-700 cursor-pointer transition-colors duration-150">
+                    Limpiar filtros
+                  </a>
+                {% else %}
+                  <div>
+                    <p class="text-sm font-semibold text-slate-600">Todo al corriente</p>
+                    <p class="text-xs text-slate-400 mt-0.5">No hay pedimentos pendientes en {{ mes_anterior }}–{{ mes_actual }}.</p>
+                  </div>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -307,39 +542,63 @@
       </table>
     </div>
 
-    <!-- Paginación -->
+    <!-- ── Paginación ─────────────────────────────────────────── -->
     {% if page.has_other_pages %}
-    <div class="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
+    <div class="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/60">
       <p class="text-xs text-slate-500">
-        Página {{ page.number }} de {{ page.paginator.num_pages }}
-        · {{ total }} resultados
+        Mostrando
+        <span class="font-semibold text-slate-700 tabular-nums">{{ page.start_index }}–{{ page.end_index }}</span>
+        de
+        <span class="font-semibold text-slate-700 tabular-nums">{{ total }}</span>
+        resultados
       </p>
-      <div class="flex gap-1">
+      <div class="flex items-center gap-1">
+
         {% if page.has_previous %}
-          <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.previous_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
-             class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
-            ← Anterior
-          </a>
+        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.previous_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+           class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium
+                  border border-slate-200 rounded-lg text-slate-600
+                  hover:bg-white hover:border-slate-300 hover:text-slate-800
+                  cursor-pointer transition-colors duration-150">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/>
+          </svg>
+          Anterior
+        </a>
         {% endif %}
+
         {% for num in page.paginator.page_range %}
           {% if page.number == num %}
-            <span class="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg">{{ num }}</span>
+            <span class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold
+                         bg-amber-500 text-white rounded-lg tabular-nums min-w-[34px]">{{ num }}</span>
           {% elif num > page.number|add:'-3' and num < page.number|add:'3' %}
             <a href="?{% if q %}q={{ q }}&{% endif %}page={{ num }}&patente={{ filtro_patente }}&orden={{ orden }}"
-               class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
+               class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium
+                      border border-slate-200 rounded-lg text-slate-600
+                      hover:bg-white hover:border-slate-300 hover:text-slate-800
+                      cursor-pointer transition-colors duration-150 tabular-nums min-w-[34px]">
               {{ num }}
             </a>
           {% endif %}
         {% endfor %}
+
         {% if page.has_next %}
-          <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.next_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
-             class="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-white text-slate-600">
-            Siguiente →
-          </a>
+        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.next_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+           class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium
+                  border border-slate-200 rounded-lg text-slate-600
+                  hover:bg-white hover:border-slate-300 hover:text-slate-800
+                  cursor-pointer transition-colors duration-150">
+          Siguiente
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/>
+          </svg>
+        </a>
         {% endif %}
+
       </div>
     </div>
     {% endif %}
+
   </div>
 
 </div>
