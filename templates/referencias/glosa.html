@@ -117,17 +117,9 @@
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'patente' %}-{% endif %}patente&patente={{ filtro_patente }}"
                  class="hover:text-slate-800">Patente</a>
             </th>
-            <th class="px-4 py-3 text-left">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'nombre_cliente' %}-{% endif %}nombre_cliente&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">Cliente</a>
-            </th>
             <th class="px-4 py-3 text-right">
               <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}"
                  class="hover:text-slate-800">F. Arribo {% if orden == '-fecha_arribo' %}↓{% elif orden == 'fecha_arribo' %}↑{% endif %}</a>
-            </th>
-            <th class="px-4 py-3 text-right">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_validacion' %}-{% endif %}fecha_validacion&patente={{ filtro_patente }}"
-                 class="hover:text-slate-800">F. Validación</a>
             </th>
             <th class="px-4 py-3 text-left">Pedimento</th>
             <th class="px-4 py-3 text-left">FIR_ELEC</th>
@@ -155,14 +147,8 @@
                 {{ ref.prefijo }}
               </span>
             </td>
-            <td class="px-4 py-3 text-slate-600 text-xs max-w-[160px] truncate" title="{{ ref.nombre_cliente }}">
-              {{ ref.nombre_cliente|default:"—" }}
-            </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
               {{ ref.fecha_arribo|default:"—" }}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
-              {{ ref.fecha_validacion|default:"—" }}
             </td>
             <td class="px-4 py-3 font-mono text-xs text-slate-600">
               {{ ref.num_pedimento|default:"—" }}
@@ -297,7 +283,7 @@
           {% endwith %}
           {% empty %}
           <tr>
-            <td colspan="11" class="px-4 py-12 text-center text-slate-400">
+            <td colspan="9" class="px-4 py-12 text-center text-slate-400">
               {% if q or filtro_patente %}
                 No se encontraron pedimentos con los filtros actuales.
               {% else %}
