@@ -1,11 +1,9 @@
 import logging
-import time
 import requests
+from requests.exceptions import Timeout, ConnectionError as ReqConnectionError
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-
-_RETRY_DELAYS = [5, 15]  # segundos entre reintentos (2 reintentos máx)
 
 
 def _headers():
@@ -24,28 +22,27 @@ def send_text(chat_id: str, text: str) -> dict:
         return {}
 
     url = f"{_session_url()}/messages/send-text"
-    last_exc = None
-
-    for attempt, delay in enumerate([0] + _RETRY_DELAYS, start=1):
-        if delay:
-            time.sleep(delay)
-        try:
-            resp = requests.post(
-                url,
-                headers=_headers(),
-                json={'chatId': chat_id, 'text': text},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            if attempt > 1:
-                logger.info("WhatsApp send_text OK en intento %d.", attempt)
-            return resp.json()
-        except Exception as e:
-            last_exc = e
-            logger.warning("WhatsApp send_text intento %d fallido: %s", attempt, e)
-
-    logger.error("WhatsApp send_text falló tras %d intentos: %s", attempt, last_exc)
-    return {}
+    try:
+        resp = requests.post(
+            url,
+            headers=_headers(),
+            json={'chatId': chat_id, 'text': text},
+            timeout=30,  # WAHA bloquea esperando ACK; 30s es suficiente
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Timeout:
+        # Timeout no significa fallo: WAHA ya encoló el mensaje en WhatsApp.
+        # No reintentar — causaría duplicados.
+        logger.warning("WhatsApp send_text timeout para %s (mensaje probablemente enviado).", chat_id)
+        return {}
+    except ReqConnectionError as e:
+        # Sin conexión al servidor OpenWA — reintento manual necesario.
+        logger.error("WhatsApp send_text sin conexión: %s", e)
+        return {}
+    except Exception as e:
+        logger.error("WhatsApp send_text error: %s", e)
+        return {}
 
 
 def send_to_admin(text: str) -> dict:
