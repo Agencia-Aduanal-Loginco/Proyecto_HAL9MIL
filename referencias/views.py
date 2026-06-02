@@ -322,15 +322,39 @@ def glosa(request):
     paginador = Paginator(qs, 50)
     pagina    = paginador.get_page(request.GET.get('page', 1))
 
-    # Cargar registros de glosa para la página actual (1 query adicional)
-    ref_ids    = [ref.id for ref in pagina]
-    glosas_map = {
+    # Cargar registros de glosa para la página actual (3 queries adicionales)
+    ref_ids = [ref.id for ref in pagina]
+
+    # Glosa activa (abierta) por referencia
+    active_map = {
         g.referencia_id: g
-        for g in GlosaRegistro.objects.filter(referencia_id__in=ref_ids)
-                               .select_related('usuario_entrada', 'usuario_conclusion')
+        for g in GlosaRegistro.objects.filter(
+            referencia_id__in=ref_ids,
+            fecha_conclusion__isnull=True,
+        ).select_related('usuario_entrada')
     }
+    # Última glosa concluida por referencia (para mostrar historial)
+    last_concluded_map: dict = {}
+    for g in (
+        GlosaRegistro.objects
+        .filter(referencia_id__in=ref_ids, fecha_conclusion__isnull=False)
+        .select_related('usuario_conclusion')
+        .order_by('referencia_id', 'fecha_conclusion')
+    ):
+        last_concluded_map[g.referencia_id] = g  # queda la más reciente
+
+    # Conteo total de ciclos de glosa por referencia
+    counts = dict(
+        GlosaRegistro.objects.filter(referencia_id__in=ref_ids)
+        .values('referencia_id')
+        .annotate(n=Count('id'))
+        .values_list('referencia_id', 'n')
+    )
+
     for ref in pagina:
-        ref.glosa_reg = glosas_map.get(ref.id)
+        ref.glosa_reg   = active_map.get(ref.id)
+        ref.last_glosa  = last_concluded_map.get(ref.id)
+        ref.glosa_count = counts.get(ref.id, 0)
 
     ctx = {
         'page':           pagina,
@@ -350,13 +374,13 @@ def glosa(request):
 @require_POST
 def glosa_registrar(request, pk):
     ref = get_object_or_404(Referencia, pk=pk)
-    GlosaRegistro.objects.get_or_create(
-        referencia=ref,
-        defaults={
-            'fecha_entrada':   timezone.now(),
-            'usuario_entrada': request.user,
-        },
-    )
+    # Solo crear si no hay ya una glosa activa (sin concluir) para esta referencia
+    if not GlosaRegistro.objects.filter(referencia=ref, fecha_conclusion__isnull=True).exists():
+        GlosaRegistro.objects.create(
+            referencia=ref,
+            fecha_entrada=timezone.now(),
+            usuario_entrada=request.user,
+        )
     return redirect('glosa')
 
 
@@ -364,13 +388,13 @@ def glosa_registrar(request, pk):
 @require_POST
 def glosa_urgente(request, pk):
     ref = get_object_or_404(Referencia, pk=pk)
-    registro, _ = GlosaRegistro.objects.get_or_create(
-        referencia=ref,
-        defaults={
-            'fecha_entrada':   timezone.now(),
-            'usuario_entrada': request.user,
-        },
-    )
+    registro = GlosaRegistro.objects.filter(referencia=ref, fecha_conclusion__isnull=True).first()
+    if registro is None:
+        registro = GlosaRegistro.objects.create(
+            referencia=ref,
+            fecha_entrada=timezone.now(),
+            usuario_entrada=request.user,
+        )
     registro.urgente = not registro.urgente
     registro.save(update_fields=['urgente'])
     return redirect('glosa')
@@ -379,12 +403,11 @@ def glosa_urgente(request, pk):
 @login_required
 @require_POST
 def glosa_concluir(request, pk):
-    registro = get_object_or_404(GlosaRegistro, referencia_id=pk)
-    if not registro.concluida:
-        registro.fecha_conclusion   = timezone.now()
-        registro.usuario_conclusion = request.user
-        registro.nota               = request.POST.get('nota', '').strip()
-        registro.save()
+    registro = get_object_or_404(GlosaRegistro, referencia_id=pk, fecha_conclusion__isnull=True)
+    registro.fecha_conclusion   = timezone.now()
+    registro.usuario_conclusion = request.user
+    registro.nota               = request.POST.get('nota', '').strip()
+    registro.save()
     return redirect('glosa')
 
 
@@ -431,19 +454,25 @@ def glosa_dashboard(request):
         .filter(referencia__in=base_qs)
         .select_related('referencia', 'usuario_entrada', 'usuario_conclusion')
     )
-    registradas_ids = set(glosas_qs.values_list('referencia_id', flat=True))
-    concluidas_ids  = set(
-        glosas_qs.filter(fecha_conclusion__isnull=False)
+
+    # Referencias con al menos una glosa (cualquier estado)
+    any_glosa_ids = set(glosas_qs.values_list('referencia_id', flat=True))
+    # Referencias con glosa activa (sin concluir)
+    active_ids = set(
+        glosas_qs.filter(fecha_conclusion__isnull=True)
         .values_list('referencia_id', flat=True)
     )
+    # Referencias con glosa(s) concluida(s) pero sin ninguna activa
+    concluded_only_ids = any_glosa_ids - active_ids
 
-    sin_registrar = total - len(registradas_ids)
-    en_proceso    = len(registradas_ids - concluidas_ids)
-    concluidas    = len(concluidas_ids)
+    sin_registrar = total - len(any_glosa_ids)
+    en_proceso    = len(active_ids)
+    concluidas    = len(concluded_only_ids)
 
-    # Urgentes: marcados manualmente en GlosaRegistro
+    # Urgentes: referencias con glosa activa marcada como urgente
     urgentes_ids = set(
-        glosas_qs.filter(urgente=True).values_list('referencia_id', flat=True)
+        glosas_qs.filter(urgente=True, fecha_conclusion__isnull=True)
+        .values_list('referencia_id', flat=True)
     )
     urgentes_count = len(urgentes_ids)
     # Críticos: urgente + ≥ 60 días (urgente manual + antigüedad severa)
@@ -502,7 +531,8 @@ def glosa_dashboard(request):
     urg_glosas_map = {
         g.referencia_id: g
         for g in GlosaRegistro.objects.filter(
-            referencia_id__in=[r.id for r in urgentes_list]
+            referencia_id__in=[r.id for r in urgentes_list],
+            fecha_conclusion__isnull=True,
         ).select_related('usuario_entrada')
     }
     for ref in urgentes_list:

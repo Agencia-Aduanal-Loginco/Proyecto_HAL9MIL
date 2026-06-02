@@ -289,5 +289,6 @@ plan_owa.md
 #context.md
 OpenWA.md
 #sync_agent/
+CorOpenWA.md
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,django

@@ -78,8 +78,8 @@ class GuiaBL(models.Model):
 
 
 class GlosaRegistro(models.Model):
-    referencia         = models.OneToOneField(
-        Referencia, on_delete=models.CASCADE, related_name='glosa'
+    referencia         = models.ForeignKey(
+        Referencia, on_delete=models.CASCADE, related_name='glosas'
     )
     fecha_entrada      = models.DateTimeField()
     usuario_entrada    = models.ForeignKey(
