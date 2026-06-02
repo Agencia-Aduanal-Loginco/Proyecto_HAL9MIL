@@ -343,11 +343,24 @@ def fetch_guias(cur, refs_filter=None):
             result.setdefault(ref, []).append({'numero_guia': bl, 'tipo_guia': tipo})
     return result
 
+
+def fetch_partidas_count(cur, refs_filter=None):
+    """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, COUNT(*) FROM SAAIO_FRACCI
+           WHERE NUM_REFE IS NOT NULL GROUP BY NUM_REFE""",
+        """SELECT NUM_REFE, COUNT(*) FROM SAAIO_FRACCI
+           WHERE NUM_REFE IN ({phs}) GROUP BY NUM_REFE""",
+        refs_filter,
+    )
+    return {clean(r[0], 50): int(r[1]) for r in rows if r[0]}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, embar, pedimentos,
-                  all_refs, pedime2, contenedores, guias):
+                  all_refs, pedime2, contenedores, guias, partidas_count):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -375,6 +388,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
             'nombre_capturista': capturistas.get(cve_capt, ''),
             'fir_elec':          ped.get('fir_elec', ''),
             'es_rectificacion':  ref.startswith('R') and len(ref) > 5,
+            'num_partidas':      partidas_count.get(ref, 0),
         })
 
     conts_list = [
@@ -534,6 +548,7 @@ def main():
         pedime2      = fetch_pedime2(cur, refs_filter)
         contenedores = fetch_contenedores(cur, refs_filter)
         guias        = fetch_guias(cur, refs_filter)
+        partidas     = fetch_partidas_count(cur, refs_filter)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
@@ -541,9 +556,10 @@ def main():
     finally:
         con.close()
 
-    n_conts = sum(len(v) for v in contenedores.values())
-    n_guias = sum(len(v) for v in guias.values())
-    log.info(f'Extraídos: {len(all_refs)} referencias | {n_conts} contenedores | {n_guias} guías BL')
+    n_conts    = sum(len(v) for v in contenedores.values())
+    n_guias    = sum(len(v) for v in guias.values())
+    n_partidas = sum(partidas.values())
+    log.info(f'Extraídos: {len(all_refs)} referencias | {n_partidas} partidas | {n_conts} contenedores | {n_guias} guías BL')
 
     if args.dry_run:
         log.info('[DRY-RUN] Extracción OK, no se envía payload.')
@@ -568,7 +584,7 @@ def main():
         for idx, chunk_refs in enumerate(chunks, 1):
             chunk_set = set(chunk_refs)
             payload   = build_payload(clientes, capturistas, embar, pedimentos,
-                                      chunk_set, pedime2, contenedores, guias)
+                                      chunk_set, pedime2, contenedores, guias, partidas)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
                      f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
             resp = send_payload(payload)

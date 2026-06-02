@@ -122,6 +122,43 @@
       </dl>
     </div>
 
+    <!-- Partidas arancelarias -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <h2 class="text-slate-700 font-semibold text-sm mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        Partidas arancelarias
+      </h2>
+      <div class="flex items-end gap-4">
+        <div>
+          <p class="text-3xl font-bold tabular-nums
+            {% if ref.num_partidas >= 10 %}text-red-600
+            {% elif ref.num_partidas >= 5 %}text-amber-600
+            {% else %}text-slate-800{% endif %}">
+            {{ ref.num_partidas }}
+          </p>
+          <p class="text-xs text-slate-400 mt-0.5">
+            fraccion{% if ref.num_partidas != 1 %}es{% endif %} arancelaria{% if ref.num_partidas != 1 %}s{% endif %}
+          </p>
+        </div>
+        <div class="flex-1 pb-1">
+          {% if ref.num_partidas == 0 %}
+            <span class="text-xs text-slate-400">Sin datos de partidas</span>
+          {% elif ref.num_partidas == 1 %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">Baja complejidad</span>
+          {% elif ref.num_partidas <= 4 %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">Complejidad media</span>
+          {% elif ref.num_partidas <= 9 %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">Alta complejidad</span>
+          {% else %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">Muy alta complejidad</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
     <!-- Contenedores -->
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
       <h2 class="text-slate-700 font-semibold text-sm mb-4 flex items-center gap-2">

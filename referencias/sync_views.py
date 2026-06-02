@@ -160,6 +160,7 @@ def _upsert_referencias(patente, referencias, stats, error_msgs):
                 'nombre_capturista': str(item.get('nombre_capturista', ''))[:150],
                 'fir_elec':         str(item.get('fir_elec', ''))[:255],
                 'es_rectificacion': bool(item.get('es_rectificacion', False)),
+                'num_partidas':     int(item.get('num_partidas', 0) or 0),
             }
             _, created = Referencia.objects.update_or_create(
                 num_refe=num_refe,

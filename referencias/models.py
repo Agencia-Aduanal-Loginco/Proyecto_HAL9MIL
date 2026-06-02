@@ -35,6 +35,7 @@ class Referencia(models.Model):
     nombre_capturista = models.CharField(max_length=150, blank=True)
     fir_elec          = models.CharField(max_length=255, blank=True)
     es_rectificacion  = models.BooleanField(default=False)
+    num_partidas      = models.IntegerField(default=0)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
 

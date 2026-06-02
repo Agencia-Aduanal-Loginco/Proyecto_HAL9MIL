@@ -127,6 +127,7 @@
             <th class="px-4 py-3 text-left">Num. Pedimento</th>
             <th class="px-4 py-3 text-center">Clave</th>
             <th class="px-4 py-3 text-center">Conts.</th>
+            <th class="px-4 py-3 text-center">Parts.</th>
             <th class="px-4 py-3 text-left">BL / Guía</th>
           </tr>
         </thead>
@@ -173,13 +174,26 @@
               {% if cnt %}{{ cnt }}{% else %}—{% endif %}
               {% endwith %}
             </td>
+            <td class="px-4 py-3 text-center">
+              {% if ref.num_partidas %}
+                <span class="inline-flex items-center justify-center text-xs font-semibold tabular-nums
+                             px-2 py-0.5 rounded-full min-w-[28px]
+                  {% if ref.num_partidas >= 10 %}bg-red-100 text-red-700
+                  {% elif ref.num_partidas >= 5 %}bg-amber-100 text-amber-700
+                  {% else %}bg-slate-100 text-slate-600{% endif %}">
+                  {{ ref.num_partidas }}
+                </span>
+              {% else %}
+                <span class="text-slate-300 text-xs">—</span>
+              {% endif %}
+            </td>
             <td class="px-4 py-3 font-mono text-xs text-slate-500 max-w-[140px] truncate">
               {% with bl=ref.guias.first %}{{ bl.numero_guia|default:"—" }}{% endwith %}
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="10" class="px-4 py-12 text-center text-slate-400">
+            <td colspan="11" class="px-4 py-12 text-center text-slate-400">
               No se encontraron referencias con los filtros actuales.
             </td>
           </tr>

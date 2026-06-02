@@ -202,12 +202,23 @@ def fetch_guias(cur):
     return result
 
 
+def fetch_partidas_count(cur):
+    """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
+    cur.execute("""
+        SELECT NUM_REFE, COUNT(*)
+        FROM SAAIO_FRACCI
+        WHERE NUM_REFE IS NOT NULL
+        GROUP BY NUM_REFE
+    """)
+    return {clean(r[0], 50): int(r[1]) for r in cur.fetchall() if r[0]}
+
+
 # ---------------------------------------------------------------------------
 # Import helpers
 # ---------------------------------------------------------------------------
 
 def import_referencias(patente, clientes, capturistas, pedime2, embar,
-                        pedimentos, all_refs, dry_run, stdout):
+                        pedimentos, all_refs, partidas_count, dry_run, stdout):
     prefijo = PATENTE_PREFIJO.get(patente, patente)
     created = updated = 0
 
@@ -245,6 +256,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             nombre_capturista=nombre_capt,
             fir_elec=ped.get('fir_elec', ''),
             es_rectificacion=es_rect,
+            num_partidas=partidas_count.get(ref, 0),
         ))
 
     if not dry_run:
@@ -363,16 +375,19 @@ class Command(BaseCommand):
                 pedime2     = fetch_pedime2(cur)     if (import_all or solo_ref) else {}
                 embar       = fetch_embar(cur)       if (import_all or solo_ref) else {}
                 peds, all_refs = fetch_pedimentos(cur) if (import_all or solo_ref) else ({}, set())
+                partidas    = fetch_partidas_count(cur) if (import_all or solo_ref) else {}
                 conts       = fetch_contenedores(cur) if (import_all or solo_cont) else {}
                 guias       = fetch_guias(cur)       if (import_all or solo_bl) else {}
                 data[patente] = dict(
                     clientes=clientes, capturistas=capturistas,
                     pedime2=pedime2, embar=embar,
                     peds=peds, all_refs=all_refs,
+                    partidas=partidas,
                     conts=conts, guias=guias,
                 )
                 self.stdout.write(
                     f'    {len(all_refs)} referencias | '
+                    f'{sum(partidas.values())} partidas | '
                     f'{sum(len(v) for v in conts.values())} contenedores | '
                     f'{sum(len(v) for v in guias.values())} guías BL'
                 )
@@ -386,6 +401,7 @@ class Command(BaseCommand):
                 import_referencias(
                     patente, d['clientes'], d['capturistas'],
                     d['pedime2'], d['embar'], d['peds'], d['all_refs'],
+                    d['partidas'],
                     dry_run, self.stdout,
                 )
 
