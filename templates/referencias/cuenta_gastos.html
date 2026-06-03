@@ -370,6 +370,7 @@
     </div>
     <form id="form-finalizar" method="post" action="">
       {% csrf_token %}
+      <input type="hidden" name="next" value="?tab={{ tab }}{% if q %}&q={{ q }}{% endif %}{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if filtro_año %}&año={{ filtro_año }}{% endif %}{% if filtro_mes %}&mes={{ filtro_mes }}{% endif %}{% if page.number > 1 %}&page={{ page.number }}{% endif %}">
       <div class="px-6 py-5">
         <label class="block text-sm font-medium text-slate-700 mb-2">
           Nota de finalización <span class="text-slate-400 font-normal">(opcional)</span>
