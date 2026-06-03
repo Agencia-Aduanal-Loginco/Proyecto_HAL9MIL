@@ -108,6 +108,26 @@ class GlosaRegistro(models.Model):
         return self.fecha_conclusion is not None
 
 
+class CuentaGastos(models.Model):
+    referencia         = models.OneToOneField(
+        Referencia, on_delete=models.CASCADE, related_name='cuenta_gastos'
+    )
+    nota               = models.TextField(blank=True)
+    fecha_finalizacion = models.DateTimeField()
+    finalizado_por     = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='cuenta_gastos_finalizadas'
+    )
+
+    class Meta:
+        ordering            = ['-fecha_finalizacion']
+        verbose_name        = 'Cuenta de gastos'
+        verbose_name_plural = 'Cuentas de gastos'
+
+    def __str__(self):
+        return f'{self.referencia} | {self.fecha_finalizacion:%Y-%m-%d %H:%M}'
+
+
 class LogSync(models.Model):
     timestamp    = models.DateTimeField(auto_now_add=True)
     patente      = models.CharField(max_length=10, db_index=True)

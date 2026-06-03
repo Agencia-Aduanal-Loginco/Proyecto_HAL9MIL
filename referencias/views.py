@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import GlosaRegistro, Referencia
+from .models import CuentaGastos, GlosaRegistro, Referencia
 
 
 # ---------------------------------------------------------------------------
@@ -442,6 +442,89 @@ def glosa_concluir(request, pk):
 # ---------------------------------------------------------------------------
 # Glosa — Dashboard estadístico
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Cuenta de Gastos
+# ---------------------------------------------------------------------------
+
+@login_required
+def cuenta_gastos(request):
+    qs = (
+        Referencia.objects
+        .filter(num_operacion__gt='', linea_captura__gt='', es_rectificacion=False)
+        .filter(cuenta_gastos__isnull=True)
+        .prefetch_related('contenedores', 'guias')
+    )
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(num_refe__icontains=q) | Q(nombre_cliente__icontains=q)
+        ).distinct()
+
+    patente = request.GET.get('patente', '')
+    if patente:
+        qs = qs.filter(patente=patente)
+
+    año = request.GET.get('año', '')
+    if año:
+        qs = qs.filter(fecha_pago__year=año)
+
+    mes = request.GET.get('mes', '')
+    if mes:
+        qs = qs.filter(fecha_pago__month=mes)
+
+    qs = qs.order_by('-fecha_pago')
+
+    años_disponibles = (
+        Referencia.objects
+        .filter(num_operacion__gt='', linea_captura__gt='', fecha_pago__isnull=False)
+        .values_list('fecha_pago__year', flat=True)
+        .distinct()
+        .order_by('-fecha_pago__year')
+    )
+    meses = [
+        (1,'Ene'),(2,'Feb'),(3,'Mar'),(4,'Abr'),(5,'May'),(6,'Jun'),
+        (7,'Jul'),(8,'Ago'),(9,'Sep'),(10,'Oct'),(11,'Nov'),(12,'Dic'),
+    ]
+
+    paginador = Paginator(qs, 50)
+    pagina    = paginador.get_page(request.GET.get('page', 1))
+
+    ctx = {
+        'page':             pagina,
+        'q':                q,
+        'filtro_patente':   patente,
+        'filtro_año':       año,
+        'filtro_mes':       mes,
+        'total':            qs.count(),
+        'años_disponibles': años_disponibles,
+        'meses':            meses,
+    }
+    return render(request, 'referencias/cuenta_gastos.html', ctx)
+
+
+@login_required
+@require_POST
+def cuenta_gastos_finalizar(request, pk):
+    if not request.user.is_staff:
+        return redirect('cuenta_gastos')
+    ref = get_object_or_404(
+        Referencia,
+        pk=pk,
+        num_operacion__gt='',
+        linea_captura__gt='',
+    )
+    CuentaGastos.objects.get_or_create(
+        referencia=ref,
+        defaults={
+            'nota':               request.POST.get('nota', '').strip(),
+            'fecha_finalizacion': timezone.now(),
+            'finalizado_por':     request.user,
+        },
+    )
+    return redirect('cuenta_gastos')
+
 
 @login_required
 def glosa_dashboard(request):
