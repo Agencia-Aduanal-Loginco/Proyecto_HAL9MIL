@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Cuenta de Gastos · Dashboard · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header + tabs -->
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Cuenta de Gastos — Dashboard</h1>
+      <p class="text-slate-500 text-sm mt-0.5">
+        Métricas de tiempo pago → finalización · {{ mes_actual }} {{ año }}
+      </p>
+    </div>
+    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+      <a href="{% url 'cuenta_gastos' %}"
+         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
+        Pendientes
+      </a>
+      <a href="{% url 'cuenta_gastos' %}?tab=finalizadas"
+         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
+        Finalizadas
+      </a>
+      <span class="px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
+        Dashboard
+      </span>
+    </div>
+  </div>
+
+  <!-- KPI row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-center">
+      <p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Total finalizadas</p>
+      <p class="text-3xl font-bold text-slate-800">{{ total_finalizadas }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">histórico</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-amber-200 shadow-sm p-4 text-center">
+      <p class="text-xs text-amber-500 uppercase tracking-wide mb-1">Pendientes</p>
+      <p class="text-3xl font-bold text-amber-600">{{ total_pendientes }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">sin finalizar</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-sky-200 shadow-sm p-4 text-center">
+      <p class="text-xs text-sky-500 uppercase tracking-wide mb-1">Este mes</p>
+      <p class="text-3xl font-bold text-sky-600">{{ este_mes }}</p>
+      <p class="text-xs text-slate-400 mt-0.5">{{ mes_actual }} {{ año }}</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-center">
+      <p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Promedio días</p>
+      {% if avg_dias is not None %}
+        <p class="text-3xl font-bold
+          {% if avg_dias < 5 %}text-emerald-600
+          {% elif avg_dias < 15 %}text-sky-600
+          {% elif avg_dias < 30 %}text-amber-600
+          {% else %}text-red-600{% endif %}">
+          {{ avg_dias }}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">pago → finalización</p>
+      {% else %}
+        <p class="text-3xl font-bold text-slate-300">—</p>
+        <p class="text-xs text-slate-400 mt-0.5">sin datos aún</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Fila media: distribución + por patente + por usuario -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- Distribución días pago → finalización -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-1">Días pago → finalización</h2>
+      <p class="text-xs text-slate-400 mb-4">Distribución por velocidad de cierre</p>
+      {% with tot=dist.rapido|add:dist.normal|add:dist.tardio|add:dist.critico %}
+      <div class="space-y-3">
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+              Rápido &lt; 5 días
+            </span>
+            <span class="font-semibold text-emerald-700">{{ dist.rapido }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot > 0 %}
+            <div class="h-full bg-emerald-400 rounded-full"
+                 style="width: {% widthratio dist.rapido tot 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span>
+              Normal 5–15 días
+            </span>
+            <span class="font-semibold text-sky-700">{{ dist.normal }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot > 0 %}
+            <div class="h-full bg-sky-400 rounded-full"
+                 style="width: {% widthratio dist.normal tot 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+              Tardío 15–30 días
+            </span>
+            <span class="font-semibold text-amber-700">{{ dist.tardio }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot > 0 %}
+            <div class="h-full bg-amber-400 rounded-full"
+                 style="width: {% widthratio dist.tardio tot 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+              Crítico &gt; 30 días
+            </span>
+            <span class="font-semibold text-red-700">{{ dist.critico }}</span>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            {% if tot > 0 %}
+            <div class="h-full bg-red-500 rounded-full"
+                 style="width: {% widthratio dist.critico tot 100 %}%"></div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+      {% if avg_dias is not None %}
+      <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-500">
+        <span>Promedio general</span>
+        <span class="font-semibold text-slate-700">{{ avg_dias }} días</span>
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- Por patente -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Por patente</h2>
+      {% if por_patente %}
+      <div class="space-y-3">
+        {% for p in por_patente %}
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-semibold px-2 py-1 rounded-lg min-w-[52px] text-center
+            {% if p.patente == '1627' %}bg-sky-100 text-sky-700
+            {% elif p.patente == '1656' %}bg-emerald-100 text-emerald-700
+            {% else %}bg-violet-100 text-violet-700{% endif %}">
+            {{ p.prefijo }}
+          </span>
+          <div class="flex-1">
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Patente {{ p.patente }}</span>
+              <span class="font-semibold text-slate-700">{{ p.total }}</span>
+            </div>
+            {% if total_finalizadas > 0 %}
+            <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full
+                {% if p.patente == '1627' %}bg-sky-400
+                {% elif p.patente == '1656' %}bg-emerald-400
+                {% else %}bg-violet-400{% endif %}"
+                   style="width: {% widthratio p.total total_finalizadas 100 %}%"></div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-xs text-slate-400 text-center py-8">Sin datos por patente aún.</p>
+      {% endif %}
+    </div>
+
+    <!-- Por usuario -->
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Por usuario que finaliza</h2>
+      {% if por_usuario %}
+      <div class="space-y-3">
+        {% for u in por_usuario %}
+        <div class="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+          <div>
+            <p class="text-xs font-medium text-slate-700">{{ u.nombre }}</p>
+            {% if u.nombre != u.username %}
+            <p class="text-xs text-slate-400">{{ u.username }}</p>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="flex-1 w-24">
+              {% if total_finalizadas > 0 %}
+              <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-400 rounded-full"
+                     style="width: {% widthratio u.total total_finalizadas 100 %}%"></div>
+              </div>
+              {% endif %}
+            </div>
+            <span class="text-sm font-bold text-emerald-600 min-w-[2rem] text-right">{{ u.total }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-xs text-slate-400 text-center py-8">Sin actividad registrada aún.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Gráfica acumulado mensual -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-700">Finalizaciones por mes — {{ año }}</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Cuentas de gastos cerradas por mes en el año en curso</p>
+      </div>
+      <span class="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
+        {{ este_mes }} en {{ mes_actual }}
+      </span>
+    </div>
+    <div class="h-48">
+      <canvas id="chartAcumulado"></canvas>
+    </div>
+  </div>
+
+  <!-- Últimas finalizaciones -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-700">Últimas finalizaciones</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Las 10 cuentas de gastos cerradas más recientemente</p>
+      </div>
+      <a href="{% url 'cuenta_gastos' %}?tab=finalizadas"
+         class="text-xs text-sky-600 hover:text-sky-800 font-medium">Ver todas →</a>
+    </div>
+    {% if recientes %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+          <tr>
+            <th class="px-4 py-2.5 text-left">Referencia</th>
+            <th class="px-4 py-2.5 text-left">Cliente</th>
+            <th class="px-4 py-2.5 text-right">F. Pago</th>
+            <th class="px-4 py-2.5 text-right">F. Finalización</th>
+            <th class="px-4 py-2.5 text-center">Días</th>
+            <th class="px-4 py-2.5 text-left">Finalizó</th>
+            <th class="px-4 py-2.5 text-left">Nota</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for cg in recientes %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-2.5">
+              <div class="flex items-center gap-2">
+                {% if cg.referencia.patente == "1627" %}
+                  <span class="w-1.5 h-1.5 rounded-full bg-sky-500 flex-shrink-0"></span>
+                {% elif cg.referencia.patente == "1656" %}
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                {% else %}
+                  <span class="w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0"></span>
+                {% endif %}
+                <a href="{% url 'detalle' cg.referencia.num_refe %}"
+                   class="font-mono text-xs font-bold text-sky-600 hover:text-sky-700">
+                  {{ cg.referencia.num_refe }}
+                </a>
+              </div>
+            </td>
+            <td class="px-4 py-2.5 text-xs text-slate-600 max-w-[180px] truncate" title="{{ cg.referencia.nombre_cliente }}">
+              {{ cg.referencia.nombre_cliente|default:"—" }}
+            </td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs text-slate-500">
+              {{ cg.referencia.fecha_pago|date:"d/m/Y"|default:"—" }}
+            </td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs text-slate-500">
+              {{ cg.fecha_finalizacion|date:"d/m/Y H:i" }}
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              {% if cg.dias_proceso is not None %}
+              <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full
+                {% if cg.dias_proceso < 5 %}bg-emerald-100 text-emerald-700
+                {% elif cg.dias_proceso < 15 %}bg-sky-100 text-sky-700
+                {% elif cg.dias_proceso < 30 %}bg-amber-100 text-amber-700
+                {% else %}bg-red-100 text-red-700{% endif %}">
+                {{ cg.dias_proceso }}d
+              </span>
+              {% else %}
+              <span class="text-slate-300 text-xs">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-slate-600">
+              {% if cg.finalizado_por %}
+                {{ cg.finalizado_por.get_short_name|default:cg.finalizado_por.username }}
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-slate-400 max-w-[200px]" title="{{ cg.nota }}">
+              {{ cg.nota|truncatechars:40|default:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="py-12 text-center">
+      <p class="text-slate-400 text-sm">Sin finalizaciones registradas aún.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+(function() {
+  const meses   = {{ meses_json|safe }};
+  const datos   = {{ acumulado_json|safe }};
+  const ctx     = document.getElementById('chartAcumulado').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: meses,
+      datasets: [{
+        label: 'Finalizadas',
+        data: datos,
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        borderColor:     'rgba(16, 185, 129, 0.8)',
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y} finalizada${ctx.parsed.y !== 1 ? 's' : ''}`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0, font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.04)' }
+        }
+      }
+    }
+  });
+})();
+</script>
+
+{% endblock %}

@@ -449,58 +449,106 @@ def glosa_concluir(request, pk):
 
 @login_required
 def cuenta_gastos(request):
-    qs = (
-        Referencia.objects
-        .filter(num_operacion__gt='', linea_captura__gt='', es_rectificacion=False)
-        .filter(cuenta_gastos__isnull=True)
-        .prefetch_related('contenedores', 'guias')
-    )
+    tab = request.GET.get('tab', 'pendientes')
 
-    q = request.GET.get('q', '').strip()
-    if q:
-        qs = qs.filter(
-            Q(num_refe__icontains=q) | Q(nombre_cliente__icontains=q)
-        ).distinct()
-
-    patente = request.GET.get('patente', '')
-    if patente:
-        qs = qs.filter(patente=patente)
-
-    año = request.GET.get('año', '')
-    if año:
-        qs = qs.filter(fecha_pago__year=año)
-
-    mes = request.GET.get('mes', '')
-    if mes:
-        qs = qs.filter(fecha_pago__month=mes)
-
-    qs = qs.order_by('-fecha_pago')
-
-    años_disponibles = (
-        Referencia.objects
-        .filter(num_operacion__gt='', linea_captura__gt='', fecha_pago__isnull=False)
-        .values_list('fecha_pago__year', flat=True)
-        .distinct()
-        .order_by('-fecha_pago__year')
-    )
-    meses = [
+    meses_lista = [
         (1,'Ene'),(2,'Feb'),(3,'Mar'),(4,'Abr'),(5,'May'),(6,'Jun'),
         (7,'Jul'),(8,'Ago'),(9,'Sep'),(10,'Oct'),(11,'Nov'),(12,'Dic'),
     ]
+    q       = request.GET.get('q', '').strip()
+    patente = request.GET.get('patente', '')
+    año     = request.GET.get('año', '')
+    mes     = request.GET.get('mes', '')
 
-    paginador = Paginator(qs, 50)
-    pagina    = paginador.get_page(request.GET.get('page', 1))
+    if tab == 'finalizadas':
+        qs = (
+            CuentaGastos.objects
+            .select_related('referencia', 'finalizado_por')
+            .prefetch_related('referencia__contenedores', 'referencia__guias')
+        )
+        if q:
+            qs = qs.filter(
+                Q(referencia__num_refe__icontains=q) |
+                Q(referencia__nombre_cliente__icontains=q)
+            ).distinct()
+        if patente:
+            qs = qs.filter(referencia__patente=patente)
+        if año:
+            qs = qs.filter(referencia__fecha_pago__year=año)
+        if mes:
+            qs = qs.filter(referencia__fecha_pago__month=mes)
+        qs = qs.order_by('-fecha_finalizacion')
 
-    ctx = {
-        'page':             pagina,
-        'q':                q,
-        'filtro_patente':   patente,
-        'filtro_año':       año,
-        'filtro_mes':       mes,
-        'total':            qs.count(),
-        'años_disponibles': años_disponibles,
-        'meses':            meses,
-    }
+        años_disponibles = (
+            CuentaGastos.objects
+            .filter(referencia__fecha_pago__isnull=False)
+            .values_list('referencia__fecha_pago__year', flat=True)
+            .distinct()
+            .order_by('-referencia__fecha_pago__year')
+        )
+
+        # Calcular días pago→finalización para cada registro de la página
+        paginador = Paginator(qs, 50)
+        pagina    = paginador.get_page(request.GET.get('page', 1))
+        for cg in pagina:
+            if cg.referencia.fecha_pago:
+                cg.dias_proceso = (cg.fecha_finalizacion.date() - cg.referencia.fecha_pago).days
+            else:
+                cg.dias_proceso = None
+
+        ctx = {
+            'tab':              'finalizadas',
+            'page':             pagina,
+            'q':                q,
+            'filtro_patente':   patente,
+            'filtro_año':       año,
+            'filtro_mes':       mes,
+            'total':            qs.count(),
+            'años_disponibles': años_disponibles,
+            'meses':            meses_lista,
+        }
+    else:
+        qs = (
+            Referencia.objects
+            .filter(num_operacion__gt='', linea_captura__gt='', es_rectificacion=False)
+            .filter(cuenta_gastos__isnull=True)
+            .prefetch_related('contenedores', 'guias')
+        )
+        if q:
+            qs = qs.filter(
+                Q(num_refe__icontains=q) | Q(nombre_cliente__icontains=q)
+            ).distinct()
+        if patente:
+            qs = qs.filter(patente=patente)
+        if año:
+            qs = qs.filter(fecha_pago__year=año)
+        if mes:
+            qs = qs.filter(fecha_pago__month=mes)
+        qs = qs.order_by('-fecha_pago')
+
+        años_disponibles = (
+            Referencia.objects
+            .filter(num_operacion__gt='', linea_captura__gt='', fecha_pago__isnull=False)
+            .values_list('fecha_pago__year', flat=True)
+            .distinct()
+            .order_by('-fecha_pago__year')
+        )
+
+        paginador = Paginator(qs, 50)
+        pagina    = paginador.get_page(request.GET.get('page', 1))
+
+        ctx = {
+            'tab':              'pendientes',
+            'page':             pagina,
+            'q':                q,
+            'filtro_patente':   patente,
+            'filtro_año':       año,
+            'filtro_mes':       mes,
+            'total':            qs.count(),
+            'años_disponibles': años_disponibles,
+            'meses':            meses_lista,
+        }
+
     return render(request, 'referencias/cuenta_gastos.html', ctx)
 
 
@@ -524,6 +572,102 @@ def cuenta_gastos_finalizar(request, pk):
         },
     )
     return redirect('cuenta_gastos')
+
+
+@login_required
+def cuenta_gastos_dashboard(request):
+    now        = timezone.localtime()
+    meses_nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+    total_finalizadas  = CuentaGastos.objects.count()
+    total_pendientes   = (
+        Referencia.objects
+        .filter(num_operacion__gt='', linea_captura__gt='', es_rectificacion=False,
+                cuenta_gastos__isnull=True)
+        .count()
+    )
+    este_mes = CuentaGastos.objects.filter(
+        fecha_finalizacion__year=now.year,
+        fecha_finalizacion__month=now.month,
+    ).count()
+
+    # Calcular días pago → finalización (en Python para evitar diferencias date/datetime)
+    dias_list = []
+    for cg in CuentaGastos.objects.select_related('referencia').iterator():
+        if cg.referencia.fecha_pago:
+            d = (cg.fecha_finalizacion.date() - cg.referencia.fecha_pago).days
+            if d >= 0:
+                dias_list.append(d)
+
+    avg_dias = round(sum(dias_list) / len(dias_list), 1) if dias_list else None
+
+    dist = {
+        'rapido':  sum(1 for d in dias_list if d < 5),
+        'normal':  sum(1 for d in dias_list if 5 <= d < 15),
+        'tardio':  sum(1 for d in dias_list if 15 <= d < 30),
+        'critico': sum(1 for d in dias_list if d >= 30),
+    }
+
+    # Por patente
+    por_patente = list(
+        CuentaGastos.objects
+        .values(patente=F('referencia__patente'), prefijo=F('referencia__prefijo'))
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+
+    # Por usuario que finalizó
+    por_usuario_raw = list(
+        CuentaGastos.objects
+        .values('finalizado_por__username',
+                'finalizado_por__first_name',
+                'finalizado_por__last_name')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    por_usuario = []
+    for u in por_usuario_raw:
+        username = u['finalizado_por__username'] or ''
+        nombre = (
+            ((u['finalizado_por__first_name'] or '') + ' ' +
+             (u['finalizado_por__last_name'] or '')).strip()
+            or username
+        )
+        por_usuario.append({'nombre': nombre, 'username': username, 'total': u['total']})
+
+    # Acumulado mensual del año en curso
+    acumulado = [0] * 12
+    for cg in CuentaGastos.objects.filter(fecha_finalizacion__year=now.year):
+        acumulado[cg.fecha_finalizacion.month - 1] += 1
+
+    # Últimas 10 finalizaciones con días de proceso
+    recientes = list(
+        CuentaGastos.objects
+        .select_related('referencia', 'finalizado_por')
+        .order_by('-fecha_finalizacion')[:10]
+    )
+    for cg in recientes:
+        if cg.referencia.fecha_pago:
+            cg.dias_proceso = (cg.fecha_finalizacion.date() - cg.referencia.fecha_pago).days
+        else:
+            cg.dias_proceso = None
+
+    ctx = {
+        'total_finalizadas': total_finalizadas,
+        'total_pendientes':  total_pendientes,
+        'este_mes':          este_mes,
+        'avg_dias':          avg_dias,
+        'dist':              dist,
+        'por_patente':       por_patente,
+        'por_usuario':       por_usuario,
+        'acumulado':         acumulado,
+        'recientes':         recientes,
+        'mes_actual':        meses_nombres[now.month - 1],
+        'año':               now.year,
+        'meses_json':        json.dumps(meses_nombres),
+        'acumulado_json':    json.dumps(acumulado),
+    }
+    return render(request, 'referencias/cuenta_gastos_dashboard.html', ctx)
 
 
 @login_required
