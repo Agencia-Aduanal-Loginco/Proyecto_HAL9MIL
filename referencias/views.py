@@ -104,6 +104,33 @@ def dashboard(request):
         .order_by('-total')
     )
 
+    # ── Estado del mes actual: elaborados / sin FIR_ELEC / pago real ────────
+    base_mes = Referencia.objects.filter(
+        fecha_validacion__year=year,
+        fecha_validacion__month=month,
+        es_rectificacion=False,
+    )
+    mes_total        = base_mes.count()
+    mes_sin_fir_elec = base_mes.filter(fir_elec='').count()
+    mes_con_pago     = base_mes.filter(
+        num_operacion__gt='', linea_captura__gt=''
+    ).count()
+    mes_con_fir_elec = mes_total - mes_sin_fir_elec
+
+    def pct(part, total):
+        return round(part / total * 100) if total else 0
+
+    estado_mes = {
+        'total':        mes_total,
+        'sin_fir_elec': mes_sin_fir_elec,
+        'con_fir_elec': mes_con_fir_elec,
+        'con_pago':     mes_con_pago,
+        'pendientes':   mes_total - mes_con_pago,
+        'pct_fir_elec': pct(mes_con_fir_elec, mes_total),
+        'pct_sin_fir':  pct(mes_sin_fir_elec, mes_total),
+        'pct_pago':     pct(mes_con_pago, mes_total),
+    }
+
     # ── Últimas 10 referencias pagadas ───────────────────────────────────────
     recientes = (
         Referencia.objects
@@ -130,6 +157,7 @@ def dashboard(request):
         'recientes':        recientes,
         'año_actual':       year,
         'mes_actual':       meses[month - 1],
+        'estado_mes':       estado_mes,
     }
     return render(request, 'dashboard.html', ctx)
 
