@@ -109,13 +109,17 @@ APSCHEDULER_RUN_NOW_TIMEOUT = 25
 # Token compartido con el agente local en Windows (sync_agent/.env)
 SYNC_SECRET_KEY = os.getenv('SYNC_SECRET_KEY', '')
 
-# ── WhatsApp (OpenWA) ─────────────────────────────────────────────────────────
-WA_API_URL        = os.getenv('WA_API_URL', '')
-WA_API_KEY        = os.getenv('WA_API_KEY', '')
-WA_SESSION_ID     = os.getenv('WA_SESSION_ID', '')
-WA_ADMIN_CHAT     = os.getenv('WA_ADMIN_CHAT', '')
-WA_WEBHOOK_SECRET = os.getenv('WA_WEBHOOK_SECRET', '')
-WA_ALLOWED_NUMBERS = [n.strip() for n in os.getenv('WA_ALLOWED_NUMBERS', '').split(',') if n.strip()]
+# ── WhatsApp (Twilio) ─────────────────────────────────────────────────────────
+TWILIO_ACCOUNT_SID        = os.getenv('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN         = os.getenv('TWILIO_AUTH_TOKEN', '')
+# Número Twilio remitente: whatsapp:+14155238886 (sandbox) o número aprobado
+TWILIO_WHATSAPP_FROM      = os.getenv('TWILIO_WHATSAPP_FROM', '')
+# Número administrador que recibe notificaciones proactivas
+TWILIO_WHATSAPP_TO_ADMIN  = os.getenv('TWILIO_WHATSAPP_TO_ADMIN', '')
+# Números autorizados para usar el bot (vacío = todos)
+TWILIO_WHATSAPP_ALLOWED_NUMBERS = [
+    n.strip() for n in os.getenv('TWILIO_WHATSAPP_ALLOWED_NUMBERS', '').split(',') if n.strip()
+]
 
 # ── Seguridad HTTPS (solo en producción) ──────────────────────────────────────
 # App Platform termina SSL en el load balancer y pasa HTTP internamente.
