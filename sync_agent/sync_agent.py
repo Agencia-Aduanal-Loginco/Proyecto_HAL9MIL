@@ -199,15 +199,15 @@ def fetch_changed_refs_since(cur, since_dt):
     Retorna el conjunto de NUM_REFE que cambiaron desde since_dt.
 
     Fuentes de cambio:
-      - CTRAO_EMBAR.APE_REFE  — se actualiza cada vez que se modifica el embarque
+      - SAAIO_PROCES.FEC_MODI — fecha de última modificación del proceso
       - SAAIO_PEDIME.DIA_PAGO — se establece cuando se paga el pedimento
-        (el pago no actualiza CTRAO_EMBAR, por eso se revisa por separado)
+        (el pago no siempre actualiza SAAIO_PROCES, por eso se revisa por separado)
     """
     since_str = since_dt.strftime('%Y-%m-%d %H:%M:%S')
     cur.execute("""
         SELECT DISTINCT NUM_REFE FROM (
-            SELECT NUM_REFE FROM CTRAO_EMBAR
-            WHERE APE_REFE >= ? AND NUM_REFE IS NOT NULL
+            SELECT NUM_REFE FROM SAAIO_PROCES
+            WHERE FEC_MODI >= ? AND NUM_REFE IS NOT NULL
             UNION
             SELECT NUM_REFE FROM SAAIO_PEDIME
             WHERE DIA_PAGO >= ? AND NUM_REFE IS NOT NULL
@@ -344,6 +344,19 @@ def fetch_guias(cur, refs_filter=None):
     return result
 
 
+def fetch_proces(cur, refs_filter=None):
+    """Retorna dict {num_refe: fecha_captura} desde SAAIO_PROCES.FEC_CAPT."""
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, FEC_CAPT FROM SAAIO_PROCES
+           WHERE NUM_REFE IS NOT NULL AND FEC_CAPT IS NOT NULL""",
+        """SELECT NUM_REFE, FEC_CAPT FROM SAAIO_PROCES
+           WHERE NUM_REFE IN ({phs}) AND FEC_CAPT IS NOT NULL""",
+        refs_filter,
+    )
+    return {clean(r[0], 50): fb_date_str(r[1]) for r in rows if r[0]}
+
+
 def fetch_partidas_count(cur, refs_filter=None):
     """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
     rows = _fetch_rows(
@@ -360,7 +373,7 @@ def fetch_partidas_count(cur, refs_filter=None):
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, embar, pedimentos,
-                  all_refs, pedime2, contenedores, guias, partidas_count):
+                  all_refs, pedime2, contenedores, guias, partidas_count, proces):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -389,6 +402,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
             'fir_elec':          ped.get('fir_elec', ''),
             'es_rectificacion':  ref.startswith('R') and len(ref) > 5,
             'num_partidas':      partidas_count.get(ref, 0),
+            'fecha_captura':     proces.get(ref),
         })
 
     conts_list = [
@@ -549,6 +563,7 @@ def main():
         contenedores = fetch_contenedores(cur, refs_filter)
         guias        = fetch_guias(cur, refs_filter)
         partidas     = fetch_partidas_count(cur, refs_filter)
+        proces       = fetch_proces(cur, refs_filter)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
@@ -584,7 +599,7 @@ def main():
         for idx, chunk_refs in enumerate(chunks, 1):
             chunk_set = set(chunk_refs)
             payload   = build_payload(clientes, capturistas, embar, pedimentos,
-                                      chunk_set, pedime2, contenedores, guias, partidas)
+                                      chunk_set, pedime2, contenedores, guias, partidas, proces)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
                      f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
             resp = send_payload(payload)

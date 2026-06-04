@@ -202,6 +202,16 @@ def fetch_guias(cur):
     return result
 
 
+def fetch_proces(cur):
+    """Devuelve dict {num_refe: fecha_captura} desde SAAIO_PROCES.FEC_CAPT."""
+    cur.execute("""
+        SELECT NUM_REFE, FEC_CAPT
+        FROM SAAIO_PROCES
+        WHERE NUM_REFE IS NOT NULL AND FEC_CAPT IS NOT NULL
+    """)
+    return {clean(r[0], 50): fb_date(r[1]) for r in cur.fetchall() if r[0]}
+
+
 def fetch_partidas_count(cur):
     """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
     cur.execute("""
@@ -218,7 +228,7 @@ def fetch_partidas_count(cur):
 # ---------------------------------------------------------------------------
 
 def import_referencias(patente, clientes, capturistas, pedime2, embar,
-                        pedimentos, all_refs, partidas_count, dry_run, stdout):
+                        pedimentos, all_refs, partidas_count, proces, dry_run, stdout):
     prefijo = PATENTE_PREFIJO.get(patente, patente)
     created = updated = 0
 
@@ -257,6 +267,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             fir_elec=ped.get('fir_elec', ''),
             es_rectificacion=es_rect,
             num_partidas=partidas_count.get(ref, 0),
+            fecha_captura=proces.get(ref),
         ))
 
     if not dry_run:
@@ -376,13 +387,14 @@ class Command(BaseCommand):
                 embar       = fetch_embar(cur)       if (import_all or solo_ref) else {}
                 peds, all_refs = fetch_pedimentos(cur) if (import_all or solo_ref) else ({}, set())
                 partidas    = fetch_partidas_count(cur) if (import_all or solo_ref) else {}
+                proces      = fetch_proces(cur)         if (import_all or solo_ref) else {}
                 conts       = fetch_contenedores(cur) if (import_all or solo_cont) else {}
                 guias       = fetch_guias(cur)       if (import_all or solo_bl) else {}
                 data[patente] = dict(
                     clientes=clientes, capturistas=capturistas,
                     pedime2=pedime2, embar=embar,
                     peds=peds, all_refs=all_refs,
-                    partidas=partidas,
+                    partidas=partidas, proces=proces,
                     conts=conts, guias=guias,
                 )
                 self.stdout.write(
@@ -401,7 +413,7 @@ class Command(BaseCommand):
                 import_referencias(
                     patente, d['clientes'], d['capturistas'],
                     d['pedime2'], d['embar'], d['peds'], d['all_refs'],
-                    d['partidas'],
+                    d['partidas'], d['proces'],
                     dry_run, self.stdout,
                 )
 

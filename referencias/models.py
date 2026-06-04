@@ -36,6 +36,7 @@ class Referencia(models.Model):
     fir_elec          = models.CharField(max_length=255, blank=True)
     es_rectificacion  = models.BooleanField(default=False)
     num_partidas      = models.IntegerField(default=0)
+    fecha_captura     = models.DateField(null=True, blank=True)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
 
