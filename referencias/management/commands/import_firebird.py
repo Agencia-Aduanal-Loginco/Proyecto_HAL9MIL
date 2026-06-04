@@ -143,9 +143,9 @@ def fetch_pedimentos(cur):
             continue  # ya tenemos el primero
 
         result[ref] = {
-            'cve_impo':         clean(cve_impo, 20),
-            'fecha_validacion':  fb_date(fec_entr),
-            'fecha_pago':        fb_date(fec_pago),
+            'cve_impo':  clean(cve_impo, 20),
+            'fec_entr':  fb_date(fec_entr),
+            'fecha_pago': fb_date(fec_pago),
             'num_pedimento':    clean(num_pedi, 30),
             'clave_pedimento':  clean(cve_pedi, 10),
             'tipo_pedimento':   clean(tip_pedi, 10),
@@ -212,6 +212,17 @@ def fetch_proces(cur):
     return {clean(r[0], 50): fb_date(r[1]) for r in cur.fetchall() if r[0]}
 
 
+def fetch_regval(cur):
+    """Devuelve dict {num_refe: fecha_validacion} desde SAAIO_REGVAL.FEC_VAL."""
+    cur.execute("""
+        SELECT NUM_REFE, MIN(FEC_VAL)
+        FROM SAAIO_REGVAL
+        WHERE NUM_REFE IS NOT NULL AND FEC_VAL IS NOT NULL
+        GROUP BY NUM_REFE
+    """)
+    return {clean(r[0], 50): fb_date(r[1]) for r in cur.fetchall() if r[0]}
+
+
 def fetch_partidas_count(cur):
     """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
     cur.execute("""
@@ -228,7 +239,7 @@ def fetch_partidas_count(cur):
 # ---------------------------------------------------------------------------
 
 def import_referencias(patente, clientes, capturistas, pedime2, embar,
-                        pedimentos, all_refs, partidas_count, proces, dry_run, stdout):
+                        pedimentos, all_refs, partidas_count, proces, regval, dry_run, stdout):
     prefijo = PATENTE_PREFIJO.get(patente, patente)
     created = updated = 0
 
@@ -237,10 +248,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
         ped = pedimentos.get(ref, {})
         cve = ped.get('cve_impo', '')
         nombre = clientes.get(cve, '')
-        fecha_arribo = embar.get(ref)
-        # Si no está en CTRAO_EMBAR, usamos fecha_validacion como proxy
-        if not fecha_arribo:
-            fecha_arribo = ped.get('fecha_validacion')
+        fecha_arribo = embar.get(ref) or ped.get('fec_entr')
 
         es_rect = ref.startswith('R') and len(ref) > 5
         cve_capt = ped.get('cve_capturista', '')
@@ -253,7 +261,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             cve_cliente=cve,
             nombre_cliente=nombre,
             fecha_arribo=fecha_arribo,
-            fecha_validacion=ped.get('fecha_validacion'),
+            fecha_validacion=regval.get(ref),
             fecha_pago=ped.get('fecha_pago'),
             num_pedimento=ped.get('num_pedimento', ''),
             clave_pedimento=ped.get('clave_pedimento', ''),
@@ -388,13 +396,14 @@ class Command(BaseCommand):
                 peds, all_refs = fetch_pedimentos(cur) if (import_all or solo_ref) else ({}, set())
                 partidas    = fetch_partidas_count(cur) if (import_all or solo_ref) else {}
                 proces      = fetch_proces(cur)         if (import_all or solo_ref) else {}
+                regval      = fetch_regval(cur)         if (import_all or solo_ref) else {}
                 conts       = fetch_contenedores(cur) if (import_all or solo_cont) else {}
                 guias       = fetch_guias(cur)       if (import_all or solo_bl) else {}
                 data[patente] = dict(
                     clientes=clientes, capturistas=capturistas,
                     pedime2=pedime2, embar=embar,
                     peds=peds, all_refs=all_refs,
-                    partidas=partidas, proces=proces,
+                    partidas=partidas, proces=proces, regval=regval,
                     conts=conts, guias=guias,
                 )
                 self.stdout.write(
@@ -413,7 +422,7 @@ class Command(BaseCommand):
                 import_referencias(
                     patente, d['clientes'], d['capturistas'],
                     d['pedime2'], d['embar'], d['peds'], d['all_refs'],
-                    d['partidas'], d['proces'],
+                    d['partidas'], d['proces'], d['regval'],
                     dry_run, self.stdout,
                 )
 

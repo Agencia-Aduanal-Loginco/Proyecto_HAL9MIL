@@ -278,9 +278,9 @@ def fetch_pedimentos(cur, refs_filter=None):
         if ref in result:
             continue
         result[ref] = {
-            'cve_impo':         clean(cve_impo, 20),
-            'fecha_validacion': fb_date_str(fec_entr),
-            'fecha_pago':       fb_date_str(fec_pago),
+            'cve_impo':  clean(cve_impo, 20),
+            'fec_entr':  fb_date_str(fec_entr),
+            'fecha_pago': fb_date_str(fec_pago),
             'num_pedimento':    clean(num_pedi, 30),
             'clave_pedimento':  clean(cve_pedi, 10),
             'tipo_pedimento':   clean(tip_pedi, 10),
@@ -357,6 +357,21 @@ def fetch_proces(cur, refs_filter=None):
     return {clean(r[0], 50): fb_date_str(r[1]) for r in rows if r[0]}
 
 
+def fetch_regval(cur, refs_filter=None):
+    """Retorna dict {num_refe: fecha_validacion} desde SAAIO_REGVAL.FEC_VAL."""
+    rows = _fetch_rows(
+        cur,
+        """SELECT NUM_REFE, MIN(FEC_VAL) FROM SAAIO_REGVAL
+           WHERE NUM_REFE IS NOT NULL AND FEC_VAL IS NOT NULL
+           GROUP BY NUM_REFE""",
+        """SELECT NUM_REFE, MIN(FEC_VAL) FROM SAAIO_REGVAL
+           WHERE NUM_REFE IN ({phs}) AND FEC_VAL IS NOT NULL
+           GROUP BY NUM_REFE""",
+        refs_filter,
+    )
+    return {clean(r[0], 50): fb_date_str(r[1]) for r in rows if r[0]}
+
+
 def fetch_partidas_count(cur, refs_filter=None):
     """Devuelve dict {num_refe: num_partidas} desde SAAIO_FRACCI."""
     rows = _fetch_rows(
@@ -373,7 +388,7 @@ def fetch_partidas_count(cur, refs_filter=None):
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, embar, pedimentos,
-                  all_refs, pedime2, contenedores, guias, partidas_count, proces):
+                  all_refs, pedime2, contenedores, guias, partidas_count, proces, regval):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -381,14 +396,14 @@ def build_payload(clientes, capturistas, embar, pedimentos,
         ped          = pedimentos.get(ref, {})
         cve          = ped.get('cve_impo', '')
         cve_capt     = ped.get('cve_capturista', '')
-        fecha_arribo = embar.get(ref) or ped.get('fecha_validacion')
+        fecha_arribo = embar.get(ref) or ped.get('fec_entr')
         refs_list.append({
             'num_refe':          ref,
             'prefijo':           prefijo,
             'cve_cliente':       cve,
             'nombre_cliente':    clientes.get(cve, ''),
             'fecha_arribo':      fecha_arribo,
-            'fecha_validacion':  ped.get('fecha_validacion'),
+            'fecha_validacion':  regval.get(ref),
             'fecha_pago':        ped.get('fecha_pago'),
             'num_pedimento':     ped.get('num_pedimento', ''),
             'clave_pedimento':   ped.get('clave_pedimento', ''),
@@ -564,6 +579,7 @@ def main():
         guias        = fetch_guias(cur, refs_filter)
         partidas     = fetch_partidas_count(cur, refs_filter)
         proces       = fetch_proces(cur, refs_filter)
+        regval       = fetch_regval(cur, refs_filter)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
@@ -599,7 +615,7 @@ def main():
         for idx, chunk_refs in enumerate(chunks, 1):
             chunk_set = set(chunk_refs)
             payload   = build_payload(clientes, capturistas, embar, pedimentos,
-                                      chunk_set, pedime2, contenedores, guias, partidas, proces)
+                                      chunk_set, pedime2, contenedores, guias, partidas, proces, regval)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
                      f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
             resp = send_payload(payload)

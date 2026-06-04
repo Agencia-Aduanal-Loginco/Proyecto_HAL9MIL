@@ -49,7 +49,7 @@ def _wa_semanal(datos: dict, semana_str: str):
             f"{top_str}"
         )
         for numero in numeros:
-            send_text(f"{numero}@c.us", texto)
+            send_text(numero, texto)
         logger.info("[WA Semanal] Enviado a %d números.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp semanal no enviado: %s", e)
@@ -82,7 +82,7 @@ def _wa_mensual(datos: dict):
             f"Por patente:\n{patentes}"
         )
         for numero in numeros:
-            send_text(f"{numero}@c.us", texto)
+            send_text(numero, texto)
         logger.info("[WA Mensual] Enviado a %d números.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp mensual no enviado: %s", e)

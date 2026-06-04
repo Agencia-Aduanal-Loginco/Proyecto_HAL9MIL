@@ -18,6 +18,8 @@ def send_text(to: str, text: str) -> dict:
         logger.warning("Twilio no configurado — mensaje no enviado.")
         return {}
 
+    # Limpiar sufijo legado de OpenWA/WAHA (@c.us, @g.us, etc.)
+    to = to.split('@')[0]
     if not to.startswith('whatsapp:'):
         to = f"whatsapp:{to}"
 
