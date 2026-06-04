@@ -2,24 +2,24 @@
 {% block title %}Glosa · Dashboard · HAL9MIL{% endblock %}
 
 {% block content %}
-<div class="p-6 space-y-6">
+<div class="p-4 sm:p-6 space-y-5 sm:space-y-6">
 
   <!-- Header + tabs -->
-  <div class="flex items-start justify-between">
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800">Glosa — Dashboard</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Glosa — Dashboard</h1>
       <p class="text-slate-500 text-sm mt-0.5">
         Ventana activa: <span class="font-medium text-slate-700">{{ mes_anterior }} – {{ mes_actual }} {{ año }}</span>
         · {{ total }} pedimento{% if total != 1 %}s{% endif %} en seguimiento
       </p>
     </div>
     <!-- Tabs -->
-    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+    <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-1 self-start">
       <a href="{% url 'glosa' %}"
-         class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
+         class="px-3 sm:px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-white hover:text-slate-800 transition-colors">
         Lista
       </a>
-      <span class="px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
+      <span class="px-3 sm:px-4 py-2 text-sm rounded-lg bg-white text-slate-800 font-semibold shadow-sm">
         Dashboard
       </span>
     </div>
@@ -242,7 +242,7 @@
       </a>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm min-w-[480px]">
         <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
           <tr>
             <th class="px-4 py-2.5 text-left">Referencia</th>

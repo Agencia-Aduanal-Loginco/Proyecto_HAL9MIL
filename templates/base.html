@@ -20,10 +20,31 @@
     .sidebar-link.active { color: #ffffff; background-color: #0284c7; }
   </style>
 </head>
-<body class="bg-slate-100 min-h-screen flex">
+<body class="bg-slate-100 min-h-screen lg:flex">
+
+  <!-- Mobile top bar -->
+  <div class="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-slate-900 flex items-center justify-between px-4 border-b border-slate-700">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden flex-shrink-0 p-0.5">
+        <img src="{% static 'img/Isotipo.svg' %}" alt="HAL9MIL" class="w-full h-full object-contain">
+      </div>
+      <p class="text-white font-bold text-sm">HAL9MIL</p>
+    </div>
+    <button id="menuBtn" class="text-slate-400 hover:text-white transition-colors p-1" aria-label="Abrir menú">
+      <svg id="menuIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+      <svg id="closeIcon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Overlay -->
+  <div id="sidebarOverlay" class="lg:hidden fixed inset-0 bg-black/50 z-20 hidden"></div>
 
   <!-- Sidebar -->
-  <aside class="w-60 min-h-screen bg-slate-900 flex flex-col fixed top-0 left-0 z-30">
+  <aside id="sidebar" class="w-60 min-h-screen bg-slate-900 flex flex-col fixed top-0 left-0 z-30 transition-transform duration-300 -translate-x-full lg:translate-x-0">
     <!-- Logo -->
     <div class="px-4 py-4 border-b border-slate-700">
       <div class="flex items-center gap-3">
@@ -112,9 +133,42 @@
   </aside>
 
   <!-- Main content -->
-  <main class="ml-60 flex-1 min-h-screen">
+  <main class="lg:ml-60 flex-1 min-h-screen pt-14 lg:pt-0">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const menuBtn = document.getElementById('menuBtn');
+    const menuIcon = document.getElementById('menuIcon');
+    const closeIcon = document.getElementById('closeIcon');
+
+    function openMenu() {
+      sidebar.classList.remove('-translate-x-full');
+      overlay.classList.remove('hidden');
+      menuIcon.classList.add('hidden');
+      closeIcon.classList.remove('hidden');
+    }
+    function closeMenu() {
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+      menuIcon.classList.remove('hidden');
+      closeIcon.classList.add('hidden');
+    }
+
+    menuBtn.addEventListener('click', () => {
+      sidebar.classList.contains('-translate-x-full') ? openMenu() : closeMenu();
+    });
+    overlay.addEventListener('click', closeMenu);
+
+    // Close sidebar when a nav link is clicked on mobile
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 1024) closeMenu();
+      });
+    });
+  </script>
 
 </body>
 </html>

@@ -2,32 +2,32 @@
 {% block title %}Dashboard · HAL9MIL{% endblock %}
 
 {% block content %}
-<div class="p-6 space-y-6">
+<div class="p-4 sm:p-6 space-y-5 sm:space-y-6">
 
   <!-- Header -->
-  <div class="flex items-center justify-between">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Dashboard</h1>
       <p class="text-slate-500 text-sm mt-0.5">Pedimentos pagados · Histórico 2022–2026</p>
     </div>
-    <div class="text-right">
+    <div class="sm:text-right">
       <p class="text-slate-400 text-xs">Última actualización</p>
       <p class="text-slate-700 text-sm font-medium">Datos Firebird CASA.GDB</p>
     </div>
   </div>
 
   <!-- KPI Cards -->
-  <div class="grid grid-cols-4 gap-4">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
     <!-- Total año -->
-    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
       <p class="text-slate-500 text-xs font-medium uppercase tracking-wide">Total {{ año_actual }}</p>
-      <p class="text-3xl font-bold text-slate-800 mt-1">{{ kpi_año }}</p>
+      <p class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{{ kpi_año }}</p>
       <p class="text-slate-400 text-xs mt-1">referencias pagadas</p>
     </div>
     <!-- Mes actual -->
-    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
       <p class="text-slate-500 text-xs font-medium uppercase tracking-wide">{{ mes_actual }} {{ año_actual }}</p>
-      <p class="text-3xl font-bold text-slate-800 mt-1">{{ kpi_mes }}</p>
+      <p class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{{ kpi_mes }}</p>
       <div class="flex items-center gap-1 mt-1">
         {% if kpi_variacion >= 0 %}
           <span class="text-emerald-500 text-xs font-medium">▲ {{ kpi_variacion }}%</span>
@@ -39,14 +39,14 @@
     </div>
     <!-- Por patente -->
     {% for p in por_patente %}
-    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
       <p class="text-slate-500 text-xs font-medium uppercase tracking-wide">
         {% if p.patente == '1627' %}<span class="text-sky-500">●</span>
         {% elif p.patente == '1656' %}<span class="text-emerald-500">●</span>
         {% else %}<span class="text-violet-500">●</span>{% endif %}
         {{ p.prefijo }} · {{ p.patente }}
       </p>
-      <p class="text-3xl font-bold text-slate-800 mt-1">{{ p.total }}</p>
+      <p class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{{ p.total }}</p>
       <p class="text-slate-400 text-xs mt-1">pagadas {{ año_actual }}</p>
     </div>
     {% endfor %}
@@ -55,7 +55,7 @@
   <!-- Estado del mes actual -->
   <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
 
-    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between">
       <div>
         <h2 class="text-slate-800 font-semibold text-sm">Estado de pedimentos · {{ mes_actual }} {{ año_actual }}</h2>
         <p class="text-slate-400 text-xs mt-0.5">Basado en fecha de validación — sin rectificaciones</p>
@@ -63,10 +63,10 @@
       <span class="text-2xl font-bold tabular-nums text-slate-800">{{ estado_mes.total }}</span>
     </div>
 
-    <div class="grid grid-cols-3 divide-x divide-slate-100">
+    <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
 
       <!-- Total elaborados -->
-      <div class="px-6 py-5">
+      <div class="px-4 sm:px-6 py-4 sm:py-5">
         <div class="flex items-start justify-between mb-3">
           <div>
             <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Elaborados</p>
@@ -74,7 +74,6 @@
           </div>
           <span class="text-2xl font-bold tabular-nums text-slate-800">{{ estado_mes.total }}</span>
         </div>
-        <!-- barra de fondo completa -->
         <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
           <div class="h-full rounded-full bg-slate-400" style="width:100%"></div>
         </div>
@@ -82,7 +81,7 @@
       </div>
 
       <!-- Sin FIR_ELEC -->
-      <div class="px-6 py-5">
+      <div class="px-4 sm:px-6 py-4 sm:py-5">
         <div class="flex items-start justify-between mb-3">
           <div>
             <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide">Sin FIR ELEC</p>
@@ -103,7 +102,7 @@
       </div>
 
       <!-- Con pago real -->
-      <div class="px-6 py-5">
+      <div class="px-4 sm:px-6 py-4 sm:py-5">
         <div class="flex items-start justify-between mb-3">
           <div>
             <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Pago confirmado</p>
@@ -126,7 +125,7 @@
     </div>
 
     <!-- Mini barra resumen -->
-    <div class="px-5 pb-4">
+    <div class="px-4 sm:px-5 pb-4">
       <div class="flex h-1.5 rounded-full overflow-hidden gap-0.5">
         {% if estado_mes.total > 0 %}
         <div class="h-full bg-emerald-500 rounded-l-full transition-all"
@@ -138,7 +137,7 @@
         <div class="flex-1 bg-slate-200 rounded-r-full"></div>
         {% endif %}
       </div>
-      <div class="flex items-center gap-4 mt-2">
+      <div class="flex flex-wrap items-center gap-3 sm:gap-4 mt-2">
         <span class="flex items-center gap-1.5 text-xs text-slate-500">
           <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>Pago confirmado
         </span>
@@ -154,16 +153,16 @@
   </div>
 
   <!-- Chart + Proyección -->
-  <div class="grid grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
     <!-- Gráfica histórica -->
-    <div class="col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-      <div class="flex items-center justify-between mb-4">
+    <div class="lg:col-span-2 bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 class="text-slate-800 font-semibold text-sm">Pedimentos Pagados por Mes</h2>
           <p class="text-slate-400 text-xs mt-0.5">2022 – 2026 (Real y Proyección)</p>
         </div>
-        <div class="flex flex-wrap gap-3 text-xs text-slate-500">
+        <div class="flex flex-wrap gap-2 sm:gap-3 text-xs text-slate-500">
           <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 bg-slate-300"></span>2022</span>
           <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 bg-amber-400"></span>2023</span>
           <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 bg-blue-500"></span>2024</span>
@@ -176,7 +175,7 @@
     </div>
 
     <!-- Totales por año -->
-    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
       <h2 class="text-slate-800 font-semibold text-sm mb-4">Totales por Año</h2>
       <div class="space-y-3">
         {% for año, total in totales.items %}
@@ -202,116 +201,120 @@
 
   <!-- Tabla comparativa 2026 -->
   <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 sm:px-5 py-4 border-b border-slate-100 gap-2">
       <h2 class="text-slate-800 font-semibold text-sm">Proyección 2026 por Mes</h2>
       <div class="flex gap-3 text-xs">
         <span class="text-emerald-600 font-medium">▲ Por encima</span>
         <span class="text-red-500 font-medium">▼ Por debajo</span>
       </div>
     </div>
-    <table class="w-full text-sm">
-      <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-        <tr>
-          <th class="px-5 py-3 text-left">Mes</th>
-          <th class="px-5 py-3 text-right">Proyectado</th>
-          <th class="px-5 py-3 text-right">Real</th>
-          <th class="px-5 py-3 text-right">Diferencia</th>
-          <th class="px-5 py-3 text-center">Estado</th>
-          <th class="px-5 py-3 text-right">% Meta</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-50">
-        {% for row in comparativa %}
-        <tr class="{% if row.estado == 'in_progress' %}bg-sky-50{% elif row.estado == 'future' %}text-slate-400{% endif %}">
-          <td class="px-5 py-3 font-medium text-slate-700">
-            {{ row.mes }}
-            {% if row.estado == 'in_progress' %}
-              <span class="ml-2 text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">En curso</span>
-            {% endif %}
-          </td>
-          <td class="px-5 py-3 text-right text-slate-600">{{ row.proyectado }}</td>
-          <td class="px-5 py-3 text-right font-semibold {% if row.real is not None %}text-slate-800{% endif %}">
-            {% if row.real is not None %}{{ row.real }}{% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-right font-semibold">
-            {% if row.delta is not None %}
-              <span class="{% if row.delta >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
-                {% if row.delta >= 0 %}+{% endif %}{{ row.delta }}
-              </span>
-            {% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-center">
-            {% if row.estado == 'future' %}
-              <span class="text-slate-400 text-xs">Pendiente</span>
-            {% elif row.delta is not None and row.delta >= 0 %}
-              <span class="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">▲ Arriba</span>
-            {% else %}
-              <span class="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">▼ Abajo</span>
-            {% endif %}
-          </td>
-          <td class="px-5 py-3 text-right">
-            {% if row.pct is not None %}
-              <div class="flex items-center justify-end gap-2">
-                <div class="w-16 bg-slate-100 rounded-full h-1.5">
-                  <div class="h-1.5 rounded-full {% if row.pct >= 100 %}bg-emerald-500{% elif row.pct >= 70 %}bg-amber-400{% else %}bg-red-400{% endif %}"
-                    style="width: {% if row.pct > 100 %}100{% else %}{{ row.pct }}{% endif %}%"></div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[500px]">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 sm:px-5 py-3 text-left">Mes</th>
+            <th class="px-4 sm:px-5 py-3 text-right">Proyectado</th>
+            <th class="px-4 sm:px-5 py-3 text-right">Real</th>
+            <th class="px-4 sm:px-5 py-3 text-right">Diferencia</th>
+            <th class="px-4 sm:px-5 py-3 text-center">Estado</th>
+            <th class="px-4 sm:px-5 py-3 text-right">% Meta</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for row in comparativa %}
+          <tr class="{% if row.estado == 'in_progress' %}bg-sky-50{% elif row.estado == 'future' %}text-slate-400{% endif %}">
+            <td class="px-4 sm:px-5 py-3 font-medium text-slate-700">
+              {{ row.mes }}
+              {% if row.estado == 'in_progress' %}
+                <span class="ml-2 text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">En curso</span>
+              {% endif %}
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-right text-slate-600">{{ row.proyectado }}</td>
+            <td class="px-4 sm:px-5 py-3 text-right font-semibold {% if row.real is not None %}text-slate-800{% endif %}">
+              {% if row.real is not None %}{{ row.real }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-right font-semibold">
+              {% if row.delta is not None %}
+                <span class="{% if row.delta >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
+                  {% if row.delta >= 0 %}+{% endif %}{{ row.delta }}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-center">
+              {% if row.estado == 'future' %}
+                <span class="text-slate-400 text-xs">Pendiente</span>
+              {% elif row.delta is not None and row.delta >= 0 %}
+                <span class="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">▲ Arriba</span>
+              {% else %}
+                <span class="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">▼ Abajo</span>
+              {% endif %}
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-right">
+              {% if row.pct is not None %}
+                <div class="flex items-center justify-end gap-2">
+                  <div class="w-12 sm:w-16 bg-slate-100 rounded-full h-1.5">
+                    <div class="h-1.5 rounded-full {% if row.pct >= 100 %}bg-emerald-500{% elif row.pct >= 70 %}bg-amber-400{% else %}bg-red-400{% endif %}"
+                      style="width: {% if row.pct > 100 %}100{% else %}{{ row.pct }}{% endif %}%"></div>
+                  </div>
+                  <span class="text-xs text-slate-600">{{ row.pct }}%</span>
                 </div>
-                <span class="text-xs text-slate-600">{{ row.pct }}%</span>
-              </div>
-            {% else %}—{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Recientes -->
   <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between">
       <h2 class="text-slate-800 font-semibold text-sm">Últimas Referencias Pagadas</h2>
       <a href="{% url 'lista' %}" class="text-sky-600 hover:text-sky-700 text-xs font-medium">Ver todas →</a>
     </div>
-    <table class="w-full text-sm">
-      <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-        <tr>
-          <th class="px-5 py-3 text-left">Referencia</th>
-          <th class="px-5 py-3 text-left">Cliente</th>
-          <th class="px-5 py-3 text-center">Patente</th>
-          <th class="px-5 py-3 text-center">Clave</th>
-          <th class="px-5 py-3 text-right">F. Pago</th>
-          <th class="px-5 py-3 text-center">Conts.</th>
-          <th class="px-5 py-3 text-left">BL</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-50">
-        {% for r in recientes %}
-        <tr class="hover:bg-slate-50 transition-colors">
-          <td class="px-5 py-3">
-            <a href="{% url 'detalle' r.num_refe %}"
-               class="text-sky-600 hover:text-sky-700 font-mono text-xs font-semibold">
-              {{ r.num_refe }}
-            </a>
-          </td>
-          <td class="px-5 py-3 text-slate-600 text-xs truncate max-w-[180px]">{{ r.nombre_cliente|default:"—" }}</td>
-          <td class="px-5 py-3 text-center">
-            <span class="text-xs font-medium px-2 py-0.5 rounded-full
-              {% if r.patente == '1627' %}bg-sky-100 text-sky-700
-              {% elif r.patente == '1656' %}bg-emerald-100 text-emerald-700
-              {% else %}bg-violet-100 text-violet-700{% endif %}">
-              {{ r.prefijo }}
-            </span>
-          </td>
-          <td class="px-5 py-3 text-center text-xs text-slate-600 font-mono">{{ r.clave_pedimento|default:"—" }}</td>
-          <td class="px-5 py-3 text-right text-xs text-slate-600 font-mono">{{ r.fecha_pago|default:"—" }}</td>
-          <td class="px-5 py-3 text-center text-xs text-slate-600">{{ r.contenedores.count }}</td>
-          <td class="px-5 py-3 text-xs text-slate-500 font-mono truncate max-w-[140px]">
-            {% with r.guias.first as bl %}{{ bl.numero_guia|default:"—" }}{% endwith %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[560px]">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 sm:px-5 py-3 text-left">Referencia</th>
+            <th class="px-4 sm:px-5 py-3 text-left">Cliente</th>
+            <th class="px-4 sm:px-5 py-3 text-center">Patente</th>
+            <th class="px-4 sm:px-5 py-3 text-center">Clave</th>
+            <th class="px-4 sm:px-5 py-3 text-right">F. Pago</th>
+            <th class="px-4 sm:px-5 py-3 text-center">Conts.</th>
+            <th class="px-4 sm:px-5 py-3 text-left">BL</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for r in recientes %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 sm:px-5 py-3">
+              <a href="{% url 'detalle' r.num_refe %}"
+                 class="text-sky-600 hover:text-sky-700 font-mono text-xs font-semibold">
+                {{ r.num_refe }}
+              </a>
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-slate-600 text-xs truncate max-w-[140px] sm:max-w-[180px]">{{ r.nombre_cliente|default:"—" }}</td>
+            <td class="px-4 sm:px-5 py-3 text-center">
+              <span class="text-xs font-medium px-2 py-0.5 rounded-full
+                {% if r.patente == '1627' %}bg-sky-100 text-sky-700
+                {% elif r.patente == '1656' %}bg-emerald-100 text-emerald-700
+                {% else %}bg-violet-100 text-violet-700{% endif %}">
+                {{ r.prefijo }}
+              </span>
+            </td>
+            <td class="px-4 sm:px-5 py-3 text-center text-xs text-slate-600 font-mono">{{ r.clave_pedimento|default:"—" }}</td>
+            <td class="px-4 sm:px-5 py-3 text-right text-xs text-slate-600 font-mono">{{ r.fecha_pago|default:"—" }}</td>
+            <td class="px-4 sm:px-5 py-3 text-center text-xs text-slate-600">{{ r.contenedores.count }}</td>
+            <td class="px-4 sm:px-5 py-3 text-xs text-slate-500 font-mono truncate max-w-[100px] sm:max-w-[140px]">
+              {% with r.guias.first as bl %}{{ bl.numero_guia|default:"—" }}{% endwith %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </div>
