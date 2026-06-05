@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .glosa_data import analyze_notas
 from .models import CuentaGastos, GlosaRegistro, Referencia
 
 
@@ -833,12 +834,21 @@ def glosa_dashboard(request):
         })
 
     # Actividad reciente (últimas 10 acciones)
-    recientes = (
+    recientes_qs = list(
         GlosaRegistro.objects
         .filter(referencia__in=base_qs)
         .select_related('referencia', 'usuario_entrada', 'usuario_conclusion')
         .order_by('-fecha_entrada')[:10]
     )
+
+    # Análisis de notas: ALL glosas de la ventana con nota no vacía
+    glosas_con_nota = list(
+        GlosaRegistro.objects
+        .filter(referencia__in=base_qs)
+        .exclude(nota='')
+        .select_related('referencia', 'usuario_entrada')
+    )
+    nota_analysis = analyze_notas(glosas_con_nota)
 
     ctx = {
         'total':               total,
@@ -854,9 +864,10 @@ def glosa_dashboard(request):
         'por_patente':         list(por_patente),
         'urgentes_list':       urgentes_list,
         'por_usuario':         por_usuario,
-        'recientes':           recientes,
+        'recientes':           recientes_qs,
         'mes_actual':          meses_nombres[month - 1],
         'mes_anterior':        meses_nombres[prev_month - 1],
         'año':                 year,
+        **nota_analysis,
     }
     return render(request, 'referencias/glosa_dashboard.html', ctx)

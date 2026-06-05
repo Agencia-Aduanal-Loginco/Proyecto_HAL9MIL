@@ -43,6 +43,66 @@ def analizar_semanal(datos: dict) -> str:
         return ''
 
 
+def analizar_glosa_semanal(datos_glosa: dict) -> str:
+    if not settings.IA_HABILITADA or not settings.ANTHROPIC_API_KEY:
+        return ''
+    if not datos_glosa or datos_glosa.get('total', 0) == 0:
+        return ''
+    try:
+        notas_muestra = datos_glosa.get('notas_muestra', [])[:15]
+        notas_str = '\n'.join(
+            f"  [{n['capturista']}] {n['nota'][:130]}"
+            for n in notas_muestra
+        ) if notas_muestra else '(sin notas registradas esta semana)'
+
+        top_palabras_str = ', '.join(
+            f"{w}({c})" for w, c in datos_glosa.get('top_palabras', [])[:12]
+        ) or '(sin datos)'
+
+        top_bigramas_str = ', '.join(
+            f'"{bg}"({c})' for bg, c in datos_glosa.get('top_bigramas', [])[:8]
+        ) or '(sin datos)'
+
+        top_caps_str = ', '.join(
+            f"{cap}({c} obs.)" for cap, c in datos_glosa.get('top_capturistas_notas', [])[:6]
+        ) or '(sin datos)'
+
+        por_usuario_str = '\n'.join(
+            f"  {u['nombre']}: {u['registradas']} registradas, {u['concluidas']} concluidas, {u['pendientes']} pendientes"
+            for u in datos_glosa.get('por_usuario', [])
+        ) or '(sin datos)'
+
+        prompt = (
+            "Eres analista de operaciones de Loginco, agencia aduanal mexicana. "
+            "Analiza el área de glosa para la dirección general. "
+            "Redacta máximo 2 párrafos ejecutivos (máximo 150 palabras en total): "
+            "el primero sobre el desempeño operativo del equipo, "
+            "el segundo sobre los tipos de error detectados en las notas y si hay patrones "
+            "por capturista que requieran atención. "
+            "Sé directo, concreto y enfocado en acciones. Español formal.\n\n"
+            f"ESTADÍSTICAS DE GLOSA (semana {datos_glosa.get('periodo_inicio', '')} – {datos_glosa.get('periodo_fin', '')}):\n"
+            f"- Total pedimentos glosados: {datos_glosa['total']}\n"
+            f"- Concluidos: {datos_glosa['concluidos']} | En proceso: {datos_glosa['en_proceso']}\n"
+            f"- Tiempo prom. arribo→ingreso a glosa: {datos_glosa.get('avg_tiempo_entrada') or 'N/D'} días\n"
+            f"- Tiempo prom. procesamiento: {datos_glosa.get('avg_tiempo_proceso') or 'N/D'} días\n"
+            f"- Registros con observaciones/notas: {datos_glosa.get('notas_count', 0)}\n\n"
+            f"POR USUARIO:\n{por_usuario_str}\n\n"
+            f"PALABRAS CLAVE EN NOTAS: {top_palabras_str}\n"
+            f"FRASES FRECUENTES: {top_bigramas_str}\n"
+            f"CAPTURISTAS CON MÁS OBSERVACIONES: {top_caps_str}\n\n"
+            f"MUESTRA DE NOTAS (capturista — texto):\n{notas_str}"
+        )
+        msg = _client().messages.create(
+            model='claude-opus-4-7',
+            max_tokens=500,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        return msg.content[0].text
+    except Exception as e:
+        logger.error(f'Error en análisis IA glosa semanal: {e}')
+        return ''
+
+
 def analizar_mensual(datos: dict) -> str:
     if not settings.IA_HABILITADA or not settings.ANTHROPIC_API_KEY:
         return ''

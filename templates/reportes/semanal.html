@@ -201,13 +201,174 @@
       </td>
     </tr>
 
-    <!-- ANÁLISIS IA -->
+    <!-- ANÁLISIS IA OPERATIVO -->
     {% if analisis_ia %}
     <tr>
       <td style="background:#ffffff;padding:20px 32px 0;">
         <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e293b 100%);border-radius:10px;padding:18px 20px;">
           <div style="color:#7dd3fc;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Análisis Ejecutivo · Claude AI</div>
           <div style="color:#e2e8f0;font-size:13px;line-height:1.7;">{{ analisis_ia }}</div>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- SECCIÓN GLOSA -->
+    {% if datos.glosa and datos.glosa.total > 0 %}
+    <tr>
+      <td style="background:#ffffff;padding:28px 32px 0;">
+        <div style="border-top:2px solid #f1f5f9;padding-top:20px;">
+          <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px;">Área de Glosa</div>
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:16px;">Pedimentos ingresados a revisión · {{ semana_str }}</div>
+
+          <!-- KPIs glosa -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+            <tr>
+              <td style="padding:0 5px 0 0;" width="33%">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">Glosados</div>
+                  <div style="font-size:24px;font-weight:800;color:#1e293b;margin-top:2px;">{{ datos.glosa.total }}</div>
+                </div>
+              </td>
+              <td style="padding:0 5px;" width="33%">
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:1px;">Concluidos</div>
+                  <div style="font-size:24px;font-weight:800;color:#14532d;margin-top:2px;">{{ datos.glosa.concluidos }}</div>
+                </div>
+              </td>
+              <td style="padding:0 0 0 5px;" width="33%">
+                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:1px;">En proceso</div>
+                  <div style="font-size:24px;font-weight:800;color:#78350f;margin-top:2px;">{{ datos.glosa.en_proceso }}</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Tiempos -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:16px;">
+            <tr>
+              <td style="padding:0 8px;">
+                <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Arribo → Glosa</div>
+                <div style="font-size:18px;font-weight:700;color:#1e293b;">
+                  {% if datos.glosa.avg_tiempo_entrada %}{{ datos.glosa.avg_tiempo_entrada }} días{% else %}—{% endif %}
+                </div>
+              </td>
+              <td style="padding:0 8px;border-left:1px solid #e2e8f0;">
+                <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:10px;">Procesamiento</div>
+                <div style="font-size:18px;font-weight:700;color:#1e293b;padding-left:10px;">
+                  {% if datos.glosa.avg_tiempo_proceso %}{{ datos.glosa.avg_tiempo_proceso }} días{% else %}—{% endif %}
+                </div>
+              </td>
+              <td style="padding:0 8px;border-left:1px solid #e2e8f0;">
+                <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:10px;">Con observaciones</div>
+                <div style="font-size:18px;font-weight:700;color:#1e293b;padding-left:10px;">{{ datos.glosa.notas_count }}</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Por usuario -->
+          {% if datos.glosa.por_usuario %}
+          <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Por Usuario</div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:16px;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Usuario</td>
+              <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Registradas</td>
+              <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Concluidas</td>
+              <td style="padding:6px 8px;font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;border-bottom:1px solid #e2e8f0;text-align:center;">Pendientes</td>
+            </tr>
+            {% for u in datos.glosa.por_usuario %}
+            <tr>
+              <td style="padding:7px 8px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;">{{ u.nombre }}</td>
+              <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+                <span style="background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;">{{ u.registradas }}</span>
+              </td>
+              <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+                <span style="background:#dcfce7;color:#16a34a;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;">{{ u.concluidas }}</span>
+              </td>
+              <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">
+                {% if u.pendientes %}
+                <span style="background:#fef9c3;color:#d97706;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;">{{ u.pendientes }}</span>
+                {% else %}
+                <span style="color:#94a3b8;font-size:12px;">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% endif %}
+
+          <!-- Errores frecuentes en notas -->
+          {% if datos.glosa.notas_count > 0 %}
+          <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Patrones en Observaciones ({{ datos.glosa.notas_count }} notas)</div>
+
+          {% if datos.glosa.top_palabras %}
+          <div style="margin-bottom:12px;">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">Términos más frecuentes:</div>
+            <div>
+              {% for palabra, count in datos.glosa.top_palabras|slice:":12" %}
+              <span style="display:inline-block;background:#f1f5f9;color:#334155;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;margin:2px;">
+                {{ palabra }} <span style="color:#94a3b8;">({{ count }})</span>
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {% if datos.glosa.top_bigramas %}
+          <div style="margin-bottom:12px;">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">Frases frecuentes:</div>
+            <div>
+              {% for bigrama, count in datos.glosa.top_bigramas|slice:":8" %}
+              <span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;margin:2px;border:1px solid #fde68a;">
+                "{{ bigrama }}" <span style="color:#d97706;">({{ count }})</span>
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {% if datos.glosa.top_capturistas_notas %}
+          <div style="margin-bottom:4px;">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">Capturistas con más observaciones:</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              {% for capturista, count in datos.glosa.top_capturistas_notas|slice:":6" %}
+              <tr>
+                <td style="padding:4px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="180" style="font-size:11px;color:#334155;">{{ capturista }}</td>
+                      <td>
+                        <div style="background:#fee2e2;border-radius:4px;height:8px;overflow:hidden;">
+                          {% if datos.glosa.top_capturistas_notas.0.1 > 0 %}
+                          <div style="background:#f87171;height:8px;width:{% widthratio count datos.glosa.top_capturistas_notas.0.1 100 %}%;border-radius:4px;"></div>
+                          {% endif %}
+                        </div>
+                      </td>
+                      <td width="40" align="right" style="font-size:11px;font-weight:700;color:#dc2626;padding-left:6px;">{{ count }}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+          </div>
+          {% endif %}
+
+          {% endif %}
+
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+
+    <!-- ANÁLISIS IA GLOSA -->
+    {% if analisis_glosa_ia %}
+    <tr>
+      <td style="background:#ffffff;padding:16px 32px 0;">
+        <div style="background:linear-gradient(135deg,#1a2e1a 0%,#14291f 100%);border-radius:10px;padding:18px 20px;">
+          <div style="color:#86efac;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Análisis de Glosa · Claude AI</div>
+          <div style="color:#e2e8f0;font-size:13px;line-height:1.7;">{{ analisis_glosa_ia }}</div>
         </div>
       </td>
     </tr>

@@ -8,7 +8,7 @@ from django.template.loader import render_to_string
 
 from .models import Destinatario, HistorialReporte
 from .data import get_datos_semana, get_datos_mes, NOMBRES_MESES
-from .ai_analysis import analizar_semanal, analizar_mensual
+from .ai_analysis import analizar_semanal, analizar_mensual, analizar_glosa_semanal
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +122,13 @@ def enviar_reporte_semanal():
     try:
         datos = get_datos_semana(last_monday, last_sunday)
         analisis_ia = analizar_semanal(datos)
+        analisis_glosa_ia = analizar_glosa_semanal(datos.get('glosa', {}))
         semana_str = f'{last_monday.strftime("%d/%m")} – {last_sunday.strftime("%d/%m/%Y")}'
 
         html = render_to_string('reportes/semanal.html', {
             'datos': datos,
             'analisis_ia': analisis_ia,
+            'analisis_glosa_ia': analisis_glosa_ia,
             'semana_str': semana_str,
         })
 

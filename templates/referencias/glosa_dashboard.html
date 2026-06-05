@@ -304,6 +304,115 @@
   </div>
   {% endif %}
 
+  <!-- Panel de análisis de notas -->
+  {% if notas_count > 0 %}
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-700">Análisis de Observaciones</h2>
+        <p class="text-xs text-slate-400 mt-0.5">{{ notas_count }} registro{% if notas_count != 1 %}s{% endif %} con notas en la ventana activa</p>
+      </div>
+      <span class="text-xs bg-amber-100 text-amber-700 font-semibold px-2.5 py-1 rounded-full self-start sm:self-auto">
+        {{ notas_count }} observaciones
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+
+      <!-- Términos frecuentes -->
+      <div class="p-5">
+        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Términos más frecuentes</h3>
+        {% if top_palabras %}
+        <div class="flex flex-wrap gap-1.5">
+          {% for palabra, count in top_palabras|slice:":15" %}
+          <span class="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-full">
+            {{ palabra }}
+            <span class="text-slate-400 text-xs font-normal">{{ count }}</span>
+          </span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-slate-400">Sin datos suficientes.</p>
+        {% endif %}
+      </div>
+
+      <!-- Frases frecuentes -->
+      <div class="p-5">
+        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Frases recurrentes</h3>
+        {% if top_bigramas %}
+        <div class="space-y-2">
+          {% for bigrama, count in top_bigramas|slice:":10" %}
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-slate-700 font-medium italic">"{{ bigrama }}"</span>
+            <span class="flex-shrink-0 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">{{ count }}×</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-slate-400">Sin frases repetidas detectadas.</p>
+        {% endif %}
+      </div>
+
+      <!-- Capturistas con observaciones -->
+      <div class="p-5">
+        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Capturistas con observaciones</h3>
+        <p class="text-xs text-slate-400 mb-3">Mayor cantidad indica posibles errores frecuentes</p>
+        {% if top_capturistas_notas %}
+        <div class="space-y-2.5">
+          {% for capturista, count in top_capturistas_notas|slice:":8" %}
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-700 font-medium truncate max-w-[160px]" title="{{ capturista }}">{{ capturista }}</span>
+              <span class="font-bold {% if count >= 5 %}text-red-600{% elif count >= 3 %}text-amber-600{% else %}text-slate-500{% endif %}">{{ count }}</span>
+            </div>
+            <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full {% if count >= 5 %}bg-red-400{% elif count >= 3 %}bg-amber-400{% else %}bg-slate-300{% endif %}"
+                   style="width: {% widthratio count top_capturistas_notas.0.1 100 %}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-slate-400">Sin datos de capturistas.</p>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Muestra de notas recientes -->
+    {% if notas_muestra %}
+    <div class="border-t border-slate-100 px-5 py-4">
+      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Últimas observaciones registradas</h3>
+      <div class="space-y-2 max-h-52 overflow-y-auto">
+        {% for nota in notas_muestra|slice:":12" %}
+        <div class="flex items-start gap-3 p-2.5 bg-slate-50 rounded-lg">
+          <div class="flex-shrink-0">
+            <span class="inline-block text-xs font-semibold px-1.5 py-0.5 rounded
+              {% if nota.patente == 'LCLF' %}bg-sky-100 text-sky-700
+              {% elif nota.patente == 'LCRR' %}bg-emerald-100 text-emerald-700
+              {% else %}bg-violet-100 text-violet-700{% endif %}">
+              {{ nota.patente }}
+            </span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap mb-0.5">
+              <a href="{% url 'detalle' nota.ref %}" class="text-xs font-mono font-bold text-sky-600 hover:text-sky-700">{{ nota.ref }}</a>
+              <span class="text-xs text-slate-400">·</span>
+              <span class="text-xs text-slate-500">Capturista: <span class="font-medium text-slate-700">{{ nota.capturista }}</span></span>
+              <span class="text-xs text-slate-400">·</span>
+              <span class="text-xs text-slate-400">Por {{ nota.usuario }}</span>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed">{{ nota.nota|truncatechars:180 }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endif %}
+
   <!-- Fila inferior: por usuario + actividad reciente -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
