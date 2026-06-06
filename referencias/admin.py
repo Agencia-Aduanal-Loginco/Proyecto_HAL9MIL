@@ -1,5 +1,30 @@
 from django.contrib import admin
-from .models import CuentaGastos, Referencia, Contenedor, GuiaBL, LogSync
+from .models import CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync
+
+
+@admin.register(GlosaRegistro)
+class GlosaRegistroAdmin(admin.ModelAdmin):
+    list_display   = ('referencia', 'fecha_entrada', 'usuario_entrada',
+                      'estado', 'fecha_conclusion', 'usuario_conclusion',
+                      'urgente', 'nota_corta')
+    list_filter    = ('urgente', 'referencia__patente', 'usuario_entrada', 'usuario_conclusion')
+    search_fields  = ('referencia__num_refe', 'referencia__nombre_cliente', 'nota')
+    date_hierarchy = 'fecha_entrada'
+    ordering       = ('-fecha_entrada',)
+    readonly_fields = ('referencia', 'fecha_entrada', 'usuario_entrada')
+    fields         = ('referencia', 'fecha_entrada', 'usuario_entrada',
+                      'fecha_conclusion', 'usuario_conclusion', 'nota', 'urgente')
+
+    def estado(self, obj):
+        return 'Concluida' if obj.concluida else 'En proceso'
+    estado.short_description = 'Estado'
+
+    def nota_corta(self, obj):
+        return obj.nota[:70] + '…' if len(obj.nota) > 70 else obj.nota or '—'
+    nota_corta.short_description = 'Nota'
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(CuentaGastos)
