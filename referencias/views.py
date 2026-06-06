@@ -441,6 +441,16 @@ def glosa_concluir(request, pk):
     return redirect('glosa')
 
 
+@login_required
+@require_POST
+def glosa_revertir(request, pk):
+    if not request.user.is_staff:
+        return redirect('glosa')
+    registro = get_object_or_404(GlosaRegistro, referencia_id=pk, fecha_conclusion__isnull=True)
+    registro.delete()
+    return redirect('glosa')
+
+
 # ---------------------------------------------------------------------------
 # Glosa — Dashboard estadístico
 # ---------------------------------------------------------------------------
