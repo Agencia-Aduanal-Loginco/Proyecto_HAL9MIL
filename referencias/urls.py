@@ -11,6 +11,7 @@ urlpatterns = [
     path('glosa/registrar/<int:pk>/',         views.glosa_registrar,    name='glosa_registrar'),
     path('glosa/concluir/<int:pk>/',          views.glosa_concluir,     name='glosa_concluir'),
     path('glosa/revertir/<int:pk>/',          views.glosa_revertir,     name='glosa_revertir'),
+    path('glosa/eliminar/<int:pk>/',          views.glosa_eliminar,     name='glosa_eliminar'),
     path('cuenta-gastos/',                    views.cuenta_gastos,            name='cuenta_gastos'),
     path('cuenta-gastos/dashboard/',          views.cuenta_gastos_dashboard,  name='cuenta_gastos_dashboard'),
     path('cuenta-gastos/finalizar/<int:pk>/', views.cuenta_gastos_finalizar,  name='cuenta_gastos_finalizar'),

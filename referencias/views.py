@@ -271,10 +271,31 @@ def lista(request):
 @login_required
 def detalle(request, num_refe):
     ref = get_object_or_404(
-        Referencia.objects.prefetch_related('contenedores', 'guias'),
+        Referencia.objects.prefetch_related(
+            'contenedores', 'guias',
+            'glosas', 'glosas__usuario_entrada', 'glosas__usuario_conclusion',
+        ),
         num_refe=num_refe,
     )
-    return render(request, 'referencias/detalle.html', {'ref': ref})
+    try:
+        cuenta_gastos = ref.cuenta_gastos
+    except Exception:
+        cuenta_gastos = None
+    return render(request, 'referencias/detalle.html', {
+        'ref': ref,
+        'cuenta_gastos': cuenta_gastos,
+    })
+
+
+@login_required
+@require_POST
+def glosa_eliminar(request, pk):
+    if not request.user.is_staff:
+        return redirect('lista')
+    registro = get_object_or_404(GlosaRegistro, pk=pk)
+    num_refe = registro.referencia.num_refe
+    registro.delete()
+    return redirect('detalle', num_refe=num_refe)
 
 
 # ---------------------------------------------------------------------------
