@@ -5,6 +5,7 @@ from django.db.models import Count
 from django.db.models.functions import TruncMonth
 from referencias.models import Referencia, Contenedor, GuiaBL
 from referencias.glosa_data import get_datos_glosa_semana
+from referencias.cuenta_gastos_data import get_datos_cuenta_gastos_semana
 
 
 def _promedio_dias_despacho(refs_qs):
@@ -112,6 +113,7 @@ def get_datos_semana(inicio: date, fin: date) -> dict:
             ).order_by('-capturadas')
         ),
         'glosa': get_datos_glosa_semana(inicio, fin),
+        'cuenta_gastos': get_datos_cuenta_gastos_semana(inicio, fin),
     }
 
 

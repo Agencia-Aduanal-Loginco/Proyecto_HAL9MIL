@@ -8,7 +8,7 @@ from django.template.loader import render_to_string
 
 from .models import Destinatario, HistorialReporte
 from .data import get_datos_semana, get_datos_mes, NOMBRES_MESES
-from .ai_analysis import analizar_semanal, analizar_mensual, analizar_glosa_semanal
+from .ai_analysis import analizar_semanal, analizar_mensual, analizar_glosa_semanal, analizar_cuenta_gastos_semanal
 
 logger = logging.getLogger(__name__)
 
@@ -27,30 +27,28 @@ def _get_wa_destinatarios(tipo: str) -> list:
 
 def _wa_semanal(datos: dict, semana_str: str):
     try:
-        from whatsapp.client import send_text
+        from django.conf import settings
+        from whatsapp.client import send_template
         numeros = _get_wa_destinatarios('semanal')
         if not numeros:
             return
+        content_sid = settings.TWILIO_CONTENT_SID_SEMANAL
         por_patente = {r['prefijo']: r['total'] for r in datos['pagadas_por_patente']}
-        patentes = '  ' + ' | '.join(
+        patentes_str = ' | '.join(
             f"{p}: {por_patente.get(p, 0)}"
             for p in ['LCLF', 'LCRR', 'LCMJ']
         )
-        top = datos['top_clientes']
-        top_str = f"\n🏆 Top: {top[0]['nombre_cliente']} ({top[0]['total']})" if top else ''
-        texto = (
-            f"📊 *Reporte Semanal HAL9MIL*\n"
-            f"Semana: {semana_str}\n\n"
-            f"✅ Pagadas:      *{datos['pagadas_total']}*\n"
-            f"📋 Validadas:    {datos['validadas_total']}\n"
-            f"📦 Contenedores: {datos['contenedores_total']}\n"
-            f"⏳ Pendientes:   {datos['pendientes_pago']}\n\n"
-            f"Por patente:\n{patentes}"
-            f"{top_str}"
-        )
+        variables = {
+            '1': semana_str,
+            '2': str(datos['pagadas_total']),
+            '3': str(datos['validadas_total']),
+            '4': str(datos['contenedores_total']),
+            '5': str(datos['pendientes_pago']),
+            '6': patentes_str,
+        }
         for numero in numeros:
-            send_text(numero, texto)
-        logger.info("[WA Semanal] Enviado a %d números.", len(numeros))
+            send_template(numero, content_sid, variables)
+        logger.info("[WA Semanal] Enviado a %d números vía plantilla.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp semanal no enviado: %s", e)
 
@@ -123,12 +121,14 @@ def enviar_reporte_semanal():
         datos = get_datos_semana(last_monday, last_sunday)
         analisis_ia = analizar_semanal(datos)
         analisis_glosa_ia = analizar_glosa_semanal(datos.get('glosa', {}))
+        analisis_cg_ia = analizar_cuenta_gastos_semanal(datos.get('cuenta_gastos', {}))
         semana_str = f'{last_monday.strftime("%d/%m")} – {last_sunday.strftime("%d/%m/%Y")}'
 
         html = render_to_string('reportes/semanal.html', {
             'datos': datos,
             'analisis_ia': analisis_ia,
             'analisis_glosa_ia': analisis_glosa_ia,
+            'analisis_cg_ia': analisis_cg_ia,
             'semana_str': semana_str,
         })
 

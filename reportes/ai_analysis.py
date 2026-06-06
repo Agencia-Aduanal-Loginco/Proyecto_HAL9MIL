@@ -103,6 +103,41 @@ def analizar_glosa_semanal(datos_glosa: dict) -> str:
         return ''
 
 
+def analizar_cuenta_gastos_semanal(datos_cg: dict) -> str:
+    if not settings.IA_HABILITADA or not settings.ANTHROPIC_API_KEY:
+        return ''
+    if not datos_cg or datos_cg.get('pedimentos_pagados', 0) == 0:
+        return ''
+    try:
+        por_usuario_str = '\n'.join(
+            f"  {u['nombre']}: {u['finalizadas']} finalizadas"
+            for u in datos_cg.get('por_usuario', [])
+        ) or '(sin datos)'
+
+        prompt = (
+            "Eres analista de operaciones de Loginco, agencia aduanal mexicana. "
+            "Redacta un párrafo ejecutivo breve (máximo 100 palabras) sobre el desempeño "
+            "del área de Cuenta de Gastos para la dirección. "
+            "Comenta la cobertura, el tiempo de respuesta y quién destacó. "
+            "Español formal y directo.\n\n"
+            f"CUENTA DE GASTOS (semana {datos_cg.get('periodo_inicio','')} – {datos_cg.get('periodo_fin','')}):\n"
+            f"- Pedimentos pagados en la semana: {datos_cg['pedimentos_pagados']}\n"
+            f"- Cuentas de gastos finalizadas en la semana: {datos_cg['finalizadas']}\n"
+            f"- De los pagados esta semana, con CG registrada: {datos_cg['cg_de_pagadas']} ({datos_cg['pct_cobertura']}%)\n"
+            f"- Promedio días pago → finalización CG: {datos_cg.get('avg_dias_pago_a_cg') or 'N/D'} días\n\n"
+            f"POR USUARIO:\n{por_usuario_str}"
+        )
+        msg = _client().messages.create(
+            model='claude-opus-4-7',
+            max_tokens=300,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        return msg.content[0].text
+    except Exception as e:
+        logger.error(f'Error en análisis IA cuenta gastos semanal: {e}')
+        return ''
+
+
 def analizar_mensual(datos: dict) -> str:
     if not settings.IA_HABILITADA or not settings.ANTHROPIC_API_KEY:
         return ''
