@@ -2,7 +2,7 @@
 
 ## Descripción General
 
-HAL9MIL es un sistema de consulta y estadísticas aduanales para Loginco, construido con Django 5.2. Extrae y visualiza datos directamente de las bases de datos Firebird **CASA.GDB** de las tres patentes de la agencia aduanal. El sistema permite consultar referencias de embarque, pedimentos, contenedores y guías BL (Bill of Lading), con un dashboard de analytics histórico 2022–2026. Incluye un bot de WhatsApp para consultas rápidas y un agente Windows que sincroniza incrementalmente los datos desde Firebird hacia la nube.
+HAL9MIL es un sistema de consulta y estadísticas aduanales para Loginco, construido con Django 5.2. Extrae y visualiza datos directamente de las bases de datos Firebird **CASA.GDB** de las tres patentes de la agencia aduanal. El sistema permite consultar referencias de embarque, pedimentos, contenedores y guías BL (Bill of Lading), con un dashboard de analytics histórico 2022–2026. Incluye un bot de WhatsApp (vía Twilio) para consultas rápidas, un agente Windows que sincroniza incrementalmente los datos desde Firebird hacia la nube, gestión operativa de Glosa y Cuenta de Gastos, y reportes semanales/mensuales con análisis de Claude AI.
 
 ---
 
@@ -16,7 +16,7 @@ HAL9MIL es un sistema de consulta y estadísticas aduanales para Loginco, constr
 | Frontend | Tailwind CSS (CDN Play) + Chart.js 4.4 |
 | Autenticación | Django session auth (login requerido) |
 | Reportes | APScheduler + SendGrid + Claude AI (Anthropic) |
-| WhatsApp bot | OpenWA (whatsapp-web.js) vía webhook HMAC |
+| WhatsApp | Twilio REST API (bot + notificaciones + plantillas aprobadas) |
 | Python | 3.12 |
 | Entorno virtual | `.venv/` |
 | Locale | `es-mx` / `America/Mexico_City` |
@@ -39,38 +39,44 @@ Proyecto_HAL9MIL/
 │   ├── wsgi.py
 │   └── asgi.py
 ├── referencias/                    # App principal
-│   ├── models.py                   # Referencia, Contenedor, GuiaBL, LogSync
-│   ├── views.py                    # dashboard, lista, detalle
+│   ├── models.py                   # Referencia, Contenedor, GuiaBL, GlosaRegistro, CuentaGastos, LogSync
+│   ├── views.py                    # dashboard, lista, detalle, glosa*, cuenta_gastos*
+│   ├── admin.py                    # GlosaRegistro, CuentaGastos, LogSync registrados
+│   ├── glosa_data.py               # Analítica de glosa: analyze_notas(), get_datos_glosa_semana()
+│   ├── cuenta_gastos_data.py       # Analítica de CG: get_datos_cuenta_gastos_semana()
 │   ├── sync_views.py               # Endpoint POST /api/sync/
 │   ├── urls.py
-│   ├── admin.py
 │   └── management/commands/
 │       └── import_firebird.py      # ETL Firebird → Django (importación completa)
 ├── reportes/                       # App de reportes periódicos
 │   ├── data.py                     # get_datos_semana(), get_datos_mes()
-│   ├── ai_analysis.py              # Análisis ejecutivo con Claude AI
-│   ├── jobs.py                     # Tareas APScheduler
+│   ├── ai_analysis.py              # analizar_semanal/mensual/glosa/cuenta_gastos con Claude AI
+│   ├── jobs.py                     # Tareas APScheduler (email + WhatsApp template)
 │   ├── scheduler.py                # BackgroundScheduler + DjangoJobStore
 │   └── management/commands/
 │       └── enviar_reporte.py       # Envío manual de reportes
-├── whatsapp/                       # Bot de WhatsApp (OpenWA)
+├── whatsapp/                       # Bot WhatsApp vía Twilio
 │   ├── bot.py                      # Lógica de comandos del bot
-│   ├── client.py                   # Cliente HTTP hacia OpenWA API
-│   ├── views.py                    # Webhook receptor (HMAC auth)
+│   ├── client.py                   # send_text() (sesión) + send_template() (plantilla aprobada)
+│   ├── views.py                    # Webhook receptor (firma Twilio)
 │   └── urls.py                     # /whatsapp/webhook/
 ├── sync_agent/                     # Agente Windows → Cloud (sincronización incremental)
 │   ├── sync_agent.py               # Script principal
 │   ├── config.ini.example          # Plantilla de configuración
 │   └── logs/                       # Directorio de logs (no versionado)
 ├── templates/
-│   ├── base.html                   # Layout con sidebar
+│   ├── base.html                   # Layout con sidebar responsive (hamburger móvil)
 │   ├── login.html
 │   ├── dashboard.html              # Vista principal con charts
-│   ├── referencias/
-│   │   ├── lista.html              # Tabla paginada con filtros
-│   │   └── detalle.html            # Ficha completa de referencia
+│   └── referencias/
+│       ├── lista.html              # Tabla paginada con filtros
+│       ├── detalle.html            # Ficha completa + historial glosa + cuenta gastos
+│       ├── glosa.html              # Lista operativa de glosa (con acciones staff)
+│       ├── glosa_dashboard.html    # Dashboard estadístico de glosa
+│       ├── cuenta_gastos.html      # Lista operativa de cuenta de gastos
+│       └── cuenta_gastos_dashboard.html
 │   └── reportes/
-│       ├── semanal.html            # Email HTML reporte semanal
+│       ├── semanal.html            # Email HTML reporte semanal (incluye glosa + CG)
 │       └── mensual.html            # Email HTML reporte mensual
 ├── static/
 ├── db.sqlite3
@@ -93,8 +99,9 @@ Tabla principal. Una fila por `NUM_REFE` único. Almacena los datos del pediment
 | `cve_cliente` | CharField | `SAAIO_PEDIME.CVE_IMPO` | Código cliente en Firebird |
 | `nombre_cliente` | CharField | `CTRAC_CLIENT.NOM_IMP` | Nombre del importador |
 | `fecha_arribo` | DateField | `CTRAO_EMBAR.FEC_ENTR` | Fecha de entrada del buque |
-| `fecha_validacion` | DateField | `SAAIO_PEDIME.FEC_ENTR` | Fecha de validación del pedimento |
+| `fecha_validacion` | DateField | `SAAIO_REGVAL.FEC_VAL` | Fecha de validación del pedimento |
 | `fecha_pago` | DateField | `SAAIO_PEDIME.FEC_PAGO` | Fecha de pago de derechos |
+| `fecha_captura` | DateField | `SAAIO_PROCES.FEC_MODI` | Fecha de captura en CASA |
 | `num_pedimento` | CharField | `SAAIO_PEDIME.NUM_PEDI` | Número de pedimento SAT |
 | `clave_pedimento` | CharField | `SAAIO_PEDIME.CVE_PEDI` | Clave (`A1`, `A4`, `R1`…) |
 | `tipo_pedimento` | CharField | `SAAIO_PEDIME.TIP_PEDI` | Tipo (`R1` = rectificación) |
@@ -104,7 +111,9 @@ Tabla principal. Una fila por `NUM_REFE` único. Almacena los datos del pediment
 | `linea_captura` | CharField | `SAAIO_PEDIME2.PAG_LCAP` | Línea de captura SAT |
 | `cve_capturista` | CharField | `SAAIO_PEDIME.CVE_CAPT` | Clave del usuario capturista en CASA |
 | `nombre_capturista` | CharField | `SISSEG_USUARI.NOMBRE` | Nombre completo del capturista |
+| `fir_elec` | CharField | `SAAIO_PEDIME.FIR_ELEC` | Firma electrónica (vacía = pendiente de pago) |
 | `es_rectificacion` | BooleanField | Derivado | `True` si `NUM_REFE` empieza con `R` **y** `len > 5` |
+| `num_partidas` | IntegerField | `SAAIO_PEDIME.NUM_PART` | Número de fracciones arancelarias |
 | `created_at` | DateTimeField | Auto | Timestamp de creación del registro Django |
 | `updated_at` | DateTimeField | Auto | Timestamp de última actualización Django |
 
@@ -114,6 +123,45 @@ Tabla principal. Una fila por `NUM_REFE` único. Almacena los datos del pediment
 > `num_operacion != ''` **Y** `linea_captura != ''`. Solo estos se cuentan en métricas de
 > "pagados" en reportes y filtros. El campo `fecha_pago` puede existir sin que ambos estén
 > presentes, por lo que no es suficiente por sí solo.
+
+> **Criterio de glosa (pendiente):** Referencias que aparecen en la lista de glosa son las que tienen
+> `fir_elec=''`, `num_operacion=''`, `linea_captura=''` y `es_rectificacion=False`
+> dentro de la ventana mes actual + mes anterior.
+
+---
+
+### `GlosaRegistro`
+Registra cada ciclo de revisión de glosa de una referencia. Una referencia puede tener múltiples registros a lo largo del tiempo.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `referencia` | FK → Referencia | Referencia glosada |
+| `fecha_entrada` | DateTimeField | Cuándo se registró la glosa |
+| `usuario_entrada` | FK → User | Quién registró la glosa |
+| `fecha_conclusion` | DateTimeField (null) | Cuándo se concluyó (null = en proceso) |
+| `usuario_conclusion` | FK → User (null) | Quién concluyó la glosa |
+| `nota` | TextField | Observaciones al concluir |
+| `urgente` | BooleanField | Marcada como urgente |
+
+**Propiedad:** `concluida` → `True` si `fecha_conclusion is not None`.
+
+**Admin:** Registrado con filtros por patente/usuario/urgente, búsqueda por referencia/nota. Usuarios `is_staff` pueden eliminar registros. No se permite agregar desde el admin.
+
+---
+
+### `CuentaGastos`
+Relación OneToOne con Referencia. Se crea cuando la cuenta de gastos es finalizada.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `referencia` | OneToOne → Referencia | Referencia asociada |
+| `nota` | TextField | Observaciones |
+| `fecha_finalizacion` | DateTimeField | Cuándo se finalizó |
+| `finalizado_por` | FK → User | Quién finalizó |
+
+**Admin:** Registrado con filtros y búsqueda. Solo lectura (no se puede agregar desde admin).
+
+---
 
 ### `Contenedor`
 FK a `Referencia`. Una fila por contenedor.
@@ -184,9 +232,11 @@ con = fdb.connect(
 | Tabla | Registros aprox. | Descripción |
 |---|---|---|
 | `CTRAC_CLIENT` | ~130–200/patente | Catálogo de importadores (`CVE_IMP`, `NOM_IMP`) |
-| `CTRAO_EMBAR` | ~3,000–5,000/patente | Embarques — `FEC_ENTR` (arribo), `APE_REFE` (última modificación) |
+| `CTRAO_EMBAR` | ~3,000–5,000/patente | Embarques — `FEC_ENTR` (arribo) |
 | `SAAIO_PEDIME` | ~12,000–15,000/patente | Pedimentos — `FEC_ENTR`, `FEC_PAGO`, `DIA_PAGO`, `NUM_PEDI` |
 | `SAAIO_PEDIME2` | — | Línea de captura SAT (`PAG_LCAP`) y número de operación (`NUM_OPER`) |
+| `SAAIO_REGVAL` | — | Validaciones — `FEC_VAL` (fecha_validacion) |
+| `SAAIO_PROCES` | — | Procesos — `FEC_MODI` (fecha_captura, última modificación) |
 | `SAAIO_CONTEN` | ~12,000–15,000/patente | Contenedores por referencia (`NUM_CONT`, `CVE_CONT`) |
 | `SAAIO_GUIAS` | ~12,000–15,000/patente | Guías / BL por referencia (`GUIA`, `IDE_MH`) |
 | `SISSEG_USUARI` | ~42/patente | Usuarios del sistema (`LOGIN`, `NOMBRE`) |
@@ -196,6 +246,8 @@ con = fdb.connect(
 > principal y `CTRAO_EMBAR` solo para `fecha_arribo`.
 >
 > **Fallback:** si una referencia no aparece en `CTRAO_EMBAR`, se usa `fecha_validacion` como proxy de `fecha_arribo`.
+>
+> **Sincronización incremental:** usa `SAAIO_PROCES.FEC_MODI` para detectar cambios desde el último sync.
 
 ### Mapeo CVE_CONT → Tipo de Contenedor
 
@@ -215,15 +267,28 @@ CVE_CONT_TIPO = {
 |---|---|---|
 | `/` | `dashboard` | Dashboard con KPIs y gráfica histórica |
 | `/referencias/` | `lista` | Tabla paginada con búsqueda y filtros |
-| `/referencias/<num_refe>/` | `detalle` | Ficha completa (usa `<path:>` por el `/` en la referencia) |
+| `/referencias/<num_refe>/` | `detalle` | Ficha completa + historial glosa + CG |
+| `/glosa/` | `glosa` | Lista operativa de pedimentos en glosa |
+| `/glosa/dashboard/` | `glosa_dashboard` | Estadísticas y analítica de glosa |
+| `/glosa/registrar/<pk>/` | `glosa_registrar` | POST — registrar glosa activa |
+| `/glosa/urgente/<pk>/` | `glosa_urgente` | POST — toggle urgente |
+| `/glosa/concluir/<pk>/` | `glosa_concluir` | POST — concluir glosa activa con nota |
+| `/glosa/revertir/<pk>/` | `glosa_revertir` | POST — eliminar glosa activa (staff only, pk=Referencia) |
+| `/glosa/eliminar/<pk>/` | `glosa_eliminar` | POST — eliminar cualquier GlosaRegistro (staff only, pk=GlosaRegistro) |
+| `/cuenta-gastos/` | `cuenta_gastos` | Lista operativa de cuenta de gastos |
+| `/cuenta-gastos/dashboard/` | `cuenta_gastos_dashboard` | Estadísticas de cuenta de gastos |
+| `/cuenta-gastos/finalizar/<pk>/` | `cuenta_gastos_finalizar` | POST — finalizar cuenta de gastos |
 | `/login/` | `LoginView` | Pantalla de acceso |
 | `/logout/` | `LogoutView` | Cierre de sesión |
-| `/admin/` | Admin Django | Gestión de usuarios |
+| `/admin/` | Admin Django | Gestión de modelos |
 | `/api/sync/` | `sync_endpoint` | POST — recibe datos del sync_agent (Token auth) |
-| `/whatsapp/webhook/` | `webhook` | POST — recibe mensajes de OpenWA (HMAC auth) |
+| `/whatsapp/webhook/` | `webhook` | POST — recibe mensajes de Twilio (firma Twilio) |
 
 > **Nota técnica:** La URL de detalle usa `<path:num_refe>` (no `<str:>`) porque las
 > referencias contienen `/` (ej. `LCLF0331/26`).
+
+> **Staff-only:** `glosa_revertir` y `glosa_eliminar` verifican `request.user.is_staff`
+> antes de ejecutar. Si el usuario no es staff, redirigen sin acción.
 
 ---
 
@@ -242,23 +307,148 @@ CVE_CONT_TIPO = {
 | Variación vs mes anterior | `((mes_actual - mes_anterior) / mes_anterior) * 100` |
 | Por patente | Agrupado por `patente` con `Count('id')` |
 
-### Secciones adicionales del dashboard
+---
 
-- **Tabla comparativa 2026:** Mes a mes con columnas `proyectado`, `real`, `delta`, `pct` y estado (`completed` / `in_progress` / `future`). Contexto: `comparativa`.
-- **Últimas 10 referencias recientes:** Las 10 últimas `Referencia` con `fecha_pago__isnull=False` y `es_rectificacion=False`, con prefetch de contenedores y guías. Contexto: `recientes`.
+## App de Glosa (`referencias/`)
 
-### Filtros disponibles en Lista (`/referencias/`)
+Gestión operativa de pedimentos pendientes de firma electrónica y pago. La lista de glosa muestra referencias con `fir_elec=''`, `num_operacion=''`, `linea_captura=''`, `es_rectificacion=False` en la ventana mes actual + mes anterior.
 
-| Parámetro GET | Descripción |
+### Flujo operativo
+
+1. **Registrar** — cualquier usuario autenticado puede registrar una glosa activa para una referencia
+2. **Urgente** — toggle para marcar/desmarcar urgencia (fondo rojo en la lista)
+3. **Concluir** — cierra la glosa activa con nota opcional y timestamp
+4. **Revertir** — elimina la glosa activa (solo staff) desde la lista de glosa
+5. **Eliminar** — elimina cualquier GlosaRegistro histórico (solo staff) desde el detalle de referencia
+
+### Módulo de analítica (`referencias/glosa_data.py`)
+
+| Función | Descripción |
 |---|---|
-| `q` | Búsqueda full-text: `num_refe`, `num_pedimento`, `nombre_cliente`, `contenedores__num_cont`, `guias__numero_guia` |
-| `patente` | Filtra por `1627`, `1656` o `1927` |
-| `año` | Filtra por `fecha_pago__year` |
-| `mes` | Filtra por `fecha_pago__month` |
-| `clave` | Filtra por `clave_pedimento` (ej. `A1`, `A4`) |
-| `pagadas` | Si presente, solo referencias con `fecha_pago` no nula |
-| `rectificaciones` | Si presente, incluye rectificaciones; por defecto se excluyen |
-| `orden` | Campo de ordenamiento. Válidos: `fecha_pago`, `num_refe`, `nombre_cliente`, `fecha_arribo`, `patente` (prefijo `-` para DESC) |
+| `analyze_notas(glosas_qs)` | Frecuencia de palabras, bigramas y capturistas con más observaciones |
+| `get_datos_glosa_semana(inicio, fin)` | Estadísticas completas para el reporte semanal |
+
+`get_datos_glosa_semana` devuelve: `total`, `concluidos`, `en_proceso`, `avg_tiempo_entrada` (arribo→glosa en días), `avg_tiempo_proceso` (entrada→conclusión), `por_usuario`, y todo lo de `analyze_notas`.
+
+---
+
+## App de Cuenta de Gastos (`referencias/`)
+
+Registra la finalización de la cuenta de gastos de cada referencia pagada.
+
+### Módulo de analítica (`referencias/cuenta_gastos_data.py`)
+
+`get_datos_cuenta_gastos_semana(inicio, fin)` devuelve:
+
+| Clave | Descripción |
+|---|---|
+| `pedimentos_pagados` | Referencias con `fecha_pago` en la semana |
+| `finalizadas` | CG con `fecha_finalizacion` en la semana |
+| `cg_de_pagadas` | De los pagados esa semana, cuántos ya tienen CG (cualquier momento) |
+| `sin_cg` | `pedimentos_pagados - cg_de_pagadas` |
+| `pct_cobertura` | `cg_de_pagadas / pedimentos_pagados * 100` |
+| `avg_dias_pago_a_cg` | Promedio días entre `fecha_pago` y `fecha_finalizacion` |
+| `por_usuario` | Ranking de usuarios por finalizaciones `[{nombre, finalizadas}]` |
+
+---
+
+## App de Reportes (`reportes/`)
+
+Genera y envía reportes HTML por correo usando SendGrid. WhatsApp vía Twilio Content Templates.
+
+### Scheduler
+
+`reportes/scheduler.py` usa `BackgroundScheduler` + `DjangoJobStore`. Arranca automáticamente al iniciar Django. La guardia `RUN_MAIN=true` evita doble arranque en el auto-reloader de desarrollo.
+
+| Job | Trigger | Descripción |
+|---|---|---|
+| `reporte_semanal` | Lunes 07:00 CST | Reporte de la semana anterior |
+| `reporte_mensual` | Día 1 del mes 07:00 CST | Reporte del mes anterior |
+
+### `reportes/data.py` — Funciones de datos
+
+#### `get_datos_semana(inicio, fin)`
+Devuelve dict con claves: `validadas_total`, `pagadas_total`, `validadas_por_patente`, `pagadas_por_patente`, `contenedores_total`, `contenedores_por_tipo`, `guias_total`, `top_clientes`, `pendientes_pago`, `rectificaciones_semana`, `claves_pedimento`, `por_capturista`, **`glosa`** (→ `get_datos_glosa_semana`), **`cuenta_gastos`** (→ `get_datos_cuenta_gastos_semana`).
+
+#### `get_datos_mes(year, month)`
+Incluye todo lo anterior más: `real`, `proyectado`, `delta_proyectado`, comparativas vs mes anterior y año pasado, `acumulado_año`, `promedio_dias_despacho`.
+
+### `reportes/ai_analysis.py` — Análisis Claude AI
+
+| Función | Modelo | max_tokens | Descripción |
+|---|---|---|---|
+| `analizar_semanal(datos)` | claude-opus-4-7 | 300 | Párrafo ejecutivo de la semana |
+| `analizar_glosa_semanal(datos_glosa)` | claude-opus-4-7 | 500 | 2 párrafos: desempeño equipo + patrones de error por capturista |
+| `analizar_cuenta_gastos_semanal(datos_cg)` | claude-opus-4-7 | 300 | Párrafo: cobertura, tiempo respuesta, usuario destacado |
+| `analizar_mensual(datos)` | claude-opus-4-7 | 600 | Análisis estratégico con 2-3 recomendaciones |
+
+### Reporte Semanal — Secciones del email (`templates/reportes/semanal.html`)
+
+1. Header con total pagadas de la semana
+2. KPI cards: Validadas / Pagadas / Contenedores / Pendientes
+3. Validadas por patente (barras de progreso)
+4. Contenedores por tipo
+5. Top 5 clientes
+6. Referencias por usuario (capturadas / pagadas / pendientes)
+7. Datos adicionales (Guías BL, Rectificaciones, Pendientes pago)
+8. **Análisis ejecutivo IA** — gradiente oscuro azul
+9. **Área de Glosa** — KPIs, tiempos, por usuario, patrones de notas
+10. **Análisis IA de Glosa** — gradiente verde oscuro
+11. **Cuenta de Gastos** — KPIs (pagados/finalizadas/cobertura%), promedio días pago→CG, ranking usuarios
+12. **Análisis IA de Cuenta de Gastos** — gradiente violeta oscuro
+
+### WhatsApp — Reporte Semanal
+
+Usa `send_template()` con Content Template aprobado por Meta (`TWILIO_CONTENT_SID_SEMANAL`).
+
+| Variable plantilla | Dato |
+|---|---|
+| `{{1}}` | Semana (ej. `02/06 – 08/06/2026`) |
+| `{{2}}` | Pagadas |
+| `{{3}}` | Validadas |
+| `{{4}}` | Contenedores |
+| `{{5}}` | Pendientes de pago |
+| `{{6}}` | Por patente (`LCLF: 12 | LCRR: 8 | LCMJ: 5`) |
+
+---
+
+## Bot de WhatsApp (`whatsapp/`)
+
+Bot conversacional vía Twilio REST API. Responde a mensajes entrantes usando `send_text()` (mensajes de sesión, dentro de ventana de 24 h). Las notificaciones proactivas (reporte semanal) usan `send_template()`.
+
+### Arquitectura
+
+```
+WhatsApp ←→ Twilio ──POST /whatsapp/webhook/──→ Django
+              (firma Twilio)                        ↓
+                                               bot.py procesa
+                                                    ↓
+                                               Referencia queryset
+                                                    ↓
+                                          send_text() → Twilio → WA
+```
+
+### `whatsapp/client.py`
+
+| Función | Descripción |
+|---|---|
+| `send_text(to, text)` | Mensaje de sesión (solo dentro de ventana 24 h tras mensaje entrante) |
+| `send_template(to, content_sid, variables)` | Mensaje con plantilla aprobada Meta — no requiere sesión previa |
+| `send_to_admin(text)` | Atajo: `send_text` al número admin configurado |
+
+### Comandos disponibles
+
+| Comando | Descripción |
+|---|---|
+| `ayuda` | Muestra el menú de comandos |
+| `ref LCRR0881/26` | Busca una referencia por número exacto |
+| `ped 7000001` | Busca referencia por número de pedimento |
+| `cont CMAU5662811` | Busca referencia por número de contenedor |
+| `bl SEL0702970` | Busca referencia por número de guía BL |
+| `hoy` | Referencias pagadas hoy |
+| `mes` | KPIs del mes en curso |
+| `sync` | Estado de la última sincronización por patente |
+| `refs LCRR mayo` | Total de referencias por patente y mes |
 
 ---
 
@@ -290,6 +480,10 @@ python manage.py runserver 8001
 docker start fb25
 python manage.py import_firebird
 
+# Enviar reporte manualmente
+python manage.py enviar_reporte semanal
+python manage.py enviar_reporte mensual
+
 # Crear usuario adicional
 python manage.py createsuperuser
 
@@ -303,169 +497,16 @@ python manage.py shell
 
 - **Tailwind CSS via CDN Play** — sin proceso de build, apto para desarrollo
 - **Chart.js 4.4** — gráfica de líneas multi-año con proyección 2026
-- **Sidebar fijo** — navegación lateral oscura (slate-900), contenido claro
+- **Sidebar responsive** — hamburger drawer en móvil, fijo en desktop
 - **Colores por patente:** LCLF → sky-500, LCRR → emerald-500, LCMJ → violet-500
 - **Paginación:** 50 registros por página
-
----
-
-## App de Reportes (`reportes/`)
-
-Genera y envía reportes HTML por correo usando SendGrid.
-
-### Scheduler
-
-`reportes/scheduler.py` usa `BackgroundScheduler` + `DjangoJobStore`. Arranca automáticamente al iniciar Django (incluyendo bajo gunicorn en producción). Usa lista de denegación `_SKIP_COMMANDS` para no arrancar durante `migrate`, `collectstatic`, etc. La guardia `RUN_MAIN=true` evita doble arranque en el auto-reloader de desarrollo.
-
-| Job | Trigger | Descripción |
-|---|---|---|
-| `reporte_semanal` | Lunes 07:00 CST | Reporte de la semana anterior |
-| `reporte_mensual` | Día 1 del mes 07:00 CST | Reporte del mes anterior |
-
-### `reportes/data.py` — Funciones de datos
-
-#### `get_datos_semana(inicio, fin)`
-Calcula métricas para el rango de fechas dado (lunes a domingo). Devuelve:
-
-| Clave | Descripción |
-|---|---|
-| `validadas_total` | Referencias con `fecha_validacion` en el rango |
-| `pagadas_total` | Referencias con `fecha_pago` en el rango |
-| `validadas_por_patente` | Desglose de validadas por patente/prefijo |
-| `pagadas_por_patente` | Desglose de pagadas por patente/prefijo |
-| `contenedores_total` / `contenedores_por_tipo` | Contenedores de referencias pagadas |
-| `guias_total` | Guías BL de referencias pagadas |
-| `top_clientes` | Top 5 clientes por volumen pagado |
-| `pendientes_pago` | Referencias validadas sin `fecha_pago` (global, no solo semana) |
-| `rectificaciones_semana` | Rectificaciones validadas en el rango |
-| `claves_pedimento` | Distribución por clave de pedimento |
-| `por_capturista` | Por usuario: `capturadas`, `pagadas` (con num_operacion+linea_captura), `pendientes` |
-
-#### `get_datos_mes(year, month)`
-Calcula métricas del mes completo. Incluye todo lo anterior más:
-
-| Clave | Descripción |
-|---|---|
-| `real` | Pedimentos pagados en el mes |
-| `proyectado` | Proyección basada en promedio ponderado 2024–2025 con factor estacional |
-| `delta_proyectado` / `pct_proyectado` | Variación vs proyección |
-| `real_mes_anterior` / `delta_mes_anterior` / `pct_mes_anterior` | Comparativa mes anterior |
-| `real_año_pasado` / `delta_año_pasado` / `pct_año_pasado` | Comparativa mismo mes año pasado |
-| `acumulado_año` | Lista mes a mes con `real` y `proyectado` hasta el mes actual |
-| `promedio_dias_despacho` | Promedio de días entre `fecha_arribo` y `fecha_pago` para pedimentos con pago real |
-| `pedimentos_con_pago_real` | Cantidad de pedimentos usados para calcular el promedio |
-
-> **Pago real en reportes:** `num_operacion__gt=''` AND `linea_captura__gt=''`
-
-### Reporte Semanal — Secciones del email
-
-1. Header con total pagadas de la semana
-2. KPI cards: Validadas / Pagadas / Contenedores / Pendientes
-3. Validadas por patente (barras de progreso)
-4. Contenedores por tipo
-5. Top 5 clientes
-6. **Referencias por usuario** — tabla: Usuario / Capturadas / Pagadas / Pendientes
-7. Datos adicionales (Guías BL, Rectificaciones, Pendientes pago)
-8. Análisis ejecutivo Claude AI (si disponible)
-
-### Reporte Mensual — Secciones del email
-
-1. Header con total pagadas y delta vs proyectado
-2. Real vs Proyectado + barra de progreso
-3. Comparativas (vs mes anterior, vs año anterior)
-4. Acumulado año mes a mes
-5. Indicadores operacionales: Validadas / Contenedores / Guías BL / Rectificaciones / Pendientes / % proyectado
-6. **Promedio días de despacho** (arribo → pago real) — tarjeta azul destacada
-7. Por patente (barras de progreso)
-8. Claves de pedimento
-9. Top 8 clientes
-10. Análisis ejecutivo Claude AI (si disponible)
-
----
-
-## Bot de WhatsApp (`whatsapp/`)
-
-Bot conversacional vía OpenWA (whatsapp-web.js). Responde a comandos en WhatsApp con datos en tiempo real de Django.
-
-### Arquitectura
-
-```
-WhatsApp ←→ OpenWA container ──POST /whatsapp/webhook/──→ Django
-                                   (HMAC-SHA256)              ↓
-                                                         bot.py procesa
-                                                              ↓
-                                                         Referencia queryset
-```
-
-### Autenticación del webhook
-
-`WA_WEBHOOK_SECRET` en settings. OpenWA firma cada request con HMAC-SHA256; Django verifica antes de procesar.
-
-### Comandos disponibles
-
-| Comando | Descripción |
-|---|---|
-| `ayuda` | Muestra el menú de comandos |
-| `ref LCRR0881/26` | Busca una referencia por número exacto |
-| `ped 7000001` | Busca referencia por número de pedimento |
-| `cont CMAU5662811` | Busca referencia por número de contenedor |
-| `bl SEL0702970` | Busca referencia por número de guía BL |
-| `hoy` | Referencias pagadas hoy |
-| `mes` | KPIs del mes en curso |
-| `sync` | Estado de la última sincronización por patente |
-| `refs LCRR mayo` | Total de referencias por patente y mes |
-
-### Variables de entorno requeridas
-
-| Variable | Descripción |
-|---|---|
-| `WA_API_URL` | URL del servicio OpenWA (ej. `http://openwa:3000`) |
-| `WA_API_KEY` | API key del servicio OpenWA |
-| `WA_SESSION_ID` | ID de sesión WhatsApp activa |
-| `WA_ADMIN_CHAT` | Número de WhatsApp del admin (para notificaciones) |
-| `WA_WEBHOOK_SECRET` | Secreto HMAC compartido con OpenWA |
-| `WA_ALLOWED_NUMBERS` | Lista de números autorizados para usar el bot (separados por coma) |
-
----
-
-## Comando de Importación (`import_firebird`)
-
-ETL completo desde Firebird hacia Django. Idempotente (`update_or_create`). Solo se usa para la carga histórica inicial — en producción la sincronización continua es responsabilidad del `sync_agent`.
-
-```bash
-# Importar todo el histórico (todas las patentes)
-python manage.py import_firebird
-
-# Solo previsualizar sin escribir
-python manage.py import_firebird --dry-run
-
-# Solo una o dos patentes
-python manage.py import_firebird --patentes 1627 1656
-```
-
-### Volúmenes importados (mayo 2026)
-
-| Patente | Referencias | Contenedores | Guías BL |
-|---|---|---|---|
-| 1627 (LCLF) | 12,303 | 12,332 | 12,249 |
-| 1656 (LCRR) | 14,472 | 14,892 | 14,438 |
-| 1927 (LCMJ) | 138 | 226 | 150 |
-| **Total** | **26,913** | **27,450** | **26,837** |
+- **Modales nativos:** `<dialog>` HTML para confirmaciones (revertir/eliminar/concluir glosa)
 
 ---
 
 ## Agente de Sincronización (`sync_agent/`)
 
 Proceso autónomo para Windows que extrae datos de Firebird local y los empuja al servidor Django en la nube. Corre vía Windows Task Scheduler.
-
-### Arquitectura
-
-```
-Windows (patente local)          →          Django Cloud
-  sync_agent.py                  →          POST /api/sync/  (Token auth)
-  Lee CASA.GDB (Firebird)        →          Upsert en PostgreSQL
-  Task Scheduler (cada N min)    →          LogSync registra cada ejecución
-```
 
 ### Modos de ejecución
 
@@ -477,55 +518,10 @@ Windows (patente local)          →          Django Cloud
 
 ### Lógica de sincronización incremental
 
-El agente persiste el timestamp del último sync exitoso en `last_sync.json`. En cada ejecución consulta dos fuentes de cambio:
+El agente persiste el timestamp del último sync exitoso en `last_sync.json`. En cada ejecución consulta:
 
-1. `CTRAO_EMBAR WHERE APE_REFE >= last_sync` — embarques modificados (APE_REFE se actualiza en cada cambio)
-2. `SAAIO_PEDIME WHERE DIA_PAGO >= last_sync` — pedimentos recién pagados (el pago no toca CTRAO_EMBAR)
-
-Si no hay cambios detectados, termina en segundos sin enviar nada. Si hay cambios, solo descarga y envía los datos de esas referencias. Los catálogos pequeños (`CTRAC_CLIENT`, `SISSEG_USUARI`) siempre se descargan completos (~130 y ~42 filas).
-
-### Configuración (`config.ini`)
-
-Cada servidor Windows tiene su propio `config.ini` (no versionado). Plantilla: `config.ini.example`.
-
-```ini
-[servidor]
-patente  = 1627
-agent_id = servidor-1627-loginco
-
-[firebird]
-db_path  = C:\ruta\a\CASA.GDB
-host     = localhost
-port     = 3050
-user     = SYSDBA
-password = masterkey
-
-[django]
-sync_url   = https://hal9mil.loginco.com.mx/api/sync/
-secret_key = <clave-compartida-con-django>
-
-[opciones]
-request_timeout = 120
-max_retries     = 2
-chunk_size      = 500
-```
-
-> El parser usa fallback de encodings (`utf-8-sig → utf-8 → latin-1 → cp1252`) para
-> compatibilidad con cualquier editor de Windows.
-
-### Archivos versionados
-
-| Archivo | Descripción |
-|---|---|
-| `sync_agent/sync_agent.py` | Script principal |
-| `sync_agent/config.ini.example` | Plantilla de configuración |
-
-### Endpoint Django
-
-- **URL:** `POST /api/sync/`
-- **Auth:** header `Authorization: Token <SYNC_SECRET_KEY>`
-- **Vista:** `referencias/sync_views.py → sync_endpoint`
-- **Config Django:** `SYNC_SECRET_KEY` en settings (variable de entorno)
+1. `SAAIO_PROCES WHERE FEC_MODI >= last_sync` — referencias modificadas
+2. `SAAIO_PEDIME WHERE DIA_PAGO >= last_sync` — pedimentos recién pagados
 
 ---
 
@@ -539,13 +535,6 @@ chunk_size      = 500
 | Base de datos | PostgreSQL 18 (DO Managed) |
 | Servidor WSGI | Gunicorn 2 workers |
 | Archivos estáticos | WhiteNoise |
-| Config | `.do/app.yaml` (secretos vía env vars del dashboard) |
-
-### Procfile
-
-```
-web: python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn hal9mil.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120
-```
 
 ### Variables de entorno requeridas en producción
 
@@ -553,15 +542,16 @@ web: python manage.py migrate --noinput && python manage.py collectstatic --noin
 |---|---|
 | `SECRET_KEY` | Django secret key |
 | `DBURL` | URL completa de PostgreSQL (`postgres://...`) |
-| `SENDGRID_API_KEY` | API key de SendGrid para reportes |
+| `SENDGRID_API_KEY` | API key de SendGrid para envío de reportes por email |
 | `ANTHROPIC_API_KEY` | API key de Anthropic para análisis Claude AI |
+| `IA_HABILITADA` | `true` para activar análisis IA en reportes |
 | `SYNC_SECRET_KEY` | Clave compartida con los agentes de sincronización |
-| `WA_API_URL` | URL del servicio OpenWA |
-| `WA_API_KEY` | API key de OpenWA |
-| `WA_SESSION_ID` | ID de sesión WhatsApp |
-| `WA_ADMIN_CHAT` | Número admin WhatsApp |
-| `WA_WEBHOOK_SECRET` | Secreto HMAC para verificar mensajes de OpenWA |
-| `WA_ALLOWED_NUMBERS` | Números autorizados para el bot (separados por coma) |
+| `TWILIO_ACCOUNT_SID` | Account SID de Twilio |
+| `TWILIO_AUTH_TOKEN` | Auth Token de Twilio |
+| `TWILIO_WHATSAPP_FROM` | Número Twilio remitente (`+14155238886` sandbox o número aprobado) |
+| `TWILIO_WHATSAPP_TO_ADMIN` | Número WhatsApp del administrador (E.164) |
+| `TWILIO_WHATSAPP_ALLOWED_NUMBERS` | Números autorizados para el bot (separados por coma) |
+| `TWILIO_CONTENT_SID_SEMANAL` | SID de la plantilla aprobada para reporte semanal (`HXebb6fc66f8fd89388a6800411a53e9b8`) |
 | `DEBUG` | `False` en producción |
 | `ALLOWED_HOSTS` | Dominio asignado por DO |
 
