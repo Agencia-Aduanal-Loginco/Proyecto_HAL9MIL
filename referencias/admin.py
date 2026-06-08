@@ -2,6 +2,84 @@ from django.contrib import admin
 from .models import CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync
 
 
+class ContenedorInline(admin.TabularInline):
+    model   = Contenedor
+    fields  = ('num_cont', 'tipo')
+    extra   = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class GuiaBLInline(admin.TabularInline):
+    model   = GuiaBL
+    fields  = ('numero_guia', 'tipo_guia')
+    extra   = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Referencia)
+class ReferenciaAdmin(admin.ModelAdmin):
+    list_display   = ('num_refe', 'patente', 'nombre_cliente', 'fecha_pago',
+                      'estado_pago', 'clave_pedimento', 'es_rectificacion')
+    list_filter    = ('patente', 'es_rectificacion', 'clave_pedimento', 'aduana')
+    search_fields  = ('num_refe', 'num_pedimento', 'nombre_cliente', 'cve_cliente')
+    date_hierarchy = 'fecha_pago'
+    ordering       = ('-fecha_pago',)
+    inlines        = [ContenedorInline, GuiaBLInline]
+    readonly_fields = (
+        'num_refe', 'patente', 'prefijo', 'cve_cliente', 'nombre_cliente',
+        'fecha_arribo', 'fecha_validacion', 'fecha_pago', 'fecha_captura',
+        'num_pedimento', 'clave_pedimento', 'tipo_pedimento', 'aduana', 'regimen',
+        'num_operacion', 'linea_captura', 'cve_capturista', 'nombre_capturista',
+        'fir_elec', 'es_rectificacion', 'num_partidas', 'created_at', 'updated_at',
+    )
+    fieldsets = (
+        ('Identificación', {
+            'fields': ('num_refe', 'patente', 'prefijo', 'es_rectificacion'),
+        }),
+        ('Cliente', {
+            'fields': ('cve_cliente', 'nombre_cliente'),
+        }),
+        ('Pedimento', {
+            'fields': ('num_pedimento', 'clave_pedimento', 'tipo_pedimento',
+                       'aduana', 'regimen', 'num_partidas', 'fir_elec'),
+        }),
+        ('Fechas', {
+            'fields': ('fecha_arribo', 'fecha_validacion', 'fecha_captura', 'fecha_pago'),
+        }),
+        ('Pago', {
+            'fields': ('num_operacion', 'linea_captura'),
+        }),
+        ('Capturista', {
+            'fields': ('cve_capturista', 'nombre_capturista'),
+        }),
+        ('Sistema', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def estado_pago(self, obj):
+        if obj.num_operacion and obj.linea_captura:
+            return 'Pagada'
+        return 'Pendiente'
+    estado_pago.short_description = 'Pago'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(GlosaRegistro)
 class GlosaRegistroAdmin(admin.ModelAdmin):
     list_display   = ('referencia', 'fecha_entrada', 'usuario_entrada',
