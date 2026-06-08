@@ -14,6 +14,7 @@ class GlosaRegistroAdmin(admin.ModelAdmin):
     readonly_fields = ('referencia', 'fecha_entrada', 'usuario_entrada')
     fields         = ('referencia', 'fecha_entrada', 'usuario_entrada',
                       'fecha_conclusion', 'usuario_conclusion', 'nota', 'urgente')
+    actions        = ['revertir_a_en_proceso']
 
     def estado(self, obj):
         return 'Concluida' if obj.concluida else 'En proceso'
@@ -22,6 +23,15 @@ class GlosaRegistroAdmin(admin.ModelAdmin):
     def nota_corta(self, obj):
         return obj.nota[:70] + '…' if len(obj.nota) > 70 else obj.nota or '—'
     nota_corta.short_description = 'Nota'
+
+    @admin.action(description='Revertir a "En proceso" (borrar conclusión)')
+    def revertir_a_en_proceso(self, request, queryset):
+        if not request.user.is_staff:
+            self.message_user(request, 'No tienes permiso para realizar esta acción.', level='error')
+            return
+        concluidas = queryset.exclude(fecha_conclusion=None)
+        total = concluidas.update(fecha_conclusion=None, usuario_conclusion=None)
+        self.message_user(request, f'{total} registro(s) revertido(s) a "En proceso".')
 
     def has_add_permission(self, request):
         return False
