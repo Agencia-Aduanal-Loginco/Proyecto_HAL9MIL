@@ -1,3 +1,4 @@
+import calendar as cal
 import json
 from datetime import date, timedelta
 
@@ -704,6 +705,120 @@ def cuenta_gastos_dashboard(request):
         'acumulado_json':    json.dumps(acumulado),
     }
     return render(request, 'referencias/cuenta_gastos_dashboard.html', ctx)
+
+
+@login_required
+def referencias_dashboard(request):
+    now   = timezone.localtime()
+    year  = now.year
+    month = now.month
+    today = now.date()
+    meses_nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+    _, last_day_num = cal.monthrange(year, month)
+    mes_inicio = date(year, month, 1)
+    mes_fin    = date(year, month, last_day_num)
+
+    validadas_mes = Referencia.objects.filter(
+        fecha_validacion__year=year,
+        fecha_validacion__month=month,
+        es_rectificacion=False,
+    )
+    pagadas_mes = Referencia.objects.filter(
+        fecha_pago__year=year,
+        fecha_pago__month=month,
+        es_rectificacion=False,
+        num_operacion__gt='',
+        linea_captura__gt='',
+    )
+
+    total_validadas = validadas_mes.count()
+    total_pagadas   = pagadas_mes.count()
+
+    # Avg captura → validacion del mes completo
+    pares_mes = list(
+        validadas_mes.filter(fecha_captura__isnull=False)
+        .values_list('fecha_captura', 'fecha_validacion')
+    )
+    dias_cv_mes = [(v - c).days for c, v in pares_mes if v and c and v >= c]
+    avg_dias_mes = round(sum(dias_cv_mes) / len(dias_cv_mes), 1) if dias_cv_mes else None
+
+    # Semanas del mes: bloques fijos de 7 días desde el día 1
+    semanas = []
+    for w in range(5):
+        ws = mes_inicio + timedelta(days=w * 7)
+        if ws > mes_fin:
+            break
+        we = min(ws + timedelta(days=6), mes_fin)
+        semanas.append({
+            'num':       w + 1,
+            'inicio':    ws,
+            'fin':       we,
+            'validadas': validadas_mes.filter(fecha_validacion__gte=ws, fecha_validacion__lte=we).count(),
+            'pagadas':   pagadas_mes.filter(fecha_pago__gte=ws, fecha_pago__lte=we).count(),
+            'es_actual': ws <= today <= we,
+            'es_futura': ws > today,
+        })
+
+    # Tabla por capturista
+    caps = {}
+    for row in validadas_mes.values('nombre_capturista').annotate(capturadas=Count('id')):
+        nombre = row['nombre_capturista'] or '—'
+        caps[nombre] = {'nombre': nombre, 'capturadas': row['capturadas'], '_dias': [], 'glosas': 0}
+
+    for nombre_cap, fecha_cap, fecha_val in (
+        validadas_mes.filter(fecha_captura__isnull=False)
+        .values_list('nombre_capturista', 'fecha_captura', 'fecha_validacion')
+    ):
+        nombre = nombre_cap or '—'
+        if fecha_val and fecha_cap and fecha_val >= fecha_cap and nombre in caps:
+            caps[nombre]['_dias'].append((fecha_val - fecha_cap).days)
+
+    for data in caps.values():
+        lst = data.pop('_dias')
+        data['avg_dias_cv'] = round(sum(lst) / len(lst), 1) if lst else None
+
+    for row in (
+        GlosaRegistro.objects
+        .filter(referencia__in=validadas_mes)
+        .values('referencia__nombre_capturista')
+        .annotate(total=Count('id'))
+    ):
+        nombre = row['referencia__nombre_capturista'] or '—'
+        if nombre in caps:
+            caps[nombre]['glosas'] = row['total']
+
+    por_capturista = sorted(caps.values(), key=lambda x: -x['capturadas'])
+    for c in por_capturista:
+        c['glosa_pct'] = round(c['glosas'] / c['capturadas'] * 100) if c['capturadas'] else 0
+
+    por_patente = list(
+        validadas_mes.values('patente', 'prefijo')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    top_clientes = list(
+        pagadas_mes.values('nombre_cliente')
+        .annotate(total=Count('id'))
+        .order_by('-total')[:8]
+    )
+
+    ctx = {
+        'mes_actual':    meses_nombres[month - 1],
+        'año':           year,
+        'total_validadas': total_validadas,
+        'total_pagadas':   total_pagadas,
+        'total_pendientes': total_validadas - total_pagadas,
+        'avg_dias_mes':  avg_dias_mes,
+        'semanas':       semanas,
+        'por_capturista': por_capturista,
+        'por_patente':   por_patente,
+        'top_clientes':  top_clientes,
+        'semanas_labels_json':    json.dumps([f"Sem {s['num']}" for s in semanas]),
+        'semanas_validadas_json': json.dumps([s['validadas'] for s in semanas]),
+        'semanas_pagadas_json':   json.dumps([s['pagadas'] for s in semanas]),
+    }
+    return render(request, 'referencias/referencias_dashboard.html', ctx)
 
 
 @login_required
