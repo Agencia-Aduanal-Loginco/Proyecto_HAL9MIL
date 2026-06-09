@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Timeline · {{ ref.num_refe }} · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 space-y-5 max-w-3xl mx-auto">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm text-slate-500">
+    <a href="{% url 'lista' %}" class="hover:text-sky-600">Referencias</a>
+    <span>/</span>
+    <a href="{% url 'detalle' num_refe=ref.num_refe %}" class="hover:text-sky-600 font-mono font-semibold text-slate-700">{{ ref.num_refe }}</a>
+    <span>/</span>
+    <span class="text-slate-400">Timeline</span>
+  </div>
+
+  <!-- Header -->
+  <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-0.5">Ciclo de vida</p>
+        <h1 class="text-2xl font-bold text-slate-800 font-mono">{{ ref.num_refe }}</h1>
+        <p class="text-slate-500 text-sm mt-0.5">{{ ref.nombre_cliente|default:"Cliente no registrado" }}</p>
+      </div>
+      {% if duraciones.total %}
+      <div class="text-right shrink-0">
+        <p class="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-0.5">Duración total</p>
+        <p class="text-3xl font-bold text-slate-800">{{ duraciones.total }}</p>
+        <p class="text-xs text-slate-400">días</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Hitos de duración -->
+    {% if duraciones %}
+    <div class="mt-4 grid grid-cols-3 gap-3">
+      {% if duraciones.captura_validacion is not None %}
+      <div class="bg-violet-50 rounded-lg p-3 text-center">
+        <p class="text-xs text-violet-500 font-semibold uppercase tracking-wide">Captura → Validación</p>
+        <p class="text-xl font-bold text-violet-700 mt-0.5">{{ duraciones.captura_validacion }}</p>
+        <p class="text-xs text-slate-400">días</p>
+      </div>
+      {% endif %}
+      {% if duraciones.validacion_pago is not None %}
+      <div class="bg-sky-50 rounded-lg p-3 text-center">
+        <p class="text-xs text-sky-500 font-semibold uppercase tracking-wide">Validación → Pago</p>
+        <p class="text-xl font-bold text-sky-700 mt-0.5">{{ duraciones.validacion_pago }}</p>
+        <p class="text-xs text-slate-400">días</p>
+      </div>
+      {% endif %}
+      {% if duraciones.pago_finalizacion is not None %}
+      <div class="bg-indigo-50 rounded-lg p-3 text-center">
+        <p class="text-xs text-indigo-500 font-semibold uppercase tracking-wide">Pago → Cta. Gastos</p>
+        <p class="text-xl font-bold text-indigo-700 mt-0.5">{{ duraciones.pago_finalizacion }}</p>
+        <p class="text-xs text-slate-400">días</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Timeline -->
+  <div class="relative">
+
+    <!-- Línea vertical de fondo -->
+    <div class="absolute left-5 top-0 bottom-0 w-0.5 bg-slate-100"></div>
+
+    <div class="space-y-1">
+      {% for e in eventos %}
+
+      <!-- Evento -->
+      <div class="relative flex gap-4 pb-2">
+
+        <!-- Dot -->
+        <div class="relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-sm
+          {% if e.color == 'violet' %}bg-violet-100 ring-2 ring-violet-300
+          {% elif e.color == 'slate'  %}bg-slate-100  ring-2 ring-slate-300
+          {% elif e.color == 'amber'  %}bg-amber-100  ring-2 ring-amber-300
+          {% elif e.color == 'green'  %}bg-green-100  ring-2 ring-green-300
+          {% elif e.color == 'sky'    %}bg-sky-100    ring-2 ring-sky-300
+          {% elif e.color == 'emerald'%}bg-emerald-100 ring-2 ring-emerald-300
+          {% elif e.color == 'indigo' %}bg-indigo-100 ring-2 ring-indigo-300
+          {% else %}bg-slate-100 ring-2 ring-slate-200{% endif %}">
+          <span class="text-base leading-none select-none
+            {% if e.color == 'violet' %}text-violet-600
+            {% elif e.color == 'slate'  %}text-slate-500
+            {% elif e.color == 'amber'  %}text-amber-600
+            {% elif e.color == 'green'  %}text-green-600
+            {% elif e.color == 'sky'    %}text-sky-600
+            {% elif e.color == 'emerald'%}text-emerald-600
+            {% elif e.color == 'indigo' %}text-indigo-600
+            {% else %}text-slate-500{% endif %}">
+            {% if e.tipo == 'captura'        %}&#9660;
+            {% elif e.tipo == 'arribo'       %}&#9632;
+            {% elif e.tipo == 'glosa_entrada'%}&#9650;
+            {% elif e.tipo == 'glosa_concluida' %}&#10003;
+            {% elif e.tipo == 'validacion'   %}&#10003;
+            {% elif e.tipo == 'pago'         %}&#36;
+            {% elif e.tipo == 'cuenta_gastos'%}&#9632;
+            {% else %}&#9679;{% endif %}
+          </span>
+        </div>
+
+        <!-- Card -->
+        <div class="flex-1 bg-white rounded-xl border shadow-sm p-4 min-w-0
+          {% if e.color == 'violet' %}border-violet-100
+          {% elif e.color == 'slate'  %}border-slate-100
+          {% elif e.color == 'amber'  %}border-amber-100
+          {% elif e.color == 'green'  %}border-green-100
+          {% elif e.color == 'sky'    %}border-sky-100
+          {% elif e.color == 'emerald'%}border-emerald-100
+          {% elif e.color == 'indigo' %}border-indigo-100
+          {% else %}border-slate-100{% endif %}">
+
+          <div class="flex items-start justify-between gap-3">
+            <p class="font-semibold text-sm
+              {% if e.color == 'violet' %}text-violet-700
+              {% elif e.color == 'slate'  %}text-slate-700
+              {% elif e.color == 'amber'  %}text-amber-700
+              {% elif e.color == 'green'  %}text-green-700
+              {% elif e.color == 'sky'    %}text-sky-700
+              {% elif e.color == 'emerald'%}text-emerald-700
+              {% elif e.color == 'indigo' %}text-indigo-700
+              {% else %}text-slate-700{% endif %}">
+              {{ e.titulo }}
+            </p>
+            <span class="text-xs text-slate-400 font-mono whitespace-nowrap shrink-0">{{ e.fecha }}</span>
+          </div>
+
+          {% if e.actor %}
+          <p class="text-xs text-slate-500 mt-1">
+            <span class="text-slate-400">por</span>
+            <span class="font-medium text-slate-600">{{ e.actor }}</span>
+          </p>
+          {% endif %}
+
+          {% if e.datos %}
+          <dl class="mt-2 space-y-0.5">
+            {% for label, valor in e.datos %}
+            <div class="flex gap-2 text-xs">
+              <dt class="text-slate-400 shrink-0 w-32">{{ label }}</dt>
+              <dd class="text-slate-600 font-mono truncate">{{ valor }}</dd>
+            </div>
+            {% endfor %}
+          </dl>
+          {% endif %}
+
+        </div>
+      </div>
+
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="pb-6"></div>
+</div>
+{% endblock %}

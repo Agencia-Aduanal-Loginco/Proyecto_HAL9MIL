@@ -289,6 +289,153 @@ def detalle(request, num_refe):
 
 
 @login_required
+def timeline(request, num_refe):
+    ref = get_object_or_404(
+        Referencia.objects.prefetch_related(
+            'contenedores', 'guias',
+            'glosas', 'glosas__usuario_entrada', 'glosas__usuario_conclusion',
+        ),
+        num_refe=num_refe,
+    )
+    try:
+        cuenta_gastos = ref.cuenta_gastos
+    except Exception:
+        cuenta_gastos = None
+
+    if not cuenta_gastos:
+        return redirect('detalle', num_refe=num_refe)
+
+    def _nombre(user):
+        if not user:
+            return None
+        return user.get_full_name() or user.username
+
+    eventos = []
+
+    if ref.fecha_captura:
+        eventos.append({
+            'tipo': 'captura', 'color': 'violet',
+            'titulo': 'Captura',
+            'fecha': ref.fecha_captura,
+            'actor': ref.nombre_capturista or None,
+            'datos': [
+                ('Referencia', ref.num_refe),
+                ('Cliente', ref.nombre_cliente or '—'),
+                ('Patente', f"{ref.prefijo} · {ref.patente}"),
+            ],
+        })
+
+    if ref.fecha_arribo:
+        conts = list(ref.contenedores.all())
+        guias = list(ref.guias.all())
+        datos_arribo = []
+        if conts:
+            resumen = ', '.join(c.num_cont for c in conts[:4])
+            if len(conts) > 4:
+                resumen += f' +{len(conts) - 4} más'
+            datos_arribo.append(('Contenedores', resumen))
+        if guias:
+            resumen = ', '.join(g.numero_guia for g in guias[:3])
+            if len(guias) > 3:
+                resumen += f' +{len(guias) - 3} más'
+            datos_arribo.append(('Guías BL', resumen))
+        eventos.append({
+            'tipo': 'arribo', 'color': 'slate',
+            'titulo': 'Arribo de mercancía',
+            'fecha': ref.fecha_arribo,
+            'actor': None,
+            'datos': datos_arribo,
+        })
+
+    for g in sorted(ref.glosas.all(), key=lambda x: x.fecha_entrada):
+        label = 'Glosa detectada'
+        if g.urgente:
+            label += ' · urgente'
+        eventos.append({
+            'tipo': 'glosa_entrada', 'color': 'amber',
+            'titulo': label,
+            'fecha': g.fecha_entrada.date(),
+            'actor': _nombre(g.usuario_entrada),
+            'datos': [('Nota', g.nota)] if g.nota else [],
+        })
+        if g.concluida:
+            eventos.append({
+                'tipo': 'glosa_concluida', 'color': 'green',
+                'titulo': 'Glosa resuelta',
+                'fecha': g.fecha_conclusion.date(),
+                'actor': _nombre(g.usuario_conclusion),
+                'datos': [],
+            })
+
+    if ref.fecha_validacion:
+        datos_val = []
+        if ref.num_pedimento:
+            datos_val.append(('Pedimento', ref.num_pedimento))
+        if ref.clave_pedimento:
+            datos_val.append(('Clave', ref.clave_pedimento))
+        if ref.fir_elec:
+            fir = ref.fir_elec[:40] + ('…' if len(ref.fir_elec) > 40 else '')
+            datos_val.append(('Firma electrónica', fir))
+        eventos.append({
+            'tipo': 'validacion', 'color': 'sky',
+            'titulo': 'Validación',
+            'fecha': ref.fecha_validacion,
+            'actor': None,
+            'datos': datos_val,
+        })
+
+    if ref.fecha_pago:
+        datos_pago = []
+        if ref.num_operacion:
+            datos_pago.append(('No. Operación', ref.num_operacion))
+        if ref.linea_captura:
+            datos_pago.append(('Línea de captura', ref.linea_captura))
+        eventos.append({
+            'tipo': 'pago', 'color': 'emerald',
+            'titulo': 'Pago registrado',
+            'fecha': ref.fecha_pago,
+            'actor': None,
+            'datos': datos_pago,
+        })
+
+    datos_cg = []
+    if cuenta_gastos.nota:
+        datos_cg.append(('Nota', cuenta_gastos.nota[:100]))
+    eventos.append({
+        'tipo': 'cuenta_gastos', 'color': 'indigo',
+        'titulo': 'Cuenta de Gastos finalizada',
+        'fecha': cuenta_gastos.fecha_finalizacion.date(),
+        'actor': _nombre(cuenta_gastos.finalizado_por),
+        'datos': datos_cg,
+    })
+
+    eventos.sort(key=lambda e: e['fecha'])
+
+    # Duraciones entre hitos clave
+    fc = ref.fecha_captura
+    fv = ref.fecha_validacion
+    fp = ref.fecha_pago
+    ff = cuenta_gastos.fecha_finalizacion.date()
+
+    duraciones = {}
+    if fc and fv:
+        duraciones['captura_validacion'] = (fv - fc).days
+    if fv and fp:
+        duraciones['validacion_pago'] = (fp - fv).days
+    if fp and ff:
+        duraciones['pago_finalizacion'] = (ff - fp).days
+    if fc and ff:
+        duraciones['total'] = (ff - fc).days
+
+    return render(request, 'referencias/timeline.html', {
+        'ref': ref,
+        'cuenta_gastos': cuenta_gastos,
+        'eventos': eventos,
+        'duraciones': duraciones,
+    })
+
+
+@login_required
 @require_POST
 def glosa_eliminar(request, pk):
     if not request.user.is_staff:
