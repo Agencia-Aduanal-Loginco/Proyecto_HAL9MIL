@@ -120,8 +120,9 @@ TWILIO_WHATSAPP_TO_ADMIN  = os.getenv('TWILIO_WHATSAPP_TO_ADMIN', '')
 TWILIO_WHATSAPP_ALLOWED_NUMBERS = [
     n.strip() for n in os.getenv('TWILIO_WHATSAPP_ALLOWED_NUMBERS', '').split(',') if n.strip()
 ]
-# Content SID de la plantilla aprobada para el reporte semanal
+# Content SIDs de las plantillas aprobadas por Meta
 TWILIO_CONTENT_SID_SEMANAL = os.getenv('TWILIO_CONTENT_SID_SEMANAL', 'HXebb6fc66f8fd89388a6800411a53e9b8')
+TWILIO_CONTENT_SID_MENSUAL = os.getenv('TWILIO_CONTENT_SID_MENSUAL', 'HX1607f5f787da17354ce04e7f8f9528af')
 
 # ── Seguridad HTTPS (solo en producción) ──────────────────────────────────────
 # App Platform termina SSL en el load balancer y pasa HTTP internamente.

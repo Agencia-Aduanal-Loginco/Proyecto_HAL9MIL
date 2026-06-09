@@ -55,33 +55,28 @@ def _wa_semanal(datos: dict, semana_str: str):
 
 def _wa_mensual(datos: dict):
     try:
-        from whatsapp.client import send_text
+        from whatsapp.client import send_template
         numeros = _get_wa_destinatarios('mensual')
         if not numeros:
             return
-        pct = datos['pct_proyectado']
-        icono_proy = '✅' if pct >= 95 else '⚠️' if pct >= 80 else '🔴'
-        delta_ant = datos['delta_mes_anterior']
-        icono_ant = '↗' if delta_ant >= 0 else '↘'
-        delta_año = datos['delta_año_pasado']
-        icono_año = '↗' if delta_año >= 0 else '↘'
+        content_sid = settings.TWILIO_CONTENT_SID_MENSUAL
         por_patente = {r['prefijo']: r['total'] for r in datos['por_patente']}
-        patentes = '  ' + ' | '.join(
+        patentes_str = ' | '.join(
             f"{p}: {por_patente.get(p, 0)}"
             for p in ['LCLF', 'LCRR', 'LCMJ']
         )
-        prom = f"\n⏱ Promedio despacho: {datos['promedio_dias_despacho']} días" if datos['promedio_dias_despacho'] else ''
-        texto = (
-            f"📅 *{datos['nombre_mes']} {datos['year']}* — HAL9MIL\n\n"
-            f"{icono_proy} Real: *{datos['real']}* | Proyectado: {datos['proyectado']} ({pct}%)\n"
-            f"{icono_ant} vs {datos['nombre_mes_anterior']}:   {delta_ant:+d}\n"
-            f"{icono_año} vs {datos['nombre_mes']} {datos['prev_year']}: {delta_año:+d}"
-            f"{prom}\n\n"
-            f"Por patente:\n{patentes}"
-        )
+        prom = datos['promedio_dias_despacho']
+        variables = {
+            '1': f"{datos['nombre_mes']} {datos['year']}",
+            '2': f"{datos['real']} | Proyectado: {datos['proyectado']} ({datos['pct_proyectado']}%)",
+            '3': f"vs {datos['nombre_mes_anterior']}: {datos['delta_mes_anterior']:+d}",
+            '4': f"vs {datos['nombre_mes']} {datos['prev_year']}: {datos['delta_año_pasado']:+d}",
+            '5': f"{prom} días" if prom else 'N/D',
+            '6': patentes_str,
+        }
         for numero in numeros:
-            send_text(numero, texto)
-        logger.info("[WA Mensual] Enviado a %d números.", len(numeros))
+            send_template(numero, content_sid, variables)
+        logger.info("[WA Mensual] Enviado a %d números vía plantilla.", len(numeros))
     except Exception as e:
         logger.warning("WhatsApp mensual no enviado: %s", e)
 
