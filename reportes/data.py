@@ -21,6 +21,18 @@ def _promedio_dias_despacho(refs_qs):
         return None, 0
     return round(sum(dias) / len(dias), 1), len(dias)
 
+
+def _promedio_dias_captura_validacion(refs_qs):
+    """Días promedio entre fecha_captura y fecha_validacion."""
+    pares = refs_qs.filter(
+        fecha_captura__isnull=False,
+        fecha_validacion__isnull=False,
+    ).values_list('fecha_captura', 'fecha_validacion')
+    dias = [(val - cap).days for cap, val in pares if val >= cap]
+    if not dias:
+        return None, 0
+    return round(sum(dias) / len(dias), 1), len(dias)
+
 NOMBRES_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -77,6 +89,8 @@ def get_datos_semana(inicio: date, fin: date) -> dict:
         referencia__es_rectificacion=False,
     )
 
+    avg_cap_val, n_cap_val = _promedio_dias_captura_validacion(validadas)
+
     return {
         'periodo_inicio': inicio,
         'periodo_fin': fin,
@@ -112,6 +126,8 @@ def get_datos_semana(inicio: date, fin: date) -> dict:
                 pendientes=Count('id', filter=~models.Q(num_operacion__gt='', linea_captura__gt='')),
             ).order_by('-capturadas')
         ),
+        'avg_dias_captura_validacion': avg_cap_val,
+        'n_captura_validacion': n_cap_val,
         'glosa': get_datos_glosa_semana(inicio, fin),
         'cuenta_gastos': get_datos_cuenta_gastos_semana(inicio, fin),
     }

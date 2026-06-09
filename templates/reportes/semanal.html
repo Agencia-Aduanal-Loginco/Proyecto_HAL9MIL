@@ -196,6 +196,13 @@
               <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:12px;">Pendientes pago</div>
               <div style="font-size:16px;font-weight:700;color:#dc2626;padding-left:12px;">{{ datos.pendientes_pago }}</div>
             </td>
+            <td style="padding:0 4px;border-left:1px solid #e2e8f0;">
+              <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;padding-left:12px;">Captura → Validación</div>
+              <div style="font-size:16px;font-weight:700;color:#0284c7;padding-left:12px;">
+                {% if datos.avg_dias_captura_validacion %}{{ datos.avg_dias_captura_validacion }} días{% else %}—{% endif %}
+              </div>
+              <div style="font-size:10px;color:#94a3b8;padding-left:12px;">promedio ({{ datos.n_captura_validacion }} refs)</div>
+            </td>
           </tr>
         </table>
       </td>
