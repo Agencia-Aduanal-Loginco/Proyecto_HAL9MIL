@@ -751,13 +751,16 @@ def referencias_dashboard(request):
             break
         we = min(ws + timedelta(days=6), mes_fin)
         semanas.append({
-            'num':       w + 1,
-            'inicio':    ws,
-            'fin':       we,
-            'validadas': validadas_mes.filter(fecha_validacion__gte=ws, fecha_validacion__lte=we).count(),
-            'pagadas':   pagadas_mes.filter(fecha_pago__gte=ws, fecha_pago__lte=we).count(),
-            'es_actual': ws <= today <= we,
-            'es_futura': ws > today,
+            'num':        w + 1,
+            'inicio':     ws,
+            'fin':        we,
+            'capturadas': Referencia.objects.filter(
+                fecha_captura__gte=ws, fecha_captura__lte=we, es_rectificacion=False,
+            ).count(),
+            'validadas':  validadas_mes.filter(fecha_validacion__gte=ws, fecha_validacion__lte=we).count(),
+            'pagadas':    pagadas_mes.filter(fecha_pago__gte=ws, fecha_pago__lte=we).count(),
+            'es_actual':  ws <= today <= we,
+            'es_futura':  ws > today,
         })
 
     # Tabla por capturista

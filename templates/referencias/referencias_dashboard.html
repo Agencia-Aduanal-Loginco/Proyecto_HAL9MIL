@@ -68,6 +68,7 @@
             <tr class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
               <th class="py-2 px-3 text-left font-semibold">Semana</th>
               <th class="py-2 px-3 text-left font-semibold text-slate-500">Período</th>
+              <th class="py-2 px-3 text-center font-semibold text-violet-500">Capturadas</th>
               <th class="py-2 px-3 text-center font-semibold text-sky-500">Validadas</th>
               <th class="py-2 px-3 text-center font-semibold text-emerald-500">Pagadas</th>
               <th class="py-2 px-3 text-center font-semibold text-slate-400">Eficiencia</th>
@@ -84,6 +85,9 @@
               </td>
               <td class="py-2.5 px-3 text-slate-500 text-xs">
                 {{ s.inicio|date:"d M" }} – {{ s.fin|date:"d M" }}
+              </td>
+              <td class="py-2.5 px-3 text-center">
+                <span class="bg-violet-50 text-violet-700 font-bold text-sm px-2.5 py-0.5 rounded-lg">{{ s.capturadas }}</span>
               </td>
               <td class="py-2.5 px-3 text-center">
                 <span class="bg-sky-50 text-sky-700 font-bold text-sm px-2.5 py-0.5 rounded-lg">{{ s.validadas }}</span>
