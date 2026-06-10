@@ -177,6 +177,7 @@
   const avg    = {{ tendencia_avg_json }};
 
   new Chart(document.getElementById('chartTendencia'), {
+    type: 'bar',
     data: {
       labels,
       datasets: [
