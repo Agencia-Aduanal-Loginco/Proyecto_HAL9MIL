@@ -84,6 +84,7 @@
         </svg>
         Glosa
       </a>
+      {% if request.user.is_superuser %}
       <a href="{% url 'clientes_lista' %}"
          class="sidebar-link {% if request.resolver_match.url_name == 'clientes_lista' or request.resolver_match.url_name == 'clientes_detalle' %}active{% endif %}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,6 +93,7 @@
         </svg>
         Clientes
       </a>
+      {% endif %}
       <a href="{% url 'cuenta_gastos' %}"
          class="sidebar-link {% if request.resolver_match.url_name == 'cuenta_gastos' or request.resolver_match.url_name == 'cuenta_gastos_finalizar' or request.resolver_match.url_name == 'cuenta_gastos_dashboard' %}active{% endif %}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

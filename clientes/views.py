@@ -4,7 +4,9 @@ from collections import defaultdict
 from datetime import date
 from urllib.parse import quote
 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
+
+_superuser_required = user_passes_test(lambda u: u.is_active and u.is_superuser)
 from django.db.models import Count
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -139,7 +141,7 @@ def _tendencia_12meses(nombre_cliente, year, month):
     return meses
 
 
-@login_required
+@_superuser_required
 def lista(request):
     now   = timezone.localtime()
     year  = int(request.GET.get('año', now.year))
@@ -169,7 +171,7 @@ def lista(request):
     })
 
 
-@login_required
+@_superuser_required
 def detalle(request, nombre):
     now   = timezone.localtime()
     year  = int(request.GET.get('año', now.year))
@@ -199,7 +201,7 @@ def detalle(request, nombre):
     })
 
 
-@login_required
+@_superuser_required
 def reporte_pdf(request):
     now   = timezone.localtime()
     year  = int(request.GET.get('año', now.year))
