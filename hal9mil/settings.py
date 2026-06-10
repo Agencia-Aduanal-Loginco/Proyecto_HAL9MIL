@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'referencias',
     'reportes',
     'whatsapp',
+    'clientes',
 ]
 
 MIDDLEWARE = [

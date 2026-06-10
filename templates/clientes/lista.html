@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}Clientes · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 space-y-5">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Clientes</h1>
+      <p class="text-slate-500 text-sm mt-0.5">
+        {{ total_clientes }} importador{% if total_clientes != 1 %}es{% endif %}
+        · <span class="font-medium text-slate-700">{{ mes_nombre }} {{ year }}</span>
+      </p>
+    </div>
+    <!-- Botón generar reporte (se activa con JS cuando hay selección) -->
+    <button id="btn-reporte"
+            onclick="generarReporte()"
+            disabled
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+                   bg-indigo-600 text-white shadow-sm transition-all
+                   disabled:opacity-40 disabled:cursor-not-allowed
+                   enabled:hover:bg-indigo-700">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+      </svg>
+      <span id="btn-reporte-label">Selecciona clientes</span>
+    </button>
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="col-span-2">
+        <label class="text-xs text-slate-500 font-medium block mb-1">Buscar cliente</label>
+        <input type="text" name="q" value="{{ q }}"
+               placeholder="Nombre del importador…"
+               class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 font-medium block mb-1">Mes</label>
+        <select name="mes" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300">
+          {% for num, nombre in meses %}
+          <option value="{{ num }}" {% if num == month %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 font-medium block mb-1">Año</label>
+        <select name="año" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300">
+          {% for a in años %}
+          <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="mt-3 flex gap-2">
+      <button type="submit" class="px-4 py-2 bg-sky-600 text-white text-sm font-semibold rounded-lg hover:bg-sky-700 transition-colors">
+        Filtrar
+      </button>
+      <a href="{% url 'clientes_lista' %}" class="px-4 py-2 text-slate-500 text-sm font-medium rounded-lg hover:bg-slate-100 transition-colors">
+        Limpiar
+      </a>
+      <label class="ml-auto flex items-center gap-2 text-sm text-slate-500 cursor-pointer select-none">
+        <input type="checkbox" id="chk-all" onchange="toggleAll(this)" class="w-4 h-4 rounded accent-indigo-600">
+        Seleccionar todos
+      </label>
+    </div>
+  </form>
+
+  <!-- Tabla -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+    {% if clientes %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" style="min-width:780px;">
+        <thead>
+          <tr class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100">
+            <th class="py-3 px-3 text-left w-8"></th>
+            <th class="py-3 px-3 text-left font-semibold text-slate-600">Cliente</th>
+            <th class="py-3 px-3 text-center font-semibold text-slate-600">Refs.</th>
+            <th class="py-3 px-3 text-center font-semibold text-violet-500" title="Promedio días captura a validación">Cap→Val</th>
+            <th class="py-3 px-3 text-center font-semibold text-sky-500" title="Promedio días validación a pago">Val→Pago</th>
+            <th class="py-3 px-3 text-center font-semibold text-emerald-500" title="Promedio días captura a pago">Cap→Pago</th>
+            <th class="py-3 px-3 text-center font-semibold text-amber-500">Glosas</th>
+            <th class="py-3 px-3 text-left font-semibold text-slate-400">Patentes</th>
+            <th class="py-3 px-3 text-center font-semibold text-slate-400"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for c in clientes %}
+          <tr class="hover:bg-slate-50 transition-colors" data-nombre="{{ c.nombre }}">
+            <td class="py-3 px-3 text-center">
+              <input type="checkbox" value="{{ c.nombre }}"
+                     onchange="actualizarSeleccion()"
+                     class="cliente-chk w-4 h-4 rounded accent-indigo-600 cursor-pointer">
+            </td>
+            <td class="py-3 px-3">
+              <a href="{% url 'clientes_detalle' nombre=c.nombre %}?mes={{ month }}&año={{ year }}"
+                 class="font-semibold text-slate-800 hover:text-sky-600 transition-colors truncate block max-w-xs">
+                {{ c.nombre }}
+              </a>
+            </td>
+            <td class="py-3 px-3 text-center">
+              <span class="font-bold text-slate-800 text-base">{{ c.total }}</span>
+            </td>
+            <!-- Cap → Val -->
+            <td class="py-3 px-3 text-center">
+              {% if c.avg_captura_validacion is not None %}
+                <span class="tabular-nums font-semibold
+                  {% if c.avg_captura_validacion <= 3 %}text-emerald-600
+                  {% elif c.avg_captura_validacion <= 7 %}text-amber-600
+                  {% else %}text-red-600{% endif %}">
+                  {{ c.avg_captura_validacion }}d
+                </span>
+              {% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <!-- Val → Pago -->
+            <td class="py-3 px-3 text-center">
+              {% if c.avg_validacion_pago is not None %}
+                <span class="tabular-nums font-semibold
+                  {% if c.avg_validacion_pago <= 5 %}text-emerald-600
+                  {% elif c.avg_validacion_pago <= 15 %}text-amber-600
+                  {% else %}text-red-600{% endif %}">
+                  {{ c.avg_validacion_pago }}d
+                </span>
+              {% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <!-- Cap → Pago -->
+            <td class="py-3 px-3 text-center">
+              {% if c.avg_captura_pago is not None %}
+                <span class="tabular-nums font-semibold
+                  {% if c.avg_captura_pago <= 10 %}text-emerald-600
+                  {% elif c.avg_captura_pago <= 20 %}text-amber-600
+                  {% else %}text-red-600{% endif %}">
+                  {{ c.avg_captura_pago }}d
+                </span>
+              {% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <!-- Glosas -->
+            <td class="py-3 px-3 text-center">
+              {% if c.con_glosa > 0 %}
+                <span class="inline-flex flex-col items-center leading-tight">
+                  <span class="font-bold text-amber-600">{{ c.con_glosa }}</span>
+                  <span class="text-xs text-slate-400">{{ c.pct_glosa }}%</span>
+                </span>
+              {% else %}
+                <span class="text-slate-300 text-xs">—</span>
+              {% endif %}
+            </td>
+            <!-- Patentes -->
+            <td class="py-3 px-3">
+              <div class="flex flex-wrap gap-1">
+                {% for p in c.por_patente %}
+                <span class="text-xs px-1.5 py-0.5 rounded font-mono font-semibold
+                  {% if p.prefijo == 'LCLF' %}bg-sky-50 text-sky-700
+                  {% elif p.prefijo == 'LCRR' %}bg-emerald-50 text-emerald-700
+                  {% else %}bg-violet-50 text-violet-700{% endif %}">
+                  {{ p.prefijo }} {{ p.total }}
+                </span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="py-3 px-3 text-center">
+              <a href="{% url 'clientes_detalle' nombre=c.nombre %}?mes={{ month }}&año={{ year }}"
+                 class="text-slate-400 hover:text-sky-600 transition-colors" title="Ver detalle">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="py-16 text-center text-slate-400">
+      <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
+      </svg>
+      <p class="font-medium">Sin clientes para {{ mes_nombre }} {{ year }}</p>
+      <p class="text-sm mt-1">Ajusta los filtros o selecciona otro período.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Leyenda colores días -->
+  <div class="flex flex-wrap items-center gap-4 text-xs text-slate-400 px-1">
+    <span class="font-semibold text-slate-500">Días promedio:</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>Óptimo</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400"></span>Moderado</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-400"></span>Alto</span>
+  </div>
+
+</div>
+
+<script>
+  let seleccionados = new Set();
+
+  function actualizarSeleccion() {
+    seleccionados.clear();
+    document.querySelectorAll('.cliente-chk:checked').forEach(chk => {
+      seleccionados.add(chk.value);
+    });
+    const btn = document.getElementById('btn-reporte');
+    const label = document.getElementById('btn-reporte-label');
+    if (seleccionados.size > 0) {
+      btn.disabled = false;
+      label.textContent = `Generar reporte (${seleccionados.size})`;
+    } else {
+      btn.disabled = true;
+      label.textContent = 'Selecciona clientes';
+    }
+    document.getElementById('chk-all').indeterminate =
+      seleccionados.size > 0 && seleccionados.size < document.querySelectorAll('.cliente-chk').length;
+    document.getElementById('chk-all').checked =
+      seleccionados.size === document.querySelectorAll('.cliente-chk').length;
+  }
+
+  function toggleAll(chk) {
+    document.querySelectorAll('.cliente-chk').forEach(c => c.checked = chk.checked);
+    actualizarSeleccion();
+  }
+
+  function generarReporte() {
+    if (!seleccionados.size) return;
+    const nombres = Array.from(seleccionados).join('|');
+    const url = "{% url 'clientes_reporte_pdf' %}?nombres=" + encodeURIComponent(nombres) + "&mes={{ month }}&año={{ year }}";
+    window.open(url, '_blank');
+  }
+</script>
+{% endblock %}

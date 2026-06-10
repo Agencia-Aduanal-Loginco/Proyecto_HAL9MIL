@@ -8,4 +8,5 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('whatsapp/', include('whatsapp.urls')),
     path('', include('referencias.urls')),
+    path('', include('clientes.urls')),
 ]

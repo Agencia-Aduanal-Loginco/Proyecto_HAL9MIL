@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}{{ nombre }} · Clientes · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 space-y-5 max-w-5xl mx-auto">
+
+  <!-- Breadcrumb -->
+  <nav class="flex items-center gap-2 text-xs text-slate-400 font-medium">
+    <a href="{% url 'clientes_lista' %}?mes={{ month }}&año={{ year }}" class="hover:text-sky-600 transition-colors">Clientes</a>
+    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-slate-600 font-semibold truncate max-w-xs">{{ nombre }}</span>
+  </nav>
+
+  <!-- Header -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div>
+        <p class="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-1">Importador</p>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-800 leading-tight">{{ nombre }}</h1>
+        <p class="text-slate-500 text-sm mt-0.5">Período: <span class="font-medium text-slate-700">{{ mes_nombre }} {{ year }}</span></p>
+      </div>
+      <!-- Filtro de período -->
+      <form method="get" class="flex items-end gap-2 shrink-0">
+        <div>
+          <label class="text-xs text-slate-400 font-medium block mb-1">Mes</label>
+          <select name="mes" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-300">
+            {% for num, nom in meses %}
+            <option value="{{ num }}" {% if num == month %}selected{% endif %}>{{ nom }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 font-medium block mb-1">Año</label>
+          <select name="año" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-300">
+            {% for a in años %}
+            <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="px-3 py-1.5 bg-sky-600 text-white text-xs font-semibold rounded-lg hover:bg-sky-700 transition-colors">
+          Aplicar
+        </button>
+        <a href="{% url 'clientes_reporte_pdf' %}?nombres={{ nombre|urlencode }}&mes={{ month }}&año={{ year }}"
+           target="_blank"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-lg hover:bg-indigo-100 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+          </svg>
+          PDF
+        </a>
+      </form>
+    </div>
+
+    <!-- KPIs del mes seleccionado -->
+    {% if stats %}
+    <div class="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide">Referencias</p>
+        <p class="text-2xl font-bold text-slate-800 tabular-nums mt-0.5">{{ stats.total }}</p>
+      </div>
+      <div class="bg-violet-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-violet-500 font-semibold uppercase tracking-wide">Cap → Val</p>
+        <p class="text-2xl font-bold text-violet-700 tabular-nums mt-0.5">
+          {% if stats.avg_captura_validacion is not None %}{{ stats.avg_captura_validacion }}<span class="text-sm font-normal">d</span>{% else %}—{% endif %}
+        </p>
+      </div>
+      <div class="bg-sky-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-sky-500 font-semibold uppercase tracking-wide">Val → Pago</p>
+        <p class="text-2xl font-bold text-sky-700 tabular-nums mt-0.5">
+          {% if stats.avg_validacion_pago is not None %}{{ stats.avg_validacion_pago }}<span class="text-sm font-normal">d</span>{% else %}—{% endif %}
+        </p>
+      </div>
+      <div class="bg-emerald-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-emerald-500 font-semibold uppercase tracking-wide">Cap → Pago</p>
+        <p class="text-2xl font-bold text-emerald-700 tabular-nums mt-0.5">
+          {% if stats.avg_captura_pago is not None %}{{ stats.avg_captura_pago }}<span class="text-sm font-normal">d</span>{% else %}—{% endif %}
+        </p>
+      </div>
+      <div class="bg-amber-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-amber-500 font-semibold uppercase tracking-wide">Glosas</p>
+        <p class="text-2xl font-bold text-amber-700 tabular-nums mt-0.5">{{ stats.con_glosa }}</p>
+        <p class="text-xs text-slate-400">{{ stats.pct_glosa }}%</p>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide">Patentes</p>
+        <div class="mt-1 space-y-0.5">
+          {% for p in stats.por_patente %}
+          <p class="text-xs font-mono font-semibold
+            {% if p.prefijo == 'LCLF' %}text-sky-700
+            {% elif p.prefijo == 'LCRR' %}text-emerald-700
+            {% else %}text-violet-700{% endif %}">
+            {{ p.prefijo }}: {{ p.total }}
+          </p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="mt-4 py-6 text-center text-slate-400 text-sm">Sin referencias pagadas en {{ mes_nombre }} {{ year }}.</div>
+    {% endif %}
+  </div>
+
+  <!-- Gráfica tendencia 12 meses -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+    <h2 class="text-sm font-semibold text-slate-700 mb-4">Tendencia — últimos 12 meses</h2>
+    <div class="relative h-52">
+      <canvas id="chartTendencia"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabla mensual histórica -->
+  <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-50">
+      <h2 class="text-sm font-semibold text-slate-700">Desglose mensual</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" style="min-width:620px;">
+        <thead>
+          <tr class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100">
+            <th class="py-2.5 px-4 text-left font-semibold text-slate-500">Mes</th>
+            <th class="py-2.5 px-4 text-center font-semibold text-slate-600">Refs.</th>
+            <th class="py-2.5 px-4 text-center font-semibold text-violet-500">Cap → Val</th>
+            <th class="py-2.5 px-4 text-center font-semibold text-sky-500">Val → Pago</th>
+            <th class="py-2.5 px-4 text-center font-semibold text-emerald-500">Cap → Pago</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for t in tendencia reversed %}
+          <tr class="{% if t.year == year and t.month == month %}bg-sky-50{% else %}hover:bg-slate-50{% endif %} transition-colors">
+            <td class="py-2.5 px-4 font-medium text-slate-700">
+              {{ t.label }} {{ t.year }}
+              {% if t.year == year and t.month == month %}
+              <span class="ml-1.5 text-xs bg-sky-100 text-sky-600 px-1.5 py-0.5 rounded-full font-medium">actual</span>
+              {% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-center font-bold text-slate-800 tabular-nums">
+              {% if t.total > 0 %}{{ t.total }}{% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-center tabular-nums
+              {% if t.avg_captura_validacion is not None %}
+                {% if t.avg_captura_validacion <= 3 %}text-emerald-600 font-semibold
+                {% elif t.avg_captura_validacion <= 7 %}text-amber-600 font-semibold
+                {% else %}text-red-600 font-semibold{% endif %}
+              {% endif %}">
+              {% if t.avg_captura_validacion is not None %}{{ t.avg_captura_validacion }}d{% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-center tabular-nums
+              {% if t.avg_validacion_pago is not None %}
+                {% if t.avg_validacion_pago <= 5 %}text-emerald-600 font-semibold
+                {% elif t.avg_validacion_pago <= 15 %}text-amber-600 font-semibold
+                {% else %}text-red-600 font-semibold{% endif %}
+              {% endif %}">
+              {% if t.avg_validacion_pago is not None %}{{ t.avg_validacion_pago }}d{% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-center tabular-nums
+              {% if t.avg_captura_pago is not None %}
+                {% if t.avg_captura_pago <= 10 %}text-emerald-600 font-semibold
+                {% elif t.avg_captura_pago <= 20 %}text-amber-600 font-semibold
+                {% else %}text-red-600 font-semibold{% endif %}
+              {% endif %}">
+              {% if t.avg_captura_pago is not None %}{{ t.avg_captura_pago }}d{% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="pb-6"></div>
+</div>
+
+<script>
+(function() {
+  const labels = {{ tendencia_labels_json }};
+  const refs   = {{ tendencia_refs_json }};
+  const avg    = {{ tendencia_avg_json }};
+
+  new Chart(document.getElementById('chartTendencia'), {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Referencias',
+          data: refs,
+          backgroundColor: 'rgba(14,165,233,0.15)',
+          borderColor: 'rgba(14,165,233,0.6)',
+          borderWidth: 1.5,
+          borderRadius: 4,
+          yAxisID: 'yRefs',
+        },
+        {
+          type: 'line',
+          label: 'Avg días Cap→Pago',
+          data: avg,
+          borderColor: 'rgba(99,102,241,0.8)',
+          backgroundColor: 'rgba(99,102,241,0.08)',
+          pointBackgroundColor: 'rgba(99,102,241,1)',
+          pointRadius: 4,
+          tension: 0.35,
+          fill: true,
+          yAxisID: 'yDias',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y ?? '—') + (ctx.datasetIndex === 1 ? 'd' : ''),
+          }
+        }
+      },
+      scales: {
+        yRefs: { position: 'left',  beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+        yDias: { position: 'right', beginAtZero: true, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } },
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}
