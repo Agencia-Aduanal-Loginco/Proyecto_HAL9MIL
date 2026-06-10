@@ -20,7 +20,24 @@
       <div>
         <p class="text-slate-500 text-xs font-medium uppercase tracking-wide mb-1">Referencia</p>
         <h1 class="text-3xl font-bold text-slate-800 font-mono">{{ ref.num_refe }}</h1>
-        <p class="text-slate-500 mt-1">{{ ref.nombre_cliente|default:"Cliente no registrado" }}</p>
+        <div class="flex items-center gap-2 mt-1 flex-wrap">
+          <p class="text-slate-500">{{ ref.nombre_cliente|default:"Cliente no registrado" }}</p>
+          {% if riesgo_glosa and riesgo_glosa.con_glosa > 0 %}
+            {% if riesgo_glosa.nivel == 'rojo' %}
+              <span title="Riesgo alto: {{ riesgo_glosa.pct }}% de referencias con glosa ({{ riesgo_glosa.con_glosa }}/{{ riesgo_glosa.total }})"
+                    class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 cursor-default">
+                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                Riesgo alto · {{ riesgo_glosa.pct }}%
+              </span>
+            {% elif riesgo_glosa.nivel == 'amarillo' %}
+              <span title="Riesgo medio: {{ riesgo_glosa.pct }}% de referencias con glosa ({{ riesgo_glosa.con_glosa }}/{{ riesgo_glosa.total }})"
+                    class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 cursor-default">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                Riesgo medio · {{ riesgo_glosa.pct }}%
+              </span>
+            {% endif %}
+          {% endif %}
+        </div>
       </div>
       <div class="text-right flex flex-col items-end gap-2">
         <span class="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full

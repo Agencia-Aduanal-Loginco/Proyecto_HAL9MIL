@@ -269,6 +269,29 @@ def lista(request):
 # Detalle de referencia
 # ---------------------------------------------------------------------------
 
+def _riesgo_glosa_cliente(nombre_cliente):
+    """Calcula nivel de riesgo de glosa histórico para un cliente."""
+    if not nombre_cliente:
+        return None
+    total = Referencia.objects.filter(
+        nombre_cliente=nombre_cliente,
+        es_rectificacion=False,
+        fecha_pago__isnull=False,
+    ).count()
+    if not total:
+        return None
+    con_glosa = (
+        Referencia.objects
+        .filter(nombre_cliente=nombre_cliente, es_rectificacion=False)
+        .filter(glosas__isnull=False)
+        .distinct()
+        .count()
+    )
+    pct = round(con_glosa / total * 100, 1)
+    nivel = 'rojo' if pct > 15 else ('amarillo' if pct >= 5 else 'verde')
+    return {'total': total, 'con_glosa': con_glosa, 'pct': pct, 'nivel': nivel}
+
+
 @login_required
 def detalle(request, num_refe):
     ref = get_object_or_404(
@@ -285,6 +308,7 @@ def detalle(request, num_refe):
     return render(request, 'referencias/detalle.html', {
         'ref': ref,
         'cuenta_gastos': cuenta_gastos,
+        'riesgo_glosa': _riesgo_glosa_cliente(ref.nombre_cliente),
     })
 
 
