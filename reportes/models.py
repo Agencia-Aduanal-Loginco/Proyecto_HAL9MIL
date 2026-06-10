@@ -13,6 +13,10 @@ class Destinatario(models.Model):
     whatsapp = models.CharField(max_length=20, blank=True, help_text='Número internacional sin + (ej. 5217535342088)')
     recibe_wa_semanal = models.BooleanField(default=False, verbose_name='WA Semanal')
     recibe_wa_mensual = models.BooleanField(default=False, verbose_name='WA Mensual')
+    # IA por módulo — reciben la interpretación IA del módulo correspondiente
+    recibe_wa_ia_referencias   = models.BooleanField(default=False, verbose_name='WA IA Referencias')
+    recibe_wa_ia_glosa         = models.BooleanField(default=False, verbose_name='WA IA Glosa')
+    recibe_wa_ia_cuenta_gastos = models.BooleanField(default=False, verbose_name='WA IA Cuenta Gastos')
     notas = models.CharField(max_length=255, blank=True)
 
     class Meta:

@@ -53,6 +53,35 @@ def _wa_semanal(datos: dict, semana_str: str):
         logger.warning("WhatsApp semanal no enviado: %s", e)
 
 
+def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
+    """Envía la interpretación IA de un módulo a sus destinatarios configurados."""
+    if not texto:
+        return
+    try:
+        from whatsapp.client import send_template
+        campo = f'recibe_wa_ia_{modulo}'
+        numeros = list(
+            Destinatario.objects
+            .filter(activo=True, **{campo: True})
+            .exclude(whatsapp='')
+            .values_list('whatsapp', flat=True)
+        )
+        if not numeros:
+            return
+        content_sid = settings.TWILIO_CONTENT_SID_IA_HAL9MIL
+        if not content_sid:
+            logger.warning("TWILIO_CONTENT_SID_IA_HAL9MIL no configurado — IA %s no enviado.", modulo)
+            return
+        # El template tiene texto fijo de ~52 chars; dejamos margen hasta 1500
+        texto_enviado = texto[:1500] + ('…' if len(texto) > 1500 else '')
+        variables = {'1': texto_enviado}
+        for numero in numeros:
+            send_template(numero, content_sid, variables)
+        logger.info("[WA IA %s] Enviado a %d números — semana %s.", modulo, len(numeros), semana_str)
+    except Exception as e:
+        logger.warning("WhatsApp IA %s no enviado: %s", modulo, e)
+
+
 def _wa_mensual(datos: dict):
     try:
         from whatsapp.client import send_template
@@ -139,6 +168,9 @@ def enviar_reporte_semanal():
         _guardar_historial('semanal', last_monday, last_sunday, destinatarios, True)
         logger.info(f'[Semanal] Enviado a {len(destinatarios)} destinatarios.')
         _wa_semanal(datos, semana_str)
+        _wa_ia_modulo(analisis_ia,       'referencias',   semana_str)
+        _wa_ia_modulo(analisis_glosa_ia, 'glosa',         semana_str)
+        _wa_ia_modulo(analisis_cg_ia,    'cuenta_gastos', semana_str)
 
     except Exception as e:
         logger.error(f'[Semanal] Error: {e}')
@@ -183,6 +215,7 @@ def enviar_reporte_mensual():
         _guardar_historial('mensual', inicio, fin, destinatarios, True)
         logger.info(f'[Mensual] Enviado a {len(destinatarios)} destinatarios.')
         _wa_mensual(datos)
+        _wa_ia_modulo(analisis_ia, 'referencias', f'{nombre_mes} {year}')
 
     except Exception as e:
         logger.error(f'[Mensual] Error: {e}')

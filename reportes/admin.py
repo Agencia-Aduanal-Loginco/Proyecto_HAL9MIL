@@ -5,14 +5,31 @@ from .models import Destinatario, HistorialReporte
 
 @admin.register(Destinatario)
 class DestinatarioAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'email', 'whatsapp', 'activo', 'recibe_semanal', 'recibe_mensual', 'recibe_wa_semanal', 'recibe_wa_mensual')
-    list_editable = ('activo', 'recibe_semanal', 'recibe_mensual', 'recibe_wa_semanal', 'recibe_wa_mensual')
-    list_filter = ('activo', 'recibe_semanal', 'recibe_mensual', 'recibe_wa_semanal', 'recibe_wa_mensual')
+    list_display = (
+        'nombre', 'email', 'whatsapp', 'activo',
+        'recibe_semanal', 'recibe_mensual',
+        'recibe_wa_semanal', 'recibe_wa_mensual',
+        'recibe_wa_ia_referencias', 'recibe_wa_ia_glosa', 'recibe_wa_ia_cuenta_gastos',
+    )
+    list_editable = (
+        'activo', 'recibe_semanal', 'recibe_mensual',
+        'recibe_wa_semanal', 'recibe_wa_mensual',
+        'recibe_wa_ia_referencias', 'recibe_wa_ia_glosa', 'recibe_wa_ia_cuenta_gastos',
+    )
+    list_filter = (
+        'activo', 'recibe_semanal', 'recibe_mensual',
+        'recibe_wa_semanal', 'recibe_wa_mensual',
+        'recibe_wa_ia_referencias', 'recibe_wa_ia_glosa', 'recibe_wa_ia_cuenta_gastos',
+    )
     search_fields = ('nombre', 'email', 'whatsapp')
     fieldsets = (
         (None, {'fields': ('nombre', 'activo', 'notas')}),
         ('Email', {'fields': ('email', 'recibe_semanal', 'recibe_mensual')}),
-        ('WhatsApp', {'fields': ('whatsapp', 'recibe_wa_semanal', 'recibe_wa_mensual')}),
+        ('WhatsApp — Reportes', {'fields': ('whatsapp', 'recibe_wa_semanal', 'recibe_wa_mensual')}),
+        ('WhatsApp — Interpretación IA', {
+            'description': 'Selecciona los módulos cuya interpretación IA recibirá este destinatario.',
+            'fields': ('recibe_wa_ia_referencias', 'recibe_wa_ia_glosa', 'recibe_wa_ia_cuenta_gastos'),
+        }),
     )
 
 
