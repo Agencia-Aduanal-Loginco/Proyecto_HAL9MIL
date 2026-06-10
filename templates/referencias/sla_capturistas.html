@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}SLA Capturistas · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header + filtros -->
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">Análisis operativo</p>
+      <h1 class="text-2xl font-bold text-slate-800">SLA por Capturista</h1>
+      <p class="text-sm text-slate-500 mt-0.5">
+        {% if month %}{{ meses|dictsort:"0"|slice:":12" }}
+          {{ year }}
+        {% else %}
+          Año completo {{ year }}
+        {% endif %}
+        · {{ capturistas|length }} capturistas activos
+      </p>
+    </div>
+
+    <form method="get" class="flex items-center gap-2 flex-wrap">
+      <select name="año"
+              class="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700
+                     bg-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+              onchange="this.form.submit()">
+        {% for a in años %}
+          <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+      <select name="mes"
+              class="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700
+                     bg-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+              onchange="this.form.submit()">
+        <option value="0" {% if month == 0 %}selected{% endif %}>Año completo</option>
+        {% for num, nombre in meses %}
+          <option value="{{ num }}" {% if num == month %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <!-- Tarjetas destacadas -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+    <!-- Más volumen -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <p class="text-xs text-slate-400 uppercase tracking-wide font-medium mb-3 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        Mayor volumen
+      </p>
+      {% if mas_volumen %}
+        <p class="text-lg font-bold text-slate-800 truncate">{{ mas_volumen.nombre }}</p>
+        <p class="text-3xl font-bold text-sky-600 mt-1">{{ mas_volumen.total }}</p>
+        <p class="text-xs text-slate-400 mt-0.5">referencias despachadas</p>
+      {% else %}
+        <p class="text-slate-400 text-sm">Sin datos</p>
+      {% endif %}
+    </div>
+
+    <!-- Más rápido -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <p class="text-xs text-slate-400 uppercase tracking-wide font-medium mb-3 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Más rápido (Cap→Pago)
+      </p>
+      {% if mas_rapido %}
+        <p class="text-lg font-bold text-slate-800 truncate">{{ mas_rapido.nombre }}</p>
+        <p class="text-3xl font-bold text-emerald-600 mt-1">{{ mas_rapido.avg_cp }}<span class="text-base font-normal text-slate-400 ml-1">días</span></p>
+        <p class="text-xs text-slate-400 mt-0.5">promedio captura → pago</p>
+      {% else %}
+        <p class="text-slate-400 text-sm">Sin datos</p>
+      {% endif %}
+    </div>
+
+    <!-- Menor riesgo -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <p class="text-xs text-slate-400 uppercase tracking-wide font-medium mb-3 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        Menor riesgo (mín. 10 refs)
+      </p>
+      {% if menor_riesgo %}
+        <p class="text-lg font-bold text-slate-800 truncate">{{ menor_riesgo.nombre }}</p>
+        <div class="flex items-center gap-3 mt-1">
+          <div>
+            <p class="text-xl font-bold text-violet-600">{{ menor_riesgo.pct_glosa }}%</p>
+            <p class="text-xs text-slate-400">glosas</p>
+          </div>
+          <div class="w-px h-8 bg-slate-100"></div>
+          <div>
+            <p class="text-xl font-bold text-violet-600">{{ menor_riesgo.pct_rect }}%</p>
+            <p class="text-xs text-slate-400">rectificaciones</p>
+          </div>
+        </div>
+      {% else %}
+        <p class="text-slate-400 text-sm">Sin datos suficientes</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Tabla comparativa -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100">
+      <h2 class="text-sm font-semibold text-slate-700">Comparativa por capturista</h2>
+      <p class="text-xs text-slate-400 mt-0.5">
+        Verde &lt;5d / &lt;2% rect / &lt;5% glosa &nbsp;·&nbsp;
+        Amarillo 5–10d / 2–5% / 5–15% &nbsp;·&nbsp;
+        Rojo &gt;10d / &gt;5% / &gt;15%
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <th class="text-left px-5 py-3 font-medium">Capturista</th>
+            <th class="text-right px-4 py-3 font-medium">Refs</th>
+            <th class="text-right px-4 py-3 font-medium">Avg Cap→Val</th>
+            <th class="text-right px-4 py-3 font-medium">Avg Cap→Pago</th>
+            <th class="text-right px-4 py-3 font-medium">Rectif.</th>
+            <th class="text-right px-4 py-3 font-medium">Con Glosa</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for c in capturistas %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-5 py-3 font-medium text-slate-800">{{ c.nombre }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-700 font-semibold">{{ c.total }}</td>
+
+            <!-- Avg Cap→Val -->
+            <td class="px-4 py-3 text-right tabular-nums">
+              {% if c.avg_cv is not None %}
+                <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
+                  {% if c.avg_cv > 10 %}bg-red-100 text-red-700
+                  {% elif c.avg_cv >= 5 %}bg-amber-100 text-amber-700
+                  {% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                  {{ c.avg_cv }}d
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Avg Cap→Pago -->
+            <td class="px-4 py-3 text-right tabular-nums">
+              {% if c.avg_cp is not None %}
+                <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
+                  {% if c.nivel_cp == 'rojo' %}bg-red-100 text-red-700
+                  {% elif c.nivel_cp == 'amarillo' %}bg-amber-100 text-amber-700
+                  {% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                  {{ c.avg_cp }}d
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+
+            <!-- % Rectificaciones -->
+            <td class="px-4 py-3 text-right tabular-nums">
+              <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
+                {% if c.nivel_rect == 'rojo' %}bg-red-100 text-red-700
+                {% elif c.nivel_rect == 'amarillo' %}bg-amber-100 text-amber-700
+                {% else %}bg-slate-100 text-slate-500{% endif %}">
+                {{ c.pct_rect }}%
+              </span>
+            </td>
+
+            <!-- % Con glosa -->
+            <td class="px-4 py-3 text-right tabular-nums">
+              <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
+                {% if c.nivel_glosa == 'rojo' %}bg-red-100 text-red-700
+                {% elif c.nivel_glosa == 'amarillo' %}bg-amber-100 text-amber-700
+                {% else %}bg-slate-100 text-slate-500{% endif %}">
+                {{ c.pct_glosa }}%
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-5 py-8 text-center text-slate-400 text-sm">
+              Sin datos para el período seleccionado
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tendencia 12 meses (Top 5) -->
+  {% if top5 %}
+  <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+    <h2 class="text-sm font-semibold text-slate-700 mb-1">Tendencia 12 meses · Top 5 por volumen</h2>
+    <p class="text-xs text-slate-400 mb-4">Referencias despachadas por mes</p>
+    <div class="relative h-64">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Leyenda de semáforo -->
+  <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Umbrales del semáforo</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+      <div class="space-y-1.5">
+        <p class="font-medium text-slate-600">Avg Cap→Pago</p>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-slate-500">Verde — menos de 5 días</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400"></span><span class="text-slate-500">Amarillo — 5 a 10 días</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span class="text-slate-500">Rojo — más de 10 días</span></div>
+      </div>
+      <div class="space-y-1.5">
+        <p class="font-medium text-slate-600">% Rectificaciones</p>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-slate-500">Verde — menos del 2%</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400"></span><span class="text-slate-500">Amarillo — 2% a 5%</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span class="text-slate-500">Rojo — más del 5%</span></div>
+      </div>
+      <div class="space-y-1.5">
+        <p class="font-medium text-slate-600">% Con Glosa</p>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-slate-500">Verde — menos del 5%</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400"></span><span class="text-slate-500">Amarillo — 5% a 15%</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span class="text-slate-500">Rojo — más del 15%</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% if top5 %}
+<script>
+(function () {
+  const COLORS = [
+    'rgba(14,165,233,1)',   // sky-500
+    'rgba(16,185,129,1)',   // emerald-500
+    'rgba(139,92,246,1)',   // violet-500
+    'rgba(245,158,11,1)',   // amber-500
+    'rgba(239,68,68,1)',    // red-500
+  ];
+  const labels = {{ trend_labels_json|safe }};
+  const raw    = {{ trend_data_json|safe }};
+  const top5   = {{ top5|safe }};
+
+  const datasets = top5.map((nombre, i) => ({
+    label: nombre,
+    data: raw[nombre] || [],
+    borderColor: COLORS[i],
+    backgroundColor: COLORS[i].replace(',1)', ',0.08)'),
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { beginAtZero: true, ticks: { font: { size: 11 }, stepSize: 1 } },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+
+{% endblock %}

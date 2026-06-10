@@ -2,7 +2,7 @@ import calendar as cal
 import json
 from datetime import date, timedelta
 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.db.models.functions import Coalesce, Now, TruncMonth
@@ -1191,3 +1191,187 @@ def glosa_dashboard(request):
         **nota_analysis,
     }
     return render(request, 'referencias/glosa_dashboard.html', ctx)
+
+
+# ---------------------------------------------------------------------------
+# SLA por Capturista
+# ---------------------------------------------------------------------------
+
+_MESES_SLA = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+_MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+
+def _nivel_cp(dias):
+    if dias is None:
+        return 'gris'
+    return 'rojo' if dias > 10 else ('amarillo' if dias >= 5 else 'verde')
+
+
+def _nivel_pct(pct, umbral_amarillo, umbral_rojo):
+    return 'rojo' if pct > umbral_rojo else ('amarillo' if pct >= umbral_amarillo else 'verde')
+
+
+@user_passes_test(lambda u: u.is_active and u.is_superuser)
+def sla_capturistas(request):
+    now   = timezone.localtime()
+    year  = int(request.GET.get('año', now.year))
+    month = int(request.GET.get('mes', 0))   # 0 = todo el año
+
+    # ── Base queryset (refs normales con capturista y fecha_pago) ──────────
+    qs = Referencia.objects.filter(
+        nombre_capturista__gt='',
+        fecha_pago__isnull=False,
+        es_rectificacion=False,
+    )
+    if month:
+        qs = qs.filter(fecha_pago__year=year, fecha_pago__month=month)
+    else:
+        qs = qs.filter(fecha_pago__year=year)
+
+    # ── Métricas agregadas por capturista ─────────────────────────────────
+    rows = list(
+        qs.values('nombre_capturista')
+        .annotate(
+            total=Count('id'),
+            avg_cap_val=Avg(
+                ExpressionWrapper(F('fecha_validacion') - F('fecha_captura'),
+                                  output_field=DurationField()),
+            ),
+            avg_cap_pago=Avg(
+                ExpressionWrapper(F('fecha_pago') - F('fecha_captura'),
+                                  output_field=DurationField()),
+            ),
+        )
+        .order_by('-total')
+    )
+
+    # ── Rectificaciones en el mismo período ──────────────────────────────
+    rect_qs = Referencia.objects.filter(
+        nombre_capturista__gt='',
+        es_rectificacion=True,
+    )
+    if month:
+        rect_qs = rect_qs.filter(fecha_pago__year=year, fecha_pago__month=month)
+    else:
+        rect_qs = rect_qs.filter(fecha_pago__year=year)
+
+    rect_map = {
+        r['nombre_capturista']: r['n']
+        for r in rect_qs.values('nombre_capturista').annotate(n=Count('id'))
+    }
+
+    # ── Glosas (refs con al menos 1 glosa, agrupadas por capturista) ──────
+    ref_ids = list(qs.values_list('id', flat=True))
+    glosa_map = {
+        row['referencia__nombre_capturista']: row['n']
+        for row in (
+            GlosaRegistro.objects
+            .filter(referencia_id__in=ref_ids)
+            .values('referencia__nombre_capturista')
+            .annotate(n=Count('referencia_id', distinct=True))
+        )
+    }
+
+    # ── Construir lista final ─────────────────────────────────────────────
+    capturistas = []
+    for row in rows:
+        nombre = (row['nombre_capturista'] or '').strip()
+        if not nombre:
+            continue
+        total       = row['total']
+        rect        = rect_map.get(nombre, 0)
+        con_glosa   = glosa_map.get(nombre, 0)
+        avg_cv      = round(row['avg_cap_val'].days,  1) if row['avg_cap_val']  else None
+        avg_cp      = round(row['avg_cap_pago'].days, 1) if row['avg_cap_pago'] else None
+        pct_rect    = round(rect      / (total + rect) * 100, 1) if (total + rect) else 0
+        pct_glosa   = round(con_glosa / total           * 100, 1) if total          else 0
+
+        capturistas.append({
+            'nombre':     nombre,
+            'total':      total,
+            'rect':       rect,
+            'con_glosa':  con_glosa,
+            'avg_cv':     avg_cv,
+            'avg_cp':     avg_cp,
+            'pct_rect':   pct_rect,
+            'pct_glosa':  pct_glosa,
+            'nivel_cp':   _nivel_cp(avg_cp),
+            'nivel_rect': _nivel_pct(pct_rect,  2, 5),
+            'nivel_glosa':_nivel_pct(pct_glosa, 5, 15),
+        })
+
+    # ── Tarjetas destacadas ───────────────────────────────────────────────
+    con_avg = [c for c in capturistas if c['avg_cp'] is not None]
+    mas_rapido   = min(con_avg, key=lambda x: x['avg_cp'],   default=None)
+    mas_volumen  = capturistas[0] if capturistas else None
+    candidatos   = [c for c in capturistas if c['total'] >= 10]
+    menor_riesgo = min(candidatos,
+                       key=lambda x: (x['pct_glosa'], x['pct_rect']),
+                       default=None)
+
+    # ── Tendencia 12 meses (top 5 por volumen) ─────────────────────────
+    top5 = [c['nombre'] for c in capturistas[:5]]
+    labels_12 = []
+    trend_data = {n: [] for n in top5}
+
+    for i in range(11, -1, -1):
+        m = now.month - i
+        y = now.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        labels_12.append(_MESES_CORTO[m - 1])
+
+    # Una sola query para los 12 meses del top-5
+    from datetime import date as _date
+    primer_mes_year  = now.year  if (now.month - 11) > 0 else now.year - 1
+    primer_mes_month = (now.month - 11) if (now.month - 11) > 0 else (now.month + 1)
+    inicio_trend = _date(primer_mes_year, primer_mes_month, 1)
+
+    trend_qs = (
+        Referencia.objects
+        .filter(
+            nombre_capturista__in=top5,
+            fecha_pago__gte=inicio_trend,
+            es_rectificacion=False,
+        )
+        .annotate(mes=TruncMonth('fecha_pago'))
+        .values('nombre_capturista', 'mes')
+        .annotate(n=Count('id'))
+        .order_by('mes')
+    )
+    # Indexar resultados
+    trend_index = {}
+    for row in trend_qs:
+        key = (row['nombre_capturista'], row['mes'].month, row['mes'].year)
+        trend_index[key] = row['n']
+
+    for i, label in enumerate(labels_12):
+        m = now.month - (11 - i)
+        y = now.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        for nombre in top5:
+            trend_data[nombre].append(trend_index.get((nombre, m, y), 0))
+
+    # ── Años disponibles ──────────────────────────────────────────────────
+    años = sorted(set(
+        Referencia.objects.filter(fecha_pago__isnull=False)
+        .values_list('fecha_pago__year', flat=True).distinct()
+    ), reverse=True)
+
+    return render(request, 'referencias/sla_capturistas.html', {
+        'capturistas':         capturistas,
+        'year':                year,
+        'month':               month,
+        'años':                años,
+        'meses':               list(enumerate(_MESES_SLA, 1)),
+        'mas_rapido':          mas_rapido,
+        'mas_volumen':         mas_volumen,
+        'menor_riesgo':        menor_riesgo,
+        'trend_labels_json':   json.dumps(labels_12),
+        'trend_data_json':     json.dumps(trend_data),
+        'top5':                top5,
+    })

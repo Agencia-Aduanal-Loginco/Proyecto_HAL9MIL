@@ -17,5 +17,6 @@ urlpatterns = [
     path('cuenta-gastos/',                    views.cuenta_gastos,            name='cuenta_gastos'),
     path('cuenta-gastos/dashboard/',          views.cuenta_gastos_dashboard,  name='cuenta_gastos_dashboard'),
     path('cuenta-gastos/finalizar/<int:pk>/', views.cuenta_gastos_finalizar,  name='cuenta_gastos_finalizar'),
+    path('sla/capturistas/',             views.sla_capturistas,    name='sla_capturistas'),
     path('api/sync/',                    sync_views.sync_endpoint, name='api_sync'),
 ]
