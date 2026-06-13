@@ -172,9 +172,9 @@
 
 <script>
 (function() {
-  const labels = {{ tendencia_labels_json }};
-  const refs   = {{ tendencia_refs_json }};
-  const avg    = {{ tendencia_avg_json }};
+  const labels = {{ tendencia_labels_json|safe }};
+  const refs   = {{ tendencia_refs_json|safe }};
+  const avg    = {{ tendencia_avg_json|safe }};
 
   new Chart(document.getElementById('chartTendencia'), {
     type: 'bar',
