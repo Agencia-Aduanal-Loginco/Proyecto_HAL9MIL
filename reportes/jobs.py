@@ -17,12 +17,12 @@ DESTINATARIOS_BASE = ['xoyocl2@gmail.com', 'f.suarez@loginco.com.mx']
 
 def _get_wa_destinatarios(tipo: str) -> list:
     campo = f'recibe_wa_{tipo}'
-    return list(
+    return list(set(
         Destinatario.objects
         .filter(activo=True, **{campo: True})
         .exclude(whatsapp='')
         .values_list('whatsapp', flat=True)
-    )
+    ))
 
 
 def _wa_semanal(datos: dict, semana_str: str):
@@ -60,12 +60,12 @@ def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
     try:
         from whatsapp.client import send_template
         campo = f'recibe_wa_ia_{modulo}'
-        numeros = list(
+        numeros = list(set(
             Destinatario.objects
             .filter(activo=True, **{campo: True})
             .exclude(whatsapp='')
             .values_list('whatsapp', flat=True)
-        )
+        ))
         if not numeros:
             return
         content_sid = settings.TWILIO_CONTENT_SID_IA_HAL9MIL
