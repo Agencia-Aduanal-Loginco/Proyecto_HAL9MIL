@@ -20,7 +20,7 @@ def analizar_semanal(datos: dict) -> str:
             f"{p['prefijo']} {p['total']}" for p in datos['validadas_por_patente']
         )
         prompt = (
-            f"Eres analista de operaciones de Loginco, agencia aduanal mexicana. "
+            f"Eres un experto analista de operaciones de Loginco, agencia aduanal mexicana. "
             f"Redacta un párrafo ejecutivo breve (máximo 100 palabras) sobre la semana "
             f"del {datos['periodo_inicio'].strftime('%d/%m/%Y')} al {datos['periodo_fin'].strftime('%d/%m/%Y')}. "
             f"Sé directo y orientado a la dirección. Datos:\n"
