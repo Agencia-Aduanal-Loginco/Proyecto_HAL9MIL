@@ -307,11 +307,31 @@ def detalle(request, num_refe):
     except Exception:
         cuenta_gastos = None
     prediccion = predecir_pago(ref) if not ref.es_rectificacion else None
+
+    now_local = timezone.localtime()
+    _y, _m = now_local.year, now_local.month
+    _py, _pm = (_y, _m - 1) if _m > 1 else (_y - 1, 12)
+    fecha_ref = ref.fecha_arribo or ref.fecha_validacion
+    en_ventana_glosa = bool(fecha_ref and (
+        (fecha_ref.year == _y and fecha_ref.month == _m) or
+        (fecha_ref.year == _py and fecha_ref.month == _pm)
+    ))
+    necesita_glosa = (
+        not ref.es_rectificacion and
+        ref.fir_elec == '' and
+        ref.num_operacion == '' and
+        ref.linea_captura == ''
+    )
+    glosa_activa = ref.glosas.filter(fecha_conclusion__isnull=True).first()
+
     return render(request, 'referencias/detalle.html', {
         'ref': ref,
         'cuenta_gastos': cuenta_gastos,
         'riesgo_glosa': _riesgo_glosa_cliente(ref.nombre_cliente),
         'prediccion': prediccion,
+        'glosa_activa': glosa_activa,
+        'en_ventana_glosa': en_ventana_glosa,
+        'necesita_glosa': necesita_glosa,
     })
 
 
@@ -607,7 +627,8 @@ def glosa_registrar(request, pk):
             fecha_entrada=timezone.now(),
             usuario_entrada=request.user,
         )
-    return redirect('glosa')
+    next_url = (request.POST.get('next') or request.GET.get('next', '')).strip()
+    return redirect(next_url if next_url.startswith('/') else reverse('glosa'))
 
 
 @login_required
@@ -623,7 +644,8 @@ def glosa_urgente(request, pk):
         )
     registro.urgente = not registro.urgente
     registro.save(update_fields=['urgente'])
-    return redirect('glosa')
+    next_url = request.POST.get('next', '').strip()
+    return redirect(next_url if next_url.startswith('/') else reverse('glosa'))
 
 
 @login_required
@@ -634,17 +656,20 @@ def glosa_concluir(request, pk):
     registro.usuario_conclusion = request.user
     registro.nota               = request.POST.get('nota', '').strip()
     registro.save()
-    return redirect('glosa')
+    next_url = request.POST.get('next', '').strip()
+    return redirect(next_url if next_url.startswith('/') else reverse('glosa'))
 
 
 @login_required
 @require_POST
 def glosa_revertir(request, pk):
+    next_url = request.POST.get('next', '').strip()
+    next_url = next_url if next_url.startswith('/') else reverse('glosa')
     if not request.user.is_staff:
-        return redirect('glosa')
+        return redirect(next_url)
     registro = get_object_or_404(GlosaRegistro, referencia_id=pk, fecha_conclusion__isnull=True)
     registro.delete()
-    return redirect('glosa')
+    return redirect(next_url)
 
 
 # ---------------------------------------------------------------------------
