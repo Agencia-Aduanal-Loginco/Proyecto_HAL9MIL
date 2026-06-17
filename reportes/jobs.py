@@ -72,8 +72,8 @@ def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
         if not content_sid:
             logger.warning("TWILIO_CONTENT_SID_IA_HAL9MIL no configurado — IA %s no enviado.", modulo)
             return
-        # El template tiene texto fijo de ~52 chars; dejamos margen hasta 1500
-        texto_enviado = texto[:1500] + ('…' if len(texto) > 1500 else '')
+        # WhatsApp limita el cuerpo total del template a 1024 chars; dejamos margen para el texto fijo
+        texto_enviado = texto[:900].strip() + ('…' if len(texto) > 900 else '')
         variables = {'1': texto_enviado}
         for numero in numeros:
             send_template(numero, content_sid, variables)
