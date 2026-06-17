@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 
 from .glosa_data import analyze_notas
 from .models import CuentaGastos, GlosaRegistro, Referencia
+from .predictor import predecir_pago
 
 
 # ---------------------------------------------------------------------------
@@ -305,10 +306,12 @@ def detalle(request, num_refe):
         cuenta_gastos = ref.cuenta_gastos
     except Exception:
         cuenta_gastos = None
+    prediccion = predecir_pago(ref) if not ref.es_rectificacion else None
     return render(request, 'referencias/detalle.html', {
         'ref': ref,
         'cuenta_gastos': cuenta_gastos,
         'riesgo_glosa': _riesgo_glosa_cliente(ref.nombre_cliente),
+        'prediccion': prediccion,
     })
 
 
