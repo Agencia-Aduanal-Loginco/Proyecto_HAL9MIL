@@ -42,6 +42,13 @@ class HistorialReporte(models.Model):
         ordering = ['-fecha_envio']
         verbose_name = 'Historial de Reporte'
         verbose_name_plural = 'Historial de Reportes'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tipo', 'periodo_inicio'],
+                condition=models.Q(exitoso=True),
+                name='unique_historial_exitoso',
+            )
+        ]
 
     def __str__(self):
         estado = '✔' if self.exitoso else '✘'

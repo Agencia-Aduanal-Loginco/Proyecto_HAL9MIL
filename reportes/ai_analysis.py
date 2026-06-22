@@ -21,7 +21,7 @@ def analizar_semanal(datos: dict) -> str:
         )
         prompt = (
             f"Eres un experto analista de operaciones de Loginco, agencia aduanal mexicana. "
-            f"Redacta un párrafo ejecutivo breve (máximo 100 palabras) sobre la semana "
+            f"Redacta un análisis ejecutivo completo sobre la semana "
             f"del {datos['periodo_inicio'].strftime('%d/%m/%Y')} al {datos['periodo_fin'].strftime('%d/%m/%Y')}. "
             f"Sé directo y orientado a la dirección. Datos:\n"
             f"- Validadas: {datos['validadas_total']} ({por_patente_str})\n"
@@ -30,11 +30,11 @@ def analizar_semanal(datos: dict) -> str:
             f"- Guías BL: {datos['guias_total']}\n"
             f"- Pendientes de pago (acumulado): {datos['pendientes_pago']}\n"
             f"- Rectificaciones: {datos['rectificaciones_semana']}\n"
-            f"Destaca anomalías o tendencias y, si aplica, una recomendación concreta."
+            f"Destaca anomalías o tendencias importantes y termina con recomendaciones concretas para la dirección."
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=300,
+            max_tokens=1024,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -75,10 +75,9 @@ def analizar_glosa_semanal(datos_glosa: dict) -> str:
         prompt = (
             "Eres analista de operaciones de Loginco, agencia aduanal mexicana. "
             "Analiza el área de glosa para la dirección general. "
-            "Redacta máximo 2 párrafos ejecutivos (máximo 150 palabras en total): "
-            "el primero sobre el desempeño operativo del equipo, "
-            "el segundo sobre los tipos de error detectados en las notas y si hay patrones "
-            "por capturista que requieran atención. "
+            "Redacta un análisis ejecutivo detallado con los siguientes apartados: "
+            "desempeño operativo del equipo, tipos de error detectados en las notas, "
+            "patrones por capturista que requieran atención, y recomendaciones concretas de mejora. "
             "Sé directo, concreto y enfocado en acciones. Español formal.\n\n"
             f"ESTADÍSTICAS DE GLOSA (semana {datos_glosa.get('periodo_inicio', '')} – {datos_glosa.get('periodo_fin', '')}):\n"
             f"- Total pedimentos glosados: {datos_glosa['total']}\n"
@@ -94,7 +93,7 @@ def analizar_glosa_semanal(datos_glosa: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=500,
+            max_tokens=1024,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -116,9 +115,10 @@ def analizar_cuenta_gastos_semanal(datos_cg: dict) -> str:
 
         prompt = (
             "Eres analista de operaciones de Loginco, agencia aduanal mexicana. "
-            "Redacta un párrafo ejecutivo breve (máximo 100 palabras) sobre el desempeño "
+            "Redacta un análisis ejecutivo completo sobre el desempeño "
             "del área de Cuenta de Gastos para la dirección. "
-            "Comenta la cobertura, el tiempo de respuesta y quién destacó. "
+            "Incluye: cobertura alcanzada, tiempo de respuesta, quién destacó positiva o negativamente, "
+            "y recomendaciones concretas si hay áreas de mejora. "
             "Español formal y directo.\n\n"
             f"CUENTA DE GASTOS (semana {datos_cg.get('periodo_inicio','')} – {datos_cg.get('periodo_fin','')}):\n"
             f"- Pedimentos pagados en la semana: {datos_cg['pedimentos_pagados']}\n"
@@ -129,7 +129,7 @@ def analizar_cuenta_gastos_semanal(datos_cg: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=300,
+            max_tokens=1024,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -155,8 +155,9 @@ def analizar_mensual(datos: dict) -> str:
 
         prompt = (
             f"Eres analista estratégico de Loginco, agencia aduanal mexicana. "
-            f"Redacta un análisis ejecutivo (máximo 200 palabras) para la dirección general sobre {nombre_mes} {year}. "
-            f"Incluye evaluación del mes, tendencias identificadas y 2-3 recomendaciones estratégicas concretas. "
+            f"Redacta un análisis ejecutivo completo para la dirección general sobre {nombre_mes} {year}. "
+            f"Incluye: evaluación detallada del mes, comparativa con períodos anteriores, "
+            f"tendencias identificadas, clientes o patentes destacadas, y recomendaciones estratégicas concretas. "
             f"Español formal y directo.\n\n"
             f"DESEMPEÑO {nombre_mes.upper()} {year}:\n"
             f"- Real: {datos['real']} pedimentos | Proyectado: {datos['proyectado']} | "
@@ -175,7 +176,7 @@ def analizar_mensual(datos: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=600,
+            max_tokens=1500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text

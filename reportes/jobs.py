@@ -2,6 +2,8 @@ import json
 import logging
 from datetime import date, timedelta
 
+from django.db import IntegrityError
+
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -72,8 +74,11 @@ def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
         if not content_sid:
             logger.warning("TWILIO_CONTENT_SID_IA_HAL9MIL no configurado — IA %s no enviado.", modulo)
             return
-        # WhatsApp limita el cuerpo total del template a 1024 chars; dejamos margen para el texto fijo
-        texto_enviado = texto[:900].strip() + ('…' if len(texto) > 900 else '')
+        # Twilio limita cada variable a 400 chars; reservamos espacio para el pie de mensaje
+        _PIE = '\n\nPara más detalle consulta tu correo.'  # 40 chars
+        _MAX = 400 - len(_PIE) - 1  # 1 para el '…'
+        resumen = texto[:_MAX].strip() + ('…' if len(texto) > _MAX else '')
+        texto_enviado = resumen + _PIE
         variables = {'1': texto_enviado}
         for numero in numeros:
             send_template(numero, content_sid, variables)
@@ -139,6 +144,12 @@ def enviar_reporte_semanal():
     last_sunday = last_monday + timedelta(days=6)
 
     logger.info(f'[Semanal] Generando reporte {last_monday} – {last_sunday}')
+
+    # Guard de idempotencia: si otra instancia ya completó este período, no reenviar
+    if HistorialReporte.objects.filter(tipo='semanal', periodo_inicio=last_monday, exitoso=True).exists():
+        logger.info('[Semanal] Reporte ya enviado para este período — omitiendo duplicado.')
+        return
+
     destinatarios = _get_destinatarios('semanal')
 
     try:
@@ -165,7 +176,14 @@ def enviar_reporte_semanal():
         msg.attach_alternative(html, 'text/html')
         msg.send()
 
-        _guardar_historial('semanal', last_monday, last_sunday, destinatarios, True)
+        # Registrar ANTES de enviar WA — la constraint única en DB garantiza que solo
+        # una instancia proceda al envío WA cuando varias arrancan simultáneamente.
+        try:
+            _guardar_historial('semanal', last_monday, last_sunday, destinatarios, True)
+        except IntegrityError:
+            logger.info('[Semanal] Historial ya registrado por otra instancia — omitiendo envío WA.')
+            return
+
         logger.info(f'[Semanal] Enviado a {len(destinatarios)} destinatarios.')
         _wa_semanal(datos, semana_str)
         _wa_ia_modulo(analisis_ia,       'referencias',   semana_str)
@@ -190,6 +208,12 @@ def enviar_reporte_mensual():
     nombre_mes = NOMBRES_MESES[mes - 1]
 
     logger.info(f'[Mensual] Generando reporte {nombre_mes} {year}')
+
+    # Guard de idempotencia: si otra instancia ya completó este período, no reenviar
+    if HistorialReporte.objects.filter(tipo='mensual', periodo_inicio=inicio, exitoso=True).exists():
+        logger.info('[Mensual] Reporte ya enviado para este período — omitiendo duplicado.')
+        return
+
     destinatarios = _get_destinatarios('mensual')
 
     try:
@@ -212,7 +236,14 @@ def enviar_reporte_mensual():
         msg.attach_alternative(html, 'text/html')
         msg.send()
 
-        _guardar_historial('mensual', inicio, fin, destinatarios, True)
+        # Registrar ANTES de enviar WA — la constraint única en DB garantiza que solo
+        # una instancia proceda al envío WA cuando varias arrancan simultáneamente.
+        try:
+            _guardar_historial('mensual', inicio, fin, destinatarios, True)
+        except IntegrityError:
+            logger.info('[Mensual] Historial ya registrado por otra instancia — omitiendo envío WA.')
+            return
+
         logger.info(f'[Mensual] Enviado a {len(destinatarios)} destinatarios.')
         _wa_mensual(datos)
         _wa_ia_modulo(analisis_ia, 'referencias', f'{nombre_mes} {year}')
