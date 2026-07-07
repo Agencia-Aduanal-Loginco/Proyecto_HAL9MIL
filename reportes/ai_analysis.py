@@ -34,7 +34,7 @@ def analizar_semanal(datos: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=1024,
+            max_tokens=500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -93,7 +93,7 @@ def analizar_glosa_semanal(datos_glosa: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=1024,
+            max_tokens=500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -129,7 +129,7 @@ def analizar_cuenta_gastos_semanal(datos_cg: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=1024,
+            max_tokens=500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
@@ -176,7 +176,7 @@ def analizar_mensual(datos: dict) -> str:
         )
         msg = _client().messages.create(
             model='claude-opus-4-7',
-            max_tokens=1500,
+            max_tokens=500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return msg.content[0].text
