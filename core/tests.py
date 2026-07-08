@@ -82,3 +82,26 @@ class ModuloRequiredTests(TestCase):
 class GrupoFinanzasMigrationTests(TestCase):
     def test_grupo_finanzas_existe_tras_migrar(self):
         self.assertTrue(Group.objects.filter(name='Finanzas').exists())
+
+
+from django.template import Context, Template
+
+
+class TieneModuloTemplateTagTests(TestCase):
+    def setUp(self):
+        self.grupo_finanzas, _ = Group.objects.get_or_create(name='Finanzas')
+        self.usuario_con_grupo = User.objects.create_user('con_grupo3', password='x')
+        self.usuario_con_grupo.groups.add(self.grupo_finanzas)
+        self.usuario_sin_grupo = User.objects.create_user('sin_grupo3', password='x')
+
+    def _renderizar(self, user):
+        plantilla = Template(
+            "{% load permisos_tags %}{% if user|tiene_modulo:'Finanzas' %}SI{% else %}NO{% endif %}"
+        )
+        return plantilla.render(Context({'user': user}))
+
+    def test_filtro_devuelve_si_para_usuario_en_grupo(self):
+        self.assertEqual(self._renderizar(self.usuario_con_grupo), 'SI')
+
+    def test_filtro_devuelve_no_para_usuario_fuera_del_grupo(self):
+        self.assertEqual(self._renderizar(self.usuario_sin_grupo), 'NO')
