@@ -20,10 +20,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_apscheduler',
+    'core',
     'referencias',
     'reportes',
     'whatsapp',
     'clientes',
+    'finanzas',
 ]
 
 MIDDLEWARE = [
@@ -82,6 +84,10 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# ── Archivos de usuario (XMLs CFDI de proveedores) ───────────────────────────
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
@@ -122,7 +128,7 @@ TWILIO_WHATSAPP_ALLOWED_NUMBERS = [
     n.strip() for n in os.getenv('TWILIO_WHATSAPP_ALLOWED_NUMBERS', '').split(',') if n.strip()
 ]
 # Content SIDs de las plantillas aprobadas por Meta
-TWILIO_CONTENT_SID_SEMANAL = os.getenv('TWILIO_CONTENT_SID_SEMANAL', 'HXebb6fc66f8fd89388a6800411a53e9b8')
+TWILIO_CONTENT_SID_SEMANAL = os.getenv('TWILIO_CONTENT_SID_SEMANAL', 'HX536693221fc86f35f02546763eb81888')
 TWILIO_CONTENT_SID_MENSUAL    = os.getenv('TWILIO_CONTENT_SID_MENSUAL',    'HX1607f5f787da17354ce04e7f8f9528af')
 TWILIO_CONTENT_SID_IA_HAL9MIL = os.getenv('TWILIO_CONTENT_SID_IA_HAL9MIL', 'HX1495d5e097d913edca34109f4336e012')
 
