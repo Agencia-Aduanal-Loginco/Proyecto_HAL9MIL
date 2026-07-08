@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -110,6 +111,16 @@
         </svg>
         Cuenta de Gastos
       </a>
+      {% if request.user|tiene_modulo:'Finanzas' %}
+      <a href="{% url 'finanzas:dashboard' %}"
+         class="sidebar-link {% if request.resolver_match.app_name == 'finanzas' %}active{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        Finanzas
+      </a>
+      {% endif %}
     </nav>
 
     <!-- Patentes legend -->
@@ -152,6 +163,17 @@
 
   <!-- Main content -->
   <main class="lg:ml-60 flex-1 min-h-screen pt-14 lg:pt-0">
+    {% if messages %}
+    <div class="px-4 pt-4 space-y-2">
+      {% for m in messages %}
+      <div class="px-4 py-3 rounded-lg text-sm
+        {% if m.tags == 'error' %}bg-red-50 text-red-700 border border-red-200
+        {% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %}">
+        {{ m }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 
