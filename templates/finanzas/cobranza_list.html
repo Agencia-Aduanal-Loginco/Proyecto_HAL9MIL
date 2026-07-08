@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Cobranza pendiente{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas</p>
+      <h1 class="text-2xl font-bold text-slate-800">Cobranza pendiente</h1>
+      <p class="text-slate-500 text-sm mt-0.5">Referencias con gastos registrados sin factura timbrada</p>
+    </div>
+    <a href="{% url 'finanzas:facturas_list' %}"
+       class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Ver todas las facturas
+    </a>
+  </div>
+
+  {% if items %}
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-3 text-left">Referencia</th>
+          <th class="px-5 py-3 text-left">Cliente</th>
+          <th class="px-5 py-3 text-left">Patente</th>
+          <th class="px-5 py-3 text-right">Total gastos</th>
+          <th class="px-5 py-3 text-right">Total anticipos</th>
+          <th class="px-5 py-3 text-right">Saldo</th>
+          <th class="px-5 py-3 text-center">Acción</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for item in items %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3 font-mono text-slate-800 font-medium">
+            <a href="{% url 'finanzas:referencia_estado' num_refe=item.referencia.num_refe %}"
+               class="text-sky-600 hover:underline">{{ item.referencia.num_refe }}</a>
+          </td>
+          <td class="px-5 py-3 text-slate-700">{{ item.referencia.nombre_cliente|default:"—" }}</td>
+          <td class="px-5 py-3">
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-mono">
+              {{ item.referencia.patente }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-right font-mono text-red-700">${{ item.total_gastos|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono text-green-700">${{ item.total_anticipos|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono font-semibold
+            {% if item.saldo < 0 %}text-orange-600{% elif item.saldo > 0 %}text-sky-600{% else %}text-slate-500{% endif %}">
+            ${{ item.saldo|floatformat:2 }}
+          </td>
+          <td class="px-5 py-3 text-center">
+            <a href="{% url 'finanzas:factura_crear' num_refe=item.referencia.num_refe %}"
+               class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              Emitir factura
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-16 text-center">
+    <p class="text-slate-400 text-sm">No hay referencias con cobranza pendiente.</p>
+    <p class="text-slate-300 text-xs mt-1">Todas las referencias con gastos tienen factura timbrada.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

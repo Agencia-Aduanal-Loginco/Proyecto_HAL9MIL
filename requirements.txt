@@ -6,6 +6,9 @@ anthropic>=0.40
 django-apscheduler>=0.6
 sendgrid>=6.11
 twilio>=9.0
+# módulo finanzas / CFDI
+cryptography>=42.0
+lxml>=5.0
 # producción
 gunicorn>=21.2
 psycopg2-binary>=2.9

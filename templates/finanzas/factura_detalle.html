@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}Factura {{ factura.serie }}{{ factura.folio }}{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6 max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">
+        <a href="{% url 'finanzas:facturas_list' %}" class="hover:text-sky-600">Facturas</a>
+        &rsaquo; {{ factura.serie }}{{ factura.folio }}
+      </p>
+      <h1 class="text-2xl font-bold text-slate-800 mt-1">
+        Factura {{ factura.serie }}{{ factura.folio }}
+      </h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-semibold px-3 py-1.5 rounded-full
+        {% if factura.estado == 'BORRADOR' %}bg-slate-100 text-slate-600
+        {% elif factura.estado == 'TIMBRADA' %}bg-green-100 text-green-700
+        {% else %}bg-red-100 text-red-700{% endif %}">
+        {{ factura.get_estado_display }}
+      </span>
+      {% if factura.estado == 'BORRADOR' %}
+      <form method="post" action="{% url 'finanzas:factura_timbrar' pk=factura.pk %}"
+            onsubmit="return confirm('¿Timbrar esta factura ante el SAT? Esta acción no se puede deshacer.')">
+        {% csrf_token %}
+        <button type="submit"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          Timbrar CFDI
+        </button>
+      </form>
+      {% elif factura.estado == 'TIMBRADA' %}
+      <a href="{% url 'finanzas:factura_xml' pk=factura.pk %}"
+         class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        Descargar XML
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% for msg in messages %}
+  <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">{{ msg }}</div>
+  {% endfor %}
+
+  <!-- Emisor / Receptor -->
+  <div class="grid grid-cols-2 gap-4">
+    <!-- Emisor -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <p class="text-xs text-slate-400 uppercase tracking-wider mb-3">Emisor</p>
+      <p class="font-mono font-semibold text-slate-800">{{ factura.configuracion_fiscal.rfc }}</p>
+      <p class="text-slate-700 mt-1">{{ factura.configuracion_fiscal.razon_social }}</p>
+      <p class="text-xs text-slate-400 mt-2">
+        Régimen {{ factura.configuracion_fiscal.regimen_fiscal }} ·
+        CP {{ factura.configuracion_fiscal.codigo_postal }} ·
+        Patente {{ factura.configuracion_fiscal.patente }}
+      </p>
+    </div>
+    <!-- Receptor -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <p class="text-xs text-slate-400 uppercase tracking-wider mb-3">Receptor</p>
+      <p class="font-mono font-semibold text-slate-800">{{ factura.rfc_receptor }}</p>
+      <p class="text-slate-700 mt-1">{{ factura.nombre_receptor }}</p>
+      <p class="text-xs text-slate-400 mt-2">
+        Régimen {{ factura.regimen_fiscal_receptor }} ·
+        CP {{ factura.domicilio_fiscal_receptor }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Datos CFDI -->
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <p class="text-xs text-slate-400 uppercase tracking-wider mb-3">Datos CFDI</p>
+    <div class="grid grid-cols-4 gap-4 text-sm">
+      <div>
+        <p class="text-xs text-slate-400">Uso CFDI</p>
+        <p class="font-mono text-slate-700">{{ factura.uso_cfdi }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Forma de pago</p>
+        <p class="font-mono text-slate-700">{{ factura.forma_pago }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Método de pago</p>
+        <p class="font-mono text-slate-700">{{ factura.metodo_pago }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-400">Moneda</p>
+        <p class="font-mono text-slate-700">{{ factura.moneda }}</p>
+      </div>
+    </div>
+    {% if factura.uuid_fiscal %}
+    <div class="mt-3 pt-3 border-t border-slate-100">
+      <p class="text-xs text-slate-400">UUID Fiscal</p>
+      <p class="font-mono text-xs text-slate-600 break-all">{{ factura.uuid_fiscal }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Conceptos -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-700">Conceptos</h2>
+    </div>
+    {% if factura.conceptos.all %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-2 text-left">Descripción</th>
+          <th class="px-5 py-2 text-center">Clave SAT</th>
+          <th class="px-5 py-2 text-right">Cantidad</th>
+          <th class="px-5 py-2 text-right">Valor unitario</th>
+          <th class="px-5 py-2 text-right">Importe</th>
+          <th class="px-5 py-2 text-right">IVA %</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in factura.conceptos.all %}
+        <tr>
+          <td class="px-5 py-3 text-slate-700">{{ c.descripcion }}</td>
+          <td class="px-5 py-3 text-center font-mono text-xs text-slate-500">{{ c.clave_prod_serv }}</td>
+          <td class="px-5 py-3 text-right font-mono">{{ c.cantidad|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono">${{ c.valor_unitario|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono font-semibold">${{ c.importe|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right text-slate-500">{{ c.tasa_iva|floatformat:2 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="px-5 py-8 text-center text-slate-400 text-sm">Sin conceptos.</p>
+    {% endif %}
+
+    <!-- Totales -->
+    <div class="border-t border-slate-200 px-5 py-4 flex justify-end">
+      <div class="text-sm space-y-1 w-56">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Subtotal</span>
+          <span class="font-mono">${{ factura.subtotal|floatformat:2 }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">IVA 16%</span>
+          <span class="font-mono">${{ factura.iva|floatformat:2 }}</span>
+        </div>
+        <div class="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-2 mt-2 text-base">
+          <span>Total</span>
+          <span class="font-mono">${{ factura.total|floatformat:2 }} {{ factura.moneda }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Referencias vinculadas -->
+  {% if factura.referencias.all %}
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <p class="text-xs text-slate-400 uppercase tracking-wider mb-3">Referencias vinculadas</p>
+    <div class="flex flex-wrap gap-2">
+      {% for ref in factura.referencias.all %}
+      <a href="{% url 'finanzas:referencia_estado' num_refe=ref.num_refe %}"
+         class="bg-sky-50 border border-sky-200 text-sky-700 text-xs font-mono px-3 py-1 rounded-lg hover:bg-sky-100 transition-colors">
+        {{ ref.num_refe }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Mensajes -->
+  {% for msg in messages %}
+  <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">{{ msg }}</div>
+  {% endfor %}
+
+  {% if factura.estado == 'BORRADOR' %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-amber-800">
+    <p class="font-semibold">Factura en borrador — pendiente de timbrar</p>
+    <p class="mt-1 text-amber-700">
+      Usa el botón <strong>Timbrar CFDI</strong> para enviarla al PAC y obtener el UUID SAT.
+      Asegúrate de que los certificados CSD y las variables de entorno PAC estén configurados (ver Fase 0).
+    </p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

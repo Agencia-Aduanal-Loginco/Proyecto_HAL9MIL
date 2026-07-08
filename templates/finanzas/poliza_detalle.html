@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Póliza {{ poliza.numero }}{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <div>
+    <a href="{% url 'finanzas:polizas_list' %}" class="text-sky-600 hover:underline text-sm">← Pólizas</a>
+    <h1 class="text-2xl font-bold text-slate-800 mt-2">
+      Póliza {{ poliza.numero }}
+      {% if poliza.cerrado %}
+      <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full ml-2">Cerrada</span>
+      {% endif %}
+    </h1>
+    <p class="text-slate-500 text-sm">{{ poliza.get_tipo_display }} · {{ poliza.fecha }} · {{ poliza.concepto }}</p>
+    {% if poliza.referencia %}
+    <p class="text-slate-500 text-sm">Referencia: <span class="font-medium">{{ poliza.referencia }}</span></p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-2 text-left">Línea</th>
+          <th class="px-5 py-2 text-left">Cuenta</th>
+          <th class="px-5 py-2 text-left">Concepto</th>
+          <th class="px-5 py-2 text-right">Debe</th>
+          <th class="px-5 py-2 text-right">Haber</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in poliza.partidas.all %}
+        <tr>
+          <td class="px-5 py-2.5 text-slate-400">{{ p.linea }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs text-slate-700">{{ p.cuenta.numero }} — {{ p.cuenta.nombre }}</td>
+          <td class="px-5 py-2.5 text-slate-600">{{ p.concepto }}</td>
+          <td class="px-5 py-2.5 text-right font-mono {% if p.debe %}text-slate-800{% else %}text-slate-300{% endif %}">
+            ${{ p.debe|floatformat:2 }}
+          </td>
+          <td class="px-5 py-2.5 text-right font-mono {% if p.haber %}text-slate-800{% else %}text-slate-300{% endif %}">
+            ${{ p.haber|floatformat:2 }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="bg-slate-50 text-sm font-semibold">
+        <tr>
+          <td colspan="3" class="px-5 py-2.5 text-right text-slate-600">Totales</td>
+          <td class="px-5 py-2.5 text-right font-mono text-slate-800">${{ poliza.total_debe|floatformat:2 }}</td>
+          <td class="px-5 py-2.5 text-right font-mono text-slate-800">${{ poliza.total_haber|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {% if poliza.total_debe != poliza.total_haber %}
+  <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+    ⚠ Póliza descuadrada: DEBE ≠ HABER
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+[
+  {"model": "finanzas.cuentacontable", "pk": 1,  "fields": {"numero": "1",         "nombre": "ACTIVO",                          "nivel": 1, "tipo": "A", "padre": null, "es_hoja": false, "naturaleza": "D", "codigo_agrupador_sat": "100"}},
+  {"model": "finanzas.cuentacontable", "pk": 2,  "fields": {"numero": "1-100",     "nombre": "Activo Circulante",               "nivel": 2, "tipo": "A", "padre": 1,    "es_hoja": false, "naturaleza": "D", "codigo_agrupador_sat": "100"}},
+  {"model": "finanzas.cuentacontable", "pk": 3,  "fields": {"numero": "1-100-001", "nombre": "Caja",                            "nivel": 3, "tipo": "A", "padre": 2,    "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "101"}},
+  {"model": "finanzas.cuentacontable", "pk": 4,  "fields": {"numero": "1-100-002", "nombre": "Bancos",                          "nivel": 3, "tipo": "A", "padre": 2,    "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "102"}},
+  {"model": "finanzas.cuentacontable", "pk": 5,  "fields": {"numero": "1-100-003", "nombre": "Clientes por cobrar",             "nivel": 3, "tipo": "A", "padre": 2,    "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "105"}},
+  {"model": "finanzas.cuentacontable", "pk": 6,  "fields": {"numero": "1-100-004", "nombre": "IVA Acreditable",                 "nivel": 3, "tipo": "A", "padre": 2,    "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "118"}},
+
+  {"model": "finanzas.cuentacontable", "pk": 10, "fields": {"numero": "2",         "nombre": "PASIVO",                          "nivel": 1, "tipo": "P", "padre": null, "es_hoja": false, "naturaleza": "A", "codigo_agrupador_sat": "200"}},
+  {"model": "finanzas.cuentacontable", "pk": 11, "fields": {"numero": "2-100",     "nombre": "Pasivo Circulante",               "nivel": 2, "tipo": "P", "padre": 10,   "es_hoja": false, "naturaleza": "A", "codigo_agrupador_sat": "200"}},
+  {"model": "finanzas.cuentacontable", "pk": 12, "fields": {"numero": "2-100-001", "nombre": "Anticipos de clientes",           "nivel": 3, "tipo": "P", "padre": 11,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "206"}},
+  {"model": "finanzas.cuentacontable", "pk": 13, "fields": {"numero": "2-100-002", "nombre": "Proveedores por pagar",           "nivel": 3, "tipo": "P", "padre": 11,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "201"}},
+  {"model": "finanzas.cuentacontable", "pk": 14, "fields": {"numero": "2-100-003", "nombre": "IVA Trasladado por pagar",        "nivel": 3, "tipo": "P", "padre": 11,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "216"}},
+
+  {"model": "finanzas.cuentacontable", "pk": 20, "fields": {"numero": "3",         "nombre": "CAPITAL",                         "nivel": 1, "tipo": "C", "padre": null, "es_hoja": false, "naturaleza": "A", "codigo_agrupador_sat": "300"}},
+  {"model": "finanzas.cuentacontable", "pk": 21, "fields": {"numero": "3-100-001", "nombre": "Capital social",                  "nivel": 3, "tipo": "C", "padre": 20,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "301"}},
+  {"model": "finanzas.cuentacontable", "pk": 22, "fields": {"numero": "3-100-002", "nombre": "Utilidad del ejercicio",          "nivel": 3, "tipo": "C", "padre": 20,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "304"}},
+
+  {"model": "finanzas.cuentacontable", "pk": 30, "fields": {"numero": "4",         "nombre": "INGRESOS",                        "nivel": 1, "tipo": "I", "padre": null, "es_hoja": false, "naturaleza": "A", "codigo_agrupador_sat": "400"}},
+  {"model": "finanzas.cuentacontable", "pk": 31, "fields": {"numero": "4-100-001", "nombre": "Honorarios por despacho aduanal", "nivel": 3, "tipo": "I", "padre": 30,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "401"}},
+  {"model": "finanzas.cuentacontable", "pk": 32, "fields": {"numero": "4-100-002", "nombre": "Recuperación de gastos",          "nivel": 3, "tipo": "I", "padre": 30,   "es_hoja": true,  "naturaleza": "A", "codigo_agrupador_sat": "401"}},
+
+  {"model": "finanzas.cuentacontable", "pk": 40, "fields": {"numero": "5",         "nombre": "GASTOS",                          "nivel": 1, "tipo": "G", "padre": null, "es_hoja": false, "naturaleza": "D", "codigo_agrupador_sat": "500"}},
+  {"model": "finanzas.cuentacontable", "pk": 41, "fields": {"numero": "5-100",     "nombre": "Gastos de Operación",             "nivel": 2, "tipo": "G", "padre": 40,   "es_hoja": false, "naturaleza": "D", "codigo_agrupador_sat": "500"}},
+  {"model": "finanzas.cuentacontable", "pk": 42, "fields": {"numero": "5-100-001", "nombre": "Fletes y acarreos",               "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "501"}},
+  {"model": "finanzas.cuentacontable", "pk": 43, "fields": {"numero": "5-100-002", "nombre": "Almacenaje",                      "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "501"}},
+  {"model": "finanzas.cuentacontable", "pk": 44, "fields": {"numero": "5-100-003", "nombre": "Derechos aduanales",              "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "501"}},
+  {"model": "finanzas.cuentacontable", "pk": 45, "fields": {"numero": "5-100-004", "nombre": "Maniobras",                       "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "501"}},
+  {"model": "finanzas.cuentacontable", "pk": 46, "fields": {"numero": "5-100-005", "nombre": "Honorarios a terceros",           "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "502"}},
+  {"model": "finanzas.cuentacontable", "pk": 47, "fields": {"numero": "5-100-006", "nombre": "Gastos varios de operación",      "nivel": 3, "tipo": "G", "padre": 41,   "es_hoja": true,  "naturaleza": "D", "codigo_agrupador_sat": "503"}}
+]

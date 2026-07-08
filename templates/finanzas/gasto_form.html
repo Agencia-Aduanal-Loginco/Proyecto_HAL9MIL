@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Registrar Gasto · {{ referencia.num_refe }}{% endblock %}
+{% block content %}
+<div class="p-6 max-w-2xl">
+
+  <div class="mb-6">
+    <a href="{% url 'finanzas:referencia_estado' num_refe=referencia.num_refe %}"
+       class="text-sky-600 hover:underline text-sm">← Estado financiero</a>
+    <h1 class="text-2xl font-bold text-slate-800 mt-2">Registrar gasto</h1>
+    <p class="text-slate-500 text-sm">{{ referencia.num_refe }} · {{ referencia.nombre_cliente }}</p>
+  </div>
+
+  <form method="post" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+    {% csrf_token %}
+    {% for field in form %}
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">
+        {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+      </label>
+      {{ field }}
+      {% if field.errors %}
+      <p class="text-red-500 text-xs mt-1">{{ field.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="pt-2 flex gap-3">
+      <button type="submit"
+              class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors">
+        Guardar gasto
+      </button>
+      <a href="{% url 'finanzas:referencia_estado' num_refe=referencia.num_refe %}"
+         class="text-slate-500 hover:text-slate-700 text-sm px-4 py-2">Cancelar</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Facturas{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas</p>
+      <h1 class="text-2xl font-bold text-slate-800">Facturas</h1>
+    </div>
+    <a href="{% url 'finanzas:cobranza_list' %}"
+       class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Ver cobranza pendiente
+    </a>
+  </div>
+
+  <!-- Filtro por estado -->
+  <div class="flex gap-2">
+    <a href="{% url 'finanzas:facturas_list' %}"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+         {% if not estado %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+      Todas
+    </a>
+    {% for valor, etiqueta in estados %}
+    <a href="?estado={{ valor }}"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+         {% if estado == valor %}
+           {% if valor == 'BORRADOR' %}bg-slate-600 text-white
+           {% elif valor == 'TIMBRADA' %}bg-green-600 text-white
+           {% else %}bg-red-600 text-white{% endif %}
+         {% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+      {{ etiqueta }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    {% if page.object_list %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-3 text-left">Folio</th>
+          <th class="px-5 py-3 text-left">Receptor</th>
+          <th class="px-5 py-3 text-left">RFC</th>
+          <th class="px-5 py-3 text-left">Emisor (patente)</th>
+          <th class="px-5 py-3 text-right">Subtotal</th>
+          <th class="px-5 py-3 text-right">IVA</th>
+          <th class="px-5 py-3 text-right">Total</th>
+          <th class="px-5 py-3 text-center">Estado</th>
+          <th class="px-5 py-3 text-left">Fecha</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for f in page.object_list %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3">
+            <a href="{% url 'finanzas:factura_detalle' pk=f.pk %}"
+               class="text-sky-600 hover:underline font-mono font-semibold">{{ f.serie }}{{ f.folio }}</a>
+          </td>
+          <td class="px-5 py-3 text-slate-700">{{ f.nombre_receptor }}</td>
+          <td class="px-5 py-3 font-mono text-xs text-slate-500">{{ f.rfc_receptor }}</td>
+          <td class="px-5 py-3">
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-mono">
+              {{ f.configuracion_fiscal.patente }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-right font-mono text-slate-700">${{ f.subtotal|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono text-slate-500">${{ f.iva|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-right font-mono font-semibold text-slate-800">${{ f.total|floatformat:2 }}</td>
+          <td class="px-5 py-3 text-center">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+              {% if f.estado == 'BORRADOR' %}bg-slate-100 text-slate-600
+              {% elif f.estado == 'TIMBRADA' %}bg-green-100 text-green-700
+              {% else %}bg-red-100 text-red-700{% endif %}">
+              {{ f.get_estado_display }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-slate-500 text-xs">{{ f.created_at|date:"d/m/Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page.has_other_pages %}
+    <div class="px-5 py-3 border-t border-slate-100 flex gap-2 text-sm">
+      {% if page.has_previous %}
+      <a href="?{% if estado %}estado={{ estado }}&{% endif %}page={{ page.previous_page_number }}"
+         class="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">Anterior</a>
+      {% endif %}
+      <span class="px-3 py-1 text-slate-400">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+      <a href="?{% if estado %}estado={{ estado }}&{% endif %}page={{ page.next_page_number }}"
+         class="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">Siguiente</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p class="px-5 py-12 text-center text-slate-400 text-sm">Sin facturas registradas.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

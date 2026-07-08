@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Comisiones — {{ mes|stringformat:"02d" }}/{{ anio }}{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between flex-wrap gap-4">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas / Operaciones</p>
+      <h1 class="text-2xl font-bold text-slate-800">Reporte de comisiones</h1>
+    </div>
+    <a href="{% url 'finanzas:comisiones_csv' %}?mes={{ mes }}&anio={{ anio }}"
+       class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Exportar CSV
+    </a>
+  </div>
+
+  <!-- Mensajes -->
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="px-4 py-3 rounded-lg text-sm
+      {% if m.tags == 'error' %}bg-red-50 text-red-700 border border-red-200
+      {% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %}">
+      {{ m }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Filtro + Recalcular -->
+  <div class="flex flex-wrap items-end gap-3">
+    <form method="get" class="flex items-end gap-2">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Mes</label>
+        <select name="mes"
+                class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-sky-500">
+          {% for num, nombre in meses %}
+          <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Año</label>
+        <input type="number" name="anio" value="{{ anio }}" min="2020" max="2100"
+               class="w-24 text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700">
+      </div>
+      <button type="submit"
+              class="bg-sky-600 hover:bg-sky-700 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+        Consultar
+      </button>
+    </form>
+
+    <form method="post" class="flex items-end">
+      {% csrf_token %}
+      <input type="hidden" name="mes"  value="{{ mes }}">
+      <input type="hidden" name="anio" value="{{ anio }}">
+      <button type="submit"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+        Recalcular
+      </button>
+    </form>
+  </div>
+
+  <!-- Totales resumen -->
+  {% if comisiones %}
+  <div class="grid grid-cols-3 gap-4">
+    <div class="bg-white rounded-xl border border-slate-200 px-5 py-4">
+      <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Referencias</p>
+      <p class="text-2xl font-bold text-slate-800">{{ comisiones|length }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 px-5 py-4">
+      <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Valor total operaciones</p>
+      <p class="text-xl font-bold text-slate-800 font-mono">${{ total_valor|floatformat:2 }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-emerald-200 px-5 py-4">
+      <p class="text-xs text-emerald-600 uppercase tracking-wider mb-1">Total comisiones</p>
+      <p class="text-xl font-bold text-emerald-700 font-mono">${{ total_comision|floatformat:2 }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Tabla -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    {% if comisiones %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase border-b border-slate-200">
+        <tr>
+          <th class="px-5 py-3 text-left">Referencia</th>
+          <th class="px-5 py-3 text-left">Cliente</th>
+          <th class="px-5 py-3 text-left">Agente</th>
+          <th class="px-5 py-3 text-right">Valor operación</th>
+          <th class="px-5 py-3 text-right">Tasa</th>
+          <th class="px-5 py-3 text-right">Comisión</th>
+          <th class="px-5 py-3 text-left text-xs">Calculado</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in comisiones %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3 font-mono text-xs font-semibold text-sky-700">
+            {{ c.referencia.num_refe }}
+          </td>
+          <td class="px-5 py-3 text-slate-600 text-xs">
+            {{ c.referencia.nombre_cliente|default:"—" }}
+          </td>
+          <td class="px-5 py-3 text-slate-500 text-xs">
+            {% if c.agente %}{{ c.agente.get_full_name|default:c.agente.username }}{% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-right font-mono text-slate-700">
+            ${{ c.valor_operacion|floatformat:2 }}
+          </td>
+          <td class="px-5 py-3 text-right text-slate-500 text-xs">
+            {{ c.tasa_comision|floatformat:4 }}
+          </td>
+          <td class="px-5 py-3 text-right font-mono font-semibold text-emerald-700">
+            ${{ c.monto_comision|floatformat:2 }}
+          </td>
+          <td class="px-5 py-3 text-xs text-slate-400 whitespace-nowrap">
+            {{ c.fecha_calculo|date:"d/m/Y H:i" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="bg-slate-50 border-t-2 border-slate-300 text-xs font-semibold">
+        <tr>
+          <td colspan="3" class="px-5 py-3 text-right text-slate-500 uppercase tracking-wider">Totales</td>
+          <td class="px-5 py-3 text-right font-mono text-slate-700">${{ total_valor|floatformat:2 }}</td>
+          <td></td>
+          <td class="px-5 py-3 text-right font-mono text-emerald-700">${{ total_comision|floatformat:2 }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <div class="px-5 py-14 text-center space-y-2">
+      <p class="text-slate-400 text-sm">Sin comisiones calculadas para {{ mes|stringformat:"02d" }}/{{ anio }}.</p>
+      <p class="text-slate-300 text-xs">
+        Haz clic en <strong>Recalcular</strong> o ejecuta:<br>
+        <code class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
+          python manage.py calcular_comisiones --mes {{ mes }} --anio {{ anio }}
+        </code>
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

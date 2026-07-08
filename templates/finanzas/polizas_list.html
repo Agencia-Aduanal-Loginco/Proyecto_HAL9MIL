@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Pólizas — Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 space-y-4">
+  <h1 class="text-2xl font-bold text-slate-800">Pólizas Contables</h1>
+
+  <form method="get" class="bg-white rounded-xl p-4 border border-slate-100 flex gap-3 items-end">
+    <div>
+      <label class="text-xs text-slate-500 block mb-1">Tipo</label>
+      <select name="tipo"
+              class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+        <option value="">Todos</option>
+        <option value="D" {% if tipo == 'D' %}selected{% endif %}>Diario</option>
+        <option value="H" {% if tipo == 'H' %}selected{% endif %}>Ingreso</option>
+        <option value="E" {% if tipo == 'E' %}selected{% endif %}>Egreso</option>
+      </select>
+    </div>
+    <button type="submit"
+            class="bg-sky-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-sky-700">Filtrar</button>
+    {% if tipo %}<a href="?" class="text-slate-500 text-sm px-3 py-2">Limpiar</a>{% endif %}
+  </form>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-2 text-left">Número</th>
+          <th class="px-5 py-2 text-left">Tipo</th>
+          <th class="px-5 py-2 text-left">Fecha</th>
+          <th class="px-5 py-2 text-left">Concepto</th>
+          <th class="px-5 py-2 text-left">Referencia</th>
+          <th class="px-5 py-2 text-center">Estado</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in page %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-2.5">
+            <a href="{% url 'finanzas:poliza_detalle' p.pk %}"
+               class="text-sky-600 hover:underline font-mono text-xs">{{ p.numero }}</a>
+          </td>
+          <td class="px-5 py-2.5">
+            <span class="text-xs px-2 py-0.5 rounded-full
+              {% if p.tipo == 'H' %}bg-green-100 text-green-700
+              {% elif p.tipo == 'E' %}bg-red-100 text-red-700
+              {% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ p.get_tipo_display }}
+            </span>
+          </td>
+          <td class="px-5 py-2.5 text-slate-600">{{ p.fecha }}</td>
+          <td class="px-5 py-2.5 text-slate-700 max-w-xs truncate">{{ p.concepto }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs text-slate-500">{{ p.referencia|default:"—" }}</td>
+          <td class="px-5 py-2.5 text-center">
+            {% if p.cerrado %}
+            <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Cerrada</span>
+            {% else %}
+            <span class="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">Abierta</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="px-5 py-8 text-center text-slate-400">Sin pólizas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page.has_other_pages %}
+  <div class="flex gap-2 justify-center text-sm">
+    {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&tipo={{ tipo }}" class="text-sky-600 hover:underline">← Anterior</a>{% endif %}
+    <span class="text-slate-400">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?page={{ page.next_page_number }}&tipo={{ tipo }}" class="text-sky-600 hover:underline">Siguiente →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

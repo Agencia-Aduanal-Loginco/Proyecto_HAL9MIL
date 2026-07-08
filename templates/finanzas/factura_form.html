@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Nueva factura — {{ referencia.num_refe }}{% endblock %}
+{% block content %}
+<div class="p-6 max-w-3xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div>
+    <p class="text-xs text-slate-500 uppercase tracking-wider">
+      <a href="{% url 'finanzas:referencia_estado' num_refe=referencia.num_refe %}"
+         class="hover:text-sky-600">Estado financiero</a>
+      &rsaquo; Nueva factura
+    </p>
+    <h1 class="text-2xl font-bold text-slate-800 mt-1">Nueva factura borrador</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Ref. {{ referencia.num_refe }} · {{ referencia.nombre_cliente }}</p>
+  </div>
+
+  <!-- Mensajes de error -->
+  {% if form.errors %}
+  <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
+    Corrige los errores del formulario antes de continuar.
+  </div>
+  {% endif %}
+
+  <!-- Emisor (read-only, auto por patente) -->
+  <div class="bg-sky-50 border border-sky-200 rounded-xl p-5">
+    <p class="text-xs text-sky-600 uppercase tracking-wider font-semibold mb-2">Emisor (automático por patente {{ referencia.patente }})</p>
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div>
+        <p class="text-slate-400 text-xs">RFC</p>
+        <p class="font-mono font-semibold text-slate-800">{{ config.rfc }}</p>
+      </div>
+      <div>
+        <p class="text-slate-400 text-xs">Razón social</p>
+        <p class="font-semibold text-slate-800">{{ config.razon_social }}</p>
+      </div>
+      <div>
+        <p class="text-slate-400 text-xs">Régimen fiscal</p>
+        <p class="font-mono text-slate-700">{{ config.regimen_fiscal }}</p>
+      </div>
+      <div>
+        <p class="text-slate-400 text-xs">CP fiscal</p>
+        <p class="font-mono text-slate-700">{{ config.codigo_postal }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saldo de referencia -->
+  <div class="grid grid-cols-3 gap-3">
+    <div class="bg-white border border-slate-200 rounded-xl p-4">
+      <p class="text-xs text-slate-400 mb-1">Total anticipos</p>
+      <p class="text-lg font-bold text-green-600">${{ saldo.total_anticipos|floatformat:2 }}</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-4">
+      <p class="text-xs text-slate-400 mb-1">Total gastos</p>
+      <p class="text-lg font-bold text-red-600">${{ saldo.total_gastos|floatformat:2 }}</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-4">
+      <p class="text-xs text-slate-400 mb-1">Saldo (pendiente de cobro)</p>
+      <p class="text-lg font-bold {% if saldo.saldo < 0 %}text-orange-600{% else %}text-sky-600{% endif %}">
+        ${{ saldo.saldo|floatformat:2 }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <form method="post" class="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+    {% csrf_token %}
+
+    <!-- Receptor -->
+    <div class="p-5 space-y-4">
+      <h2 class="font-semibold text-slate-700">Datos del receptor</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">RFC receptor *</label>
+          {{ form.rfc_receptor }}
+          {% if form.rfc_receptor.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.rfc_receptor.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Nombre / Razón social *</label>
+          {{ form.nombre_receptor }}
+          {% if form.nombre_receptor.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.nombre_receptor.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">CP domicilio fiscal receptor * <span class="text-slate-400">(requerido CFDI 4.0)</span></label>
+          {{ form.domicilio_fiscal_receptor }}
+          {% if form.domicilio_fiscal_receptor.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.domicilio_fiscal_receptor.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Régimen fiscal receptor *</label>
+          {{ form.regimen_fiscal_receptor }}
+          <p class="text-xs text-slate-400 mt-0.5">Ej: 612 = Personas Morales, 616 = Sin obligaciones</p>
+          {% if form.regimen_fiscal_receptor.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.regimen_fiscal_receptor.errors.0 }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Datos CFDI -->
+    <div class="p-5 space-y-4">
+      <h2 class="font-semibold text-slate-700">Datos CFDI</h2>
+      <div class="grid grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Uso CFDI</label>
+          {{ form.uso_cfdi }}
+          <p class="text-xs text-slate-400 mt-0.5">G03 = Gastos en general</p>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Forma de pago</label>
+          {{ form.forma_pago }}
+          <p class="text-xs text-slate-400 mt-0.5">99 = Por definir</p>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Método de pago</label>
+          {{ form.metodo_pago }}
+          <p class="text-xs text-slate-400 mt-0.5">PPD = Parcialidades</p>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Moneda</label>
+          {{ form.moneda }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Concepto e importe -->
+    <div class="p-5 space-y-4">
+      <h2 class="font-semibold text-slate-700">Concepto e importe</h2>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Descripción del concepto *</label>
+        {{ form.concepto_descripcion }}
+        {% if form.concepto_descripcion.errors %}
+        <p class="text-red-500 text-xs mt-1">{{ form.concepto_descripcion.errors.0 }}</p>
+        {% endif %}
+      </div>
+      <div class="grid grid-cols-3 gap-4 items-start">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Importe sin IVA *</label>
+          {{ form.valor_unitario }}
+          {% if monto_sugerido %}
+          <p class="text-xs text-sky-500 mt-0.5">Sugerido por saldo: ${{ monto_sugerido|floatformat:2 }}</p>
+          {% endif %}
+          {% if form.valor_unitario.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.valor_unitario.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3 col-span-2">
+          <p class="text-xs text-slate-400 mb-2">Cálculo estimado (IVA 16%)</p>
+          <div class="text-sm space-y-1 font-mono">
+            <div class="flex justify-between"><span class="text-slate-500">Subtotal</span><span id="lbl-subtotal">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">IVA 16%</span><span id="lbl-iva">—</span></div>
+            <div class="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1 mt-1"><span>Total</span><span id="lbl-total">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="px-5 py-4 flex justify-end gap-3">
+      <a href="{% url 'finanzas:referencia_estado' num_refe=referencia.num_refe %}"
+         class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+        Cancelar
+      </a>
+      <button type="submit"
+              class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors">
+        Crear factura borrador
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<script>
+(function() {
+  var input = document.querySelector('[name="valor_unitario"]');
+  function update() {
+    var v = parseFloat(input.value) || 0;
+    var iva = Math.round(v * 0.16 * 100) / 100;
+    var total = Math.round((v + iva) * 100) / 100;
+    var fmt = function(n) { return '$' + n.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}); };
+    document.getElementById('lbl-subtotal').textContent = fmt(v);
+    document.getElementById('lbl-iva').textContent = fmt(iva);
+    document.getElementById('lbl-total').textContent = fmt(total);
+  }
+  if (input) { input.addEventListener('input', update); update(); }
+})();
+</script>
+{% endblock %}

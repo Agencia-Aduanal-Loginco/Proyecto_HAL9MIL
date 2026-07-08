@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Gastos — Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 space-y-4">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold text-slate-800">Gastos de Referencia</h1>
+  </div>
+
+  <form method="get" class="bg-white rounded-xl p-4 border border-slate-100 flex gap-3">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar por referencia…"
+           class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+    <button type="submit"
+            class="bg-sky-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-sky-700">Buscar</button>
+    {% if q %}<a href="?" class="text-slate-500 text-sm px-3 py-2">Limpiar</a>{% endif %}
+  </form>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-2 text-left">Referencia</th>
+          <th class="px-5 py-2 text-left">Tipo</th>
+          <th class="px-5 py-2 text-left">Concepto</th>
+          <th class="px-5 py-2 text-left">Fecha</th>
+          <th class="px-5 py-2 text-right">Monto</th>
+          <th class="px-5 py-2 text-left">Proveedor</th>
+          <th class="px-5 py-2 text-left">Póliza</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for g in page %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-2.5">
+            <a href="{% url 'finanzas:referencia_estado' num_refe=g.referencia.num_refe %}"
+               class="text-sky-600 hover:underline font-mono text-xs">{{ g.referencia.num_refe }}</a>
+          </td>
+          <td class="px-5 py-2.5">
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{{ g.get_tipo_display }}</span>
+          </td>
+          <td class="px-5 py-2.5 text-slate-700 max-w-xs truncate">{{ g.concepto }}</td>
+          <td class="px-5 py-2.5 text-slate-600">{{ g.fecha }}</td>
+          <td class="px-5 py-2.5 text-right font-mono text-red-700">${{ g.monto|floatformat:2 }}</td>
+          <td class="px-5 py-2.5 text-slate-500 text-xs">{{ g.proveedor|default:"—" }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs">
+            {% if g.poliza %}
+            <a href="{% url 'finanzas:poliza_detalle' g.poliza.pk %}" class="text-sky-600 hover:underline">{{ g.poliza.numero }}</a>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">Sin gastos</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page.has_other_pages %}
+  <div class="flex gap-2 justify-center text-sm">
+    {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ q }}" class="text-sky-600 hover:underline">← Anterior</a>{% endif %}
+    <span class="text-slate-400">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ q }}" class="text-sky-600 hover:underline">Siguiente →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

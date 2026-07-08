@@ -24,6 +24,7 @@ def start():
         return
 
     from .jobs import enviar_reporte_semanal, enviar_reporte_mensual
+    from finanzas.comisiones import calcular_comisiones_mes_actual
 
     scheduler = BackgroundScheduler(timezone='America/Mexico_City')
     scheduler.add_jobstore(DjangoJobStore(), 'default')
@@ -50,8 +51,19 @@ def start():
         jobstore='default',
     )
 
+    scheduler.add_job(
+        calcular_comisiones_mes_actual,
+        trigger='cron',
+        day=1,
+        hour=6,
+        minute=0,
+        id='calcular_comisiones',
+        replace_existing=True,
+        jobstore='default',
+    )
+
     try:
         scheduler.start()
-        logger.info('APScheduler iniciado: semanal (lun 7am) + mensual (día 1, 7am).')
+        logger.info('APScheduler iniciado: semanal (lun 7am) + mensual (día 1, 7am) + comisiones (día 1, 6am).')
     except Exception as e:
         logger.error(f'Error al iniciar APScheduler: {e}')

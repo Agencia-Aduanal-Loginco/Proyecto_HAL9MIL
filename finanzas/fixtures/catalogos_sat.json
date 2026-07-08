@@ -1,0 +1,28 @@
+[
+  {"model": "finanzas.catalogosat", "pk": 1,  "fields": {"catalogo": "c_FormaPago",        "clave": "01", "descripcion": "Efectivo",                        "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 2,  "fields": {"catalogo": "c_FormaPago",        "clave": "03", "descripcion": "Transferencia electrónica",        "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 3,  "fields": {"catalogo": "c_FormaPago",        "clave": "04", "descripcion": "Tarjeta de crédito",               "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 4,  "fields": {"catalogo": "c_FormaPago",        "clave": "28", "descripcion": "Tarjeta de débito",                "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 5,  "fields": {"catalogo": "c_FormaPago",        "clave": "99", "descripcion": "Por definir",                      "vigente": true}},
+
+  {"model": "finanzas.catalogosat", "pk": 6,  "fields": {"catalogo": "c_MetodoPago",       "clave": "PUE", "descripcion": "Pago en una sola exhibición",     "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 7,  "fields": {"catalogo": "c_MetodoPago",       "clave": "PPD", "descripcion": "Pago en parcialidades o diferido", "vigente": true}},
+
+  {"model": "finanzas.catalogosat", "pk": 8,  "fields": {"catalogo": "c_UsoCFDI",          "clave": "G01", "descripcion": "Adquisición de mercancias",       "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 9,  "fields": {"catalogo": "c_UsoCFDI",          "clave": "G03", "descripcion": "Gastos en general",               "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 10, "fields": {"catalogo": "c_UsoCFDI",          "clave": "S01", "descripcion": "Sin efectos fiscales",             "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 11, "fields": {"catalogo": "c_UsoCFDI",          "clave": "P01", "descripcion": "Por definir",                      "vigente": true}},
+
+  {"model": "finanzas.catalogosat", "pk": 12, "fields": {"catalogo": "c_RegimenFiscal",    "clave": "601", "descripcion": "General de Ley Personas Morales",  "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 13, "fields": {"catalogo": "c_RegimenFiscal",    "clave": "612", "descripcion": "Personas Físicas con Actividades Empresariales y Profesionales", "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 14, "fields": {"catalogo": "c_RegimenFiscal",    "clave": "616", "descripcion": "Sin obligaciones fiscales",         "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 15, "fields": {"catalogo": "c_RegimenFiscal",    "clave": "626", "descripcion": "Régimen Simplificado de Confianza", "vigente": true}},
+
+  {"model": "finanzas.catalogosat", "pk": 16, "fields": {"catalogo": "c_TipoDeComprobante","clave": "I",  "descripcion": "Ingreso",                           "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 17, "fields": {"catalogo": "c_TipoDeComprobante","clave": "E",  "descripcion": "Egreso",                            "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 18, "fields": {"catalogo": "c_TipoDeComprobante","clave": "P",  "descripcion": "Pago",                              "vigente": true}},
+
+  {"model": "finanzas.catalogosat", "pk": 19, "fields": {"catalogo": "c_TipoPoliza",       "clave": "1",  "descripcion": "Diario",                            "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 20, "fields": {"catalogo": "c_TipoPoliza",       "clave": "2",  "descripcion": "Haber / Ingreso",                   "vigente": true}},
+  {"model": "finanzas.catalogosat", "pk": 21, "fields": {"catalogo": "c_TipoPoliza",       "clave": "3",  "descripcion": "Egreso",                            "vigente": true}}
+]

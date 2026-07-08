@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}Conciliación bancaria — {{ mes }}/{{ anio }}{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header -->
+  <div>
+    <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas / Bancos</p>
+    <h1 class="text-2xl font-bold text-slate-800">Conciliación bancaria</h1>
+  </div>
+
+  <!-- Mensajes -->
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="px-4 py-3 rounded-lg text-sm
+      {% if m.tags == 'error' %}bg-red-50 text-red-700 border border-red-200
+      {% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %}">
+      {{ m }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Filtros -->
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Cuenta bancaria</label>
+      <select name="cuenta"
+              class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-sky-500">
+        <option value="">— Selecciona —</option>
+        {% for c in cuentas %}
+        <option value="{{ c.pk }}" {% if c.pk == cuenta_id %}selected{% endif %}>
+          {{ c.banco }} — {{ c.nombre }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Mes</label>
+      <select name="mes"
+              class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700">
+        {% for num, nombre in meses %}
+        <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Año</label>
+      <input type="number" name="anio" value="{{ anio }}" min="2000" max="2100"
+             class="w-24 text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700">
+    </div>
+    <button type="submit"
+            class="bg-sky-600 hover:bg-sky-700 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+      Consultar
+    </button>
+  </form>
+
+  {% if cuenta %}
+
+  <!-- Estadísticas -->
+  <div class="grid grid-cols-3 gap-4">
+    <div class="bg-white rounded-xl border border-slate-200 px-5 py-4">
+      <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Total movimientos</p>
+      <p class="text-2xl font-bold text-slate-800">{{ stats.total }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-emerald-200 px-5 py-4">
+      <p class="text-xs text-emerald-600 uppercase tracking-wider mb-1">Conciliados</p>
+      <p class="text-2xl font-bold text-emerald-700">{{ stats.conciliados }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-amber-200 px-5 py-4">
+      <p class="text-xs text-amber-600 uppercase tracking-wider mb-1">Pendientes</p>
+      <p class="text-2xl font-bold {% if stats.pendientes > 0 %}text-amber-600{% else %}text-slate-400{% endif %}">
+        {{ stats.pendientes }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Botón conciliación automática -->
+  {% if stats.pendientes > 0 %}
+  <form method="post" action="{% url 'finanzas:conciliacion_auto' %}">
+    {% csrf_token %}
+    <input type="hidden" name="mes"    value="{{ mes }}">
+    <input type="hidden" name="anio"   value="{{ anio }}">
+    <input type="hidden" name="cuenta" value="{{ cuenta_id }}">
+    <button type="submit"
+            class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+      Conciliar automáticamente ({{ stats.pendientes }} pendientes)
+    </button>
+  </form>
+  {% endif %}
+
+  <!-- Tabla de movimientos -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    {% if movimientos %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500 uppercase border-b border-slate-200">
+          <tr>
+            <th class="px-4 py-3 text-left">Fecha</th>
+            <th class="px-4 py-3 text-left">Descripción</th>
+            <th class="px-4 py-3 text-left">Referencia</th>
+            <th class="px-4 py-3 text-right">Cargo</th>
+            <th class="px-4 py-3 text-right">Abono</th>
+            <th class="px-4 py-3 text-right">Saldo</th>
+            <th class="px-4 py-3 text-center">Estado</th>
+            <th class="px-4 py-3 text-left">Póliza</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for mov in movimientos %}
+          <tr class="hover:bg-slate-50 {% if mov.conciliado %}bg-emerald-50/30{% endif %}">
+            <td class="px-4 py-2.5 text-slate-600 text-xs whitespace-nowrap">{{ mov.fecha }}</td>
+            <td class="px-4 py-2.5 text-slate-700 max-w-xs truncate">{{ mov.descripcion }}</td>
+            <td class="px-4 py-2.5 font-mono text-xs text-slate-400">{{ mov.referencia_banco|default:"—" }}</td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs
+              {% if mov.cargo %}text-red-600 font-semibold{% else %}text-slate-300{% endif %}">
+              {% if mov.cargo %}${{ mov.cargo|floatformat:2 }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs
+              {% if mov.abono %}text-emerald-700 font-semibold{% else %}text-slate-300{% endif %}">
+              {% if mov.abono %}${{ mov.abono|floatformat:2 }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs text-slate-500">
+              {% if mov.saldo is not None %}${{ mov.saldo|floatformat:2 }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+                {% if mov.conciliado %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">
+                {% if mov.conciliado %}Conciliado{% else %}Pendiente{% endif %}
+              </span>
+            </td>
+            <td class="px-4 py-2.5 text-xs font-mono text-slate-500">
+              {% if mov.poliza %}{{ mov.poliza.tipo }} {{ mov.poliza.numero }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-2.5">
+              {% if not mov.conciliado %}
+              <form method="post" action="{% url 'finanzas:confirmar_conciliacion' movimiento_id=mov.pk %}"
+                    class="flex items-center gap-1">
+                {% csrf_token %}
+                <input type="hidden" name="cuenta_id" value="{{ cuenta_id }}">
+                <input type="hidden" name="mes"        value="{{ mes }}">
+                <input type="hidden" name="anio"       value="{{ anio }}">
+                <select name="poliza_id"
+                        class="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 max-w-[140px]">
+                  <option value="">— Póliza —</option>
+                  {% for p in polizas_disponibles %}
+                  <option value="{{ p.pk }}">{{ p.tipo }} {{ p.numero }} ({{ p.fecha }})</option>
+                  {% endfor %}
+                </select>
+                <button type="submit"
+                        class="bg-sky-600 hover:bg-sky-700 text-white text-xs px-2 py-1 rounded transition-colors">
+                  OK
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-12 text-center text-sm text-slate-400">
+      Sin movimientos para {{ cuenta.banco }} — {{ mes }}/{{ anio }}.
+      Importa un estado de cuenta con:<br>
+      <code class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded mt-1 inline-block">
+        python manage.py importar_estado_cuenta --cuenta-id {{ cuenta.pk }} --archivo estado.csv
+      </code>
+    </p>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="bg-slate-50 border border-slate-200 rounded-xl px-5 py-10 text-center text-slate-400 text-sm">
+    Selecciona una cuenta bancaria y un periodo para consultar.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
