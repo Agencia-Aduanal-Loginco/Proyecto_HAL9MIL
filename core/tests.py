@@ -77,3 +77,8 @@ class ModuloRequiredTests(TestCase):
         response = _vista_de_prueba(request)
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.url.startswith('/login/'))
+
+
+class GrupoFinanzasMigrationTests(TestCase):
+    def test_grupo_finanzas_existe_tras_migrar(self):
+        self.assertTrue(Group.objects.filter(name='Finanzas').exists())
