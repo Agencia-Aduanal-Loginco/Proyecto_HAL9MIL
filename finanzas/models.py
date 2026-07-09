@@ -203,6 +203,17 @@ class XMLProveedor(models.Model):
     xml_file = models.FileField(upload_to='xmls_proveedores/%Y/%m/')
     cargado_en = models.DateTimeField(auto_now_add=True)
     procesado = models.BooleanField(default=False)  # True si ya generó GastoReferencia
+    ESTADO_ASIGNACION = [
+        ('ASIGNADO', 'Asignado'),
+        ('PENDIENTE', 'Pendiente'),
+    ]
+    pdf_file = models.FileField(
+        upload_to='xmls_proveedores/%Y/%m/', null=True, blank=True
+    )
+    estado_asignacion = models.CharField(
+        max_length=10, choices=ESTADO_ASIGNACION, default='PENDIENTE'
+    )
+    motivo_pendiente = models.CharField(max_length=200, blank=True)
 
     class Meta:
         ordering = ['-fecha_emision']
