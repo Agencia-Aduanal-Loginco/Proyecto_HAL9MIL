@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from referencias.models import Referencia
 from .cfdi_parser import parsear_cfdi
+from .carga_xml import crear_gasto_desde_xml
 from .balanza import calcular_balanza, totales_balanza
 from .cierre import CierreError, ejecutar_cierre_mensual
 from .comisiones import calcular_comisiones_mes
@@ -206,29 +207,15 @@ def subir_xml_proveedor(request, num_refe):
         tipo_comprobante=datos['tipo'],
         concepto_principal=datos['concepto_principal'],
         xml_file=xml_file,
+        estado_asignacion='ASIGNADO',
     )
 
     # Crear GastoReferencia automático si el usuario lo solicitó y el XML es tipo Ingreso
     if request.POST.get('crear_gasto') == '1' and datos['tipo'] == 'I':
-        gasto = GastoReferencia.objects.create(
-            referencia=referencia,
-            tipo='OTROS',
-            concepto=datos['concepto_principal'] or f'Factura {datos["rfc_emisor"]}',
-            fecha=datos['fecha'].date(),
-            monto=datos['total'],
-            moneda=datos['moneda'],
-            proveedor=datos['nombre_emisor'],
-            xml_proveedor=xml_obj,
-            registrado_por=request.user,
-        )
-        poliza = generar_poliza_gasto(gasto)
-        gasto.poliza = poliza
-        gasto.save(update_fields=['poliza'])
-        xml_obj.procesado = True
-        xml_obj.save(update_fields=['procesado'])
+        gasto = crear_gasto_desde_xml(xml_obj, request.user, tipo='OTROS')
         messages.success(
             request,
-            f'XML cargado · Gasto ${datos["total"]} registrado · Póliza {poliza.numero} generada.'
+            f'XML cargado · Gasto ${datos["total"]} registrado · Póliza {gasto.poliza.numero} generada.'
         )
     else:
         messages.success(request, f'XML cargado correctamente. UUID: {datos["uuid"]}')
