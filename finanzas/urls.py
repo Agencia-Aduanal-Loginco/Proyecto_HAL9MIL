@@ -37,6 +37,9 @@ urlpatterns = [
     path('conciliacion/', views.conciliacion_view, name='conciliacion'),
     path('conciliacion/auto/', views.conciliacion_auto, name='conciliacion_auto'),
     path('conciliacion/confirmar/<int:movimiento_id>/', views.confirmar_conciliacion, name='confirmar_conciliacion'),
+    # Carga masiva de XMLs de proveedor
+    path('xml/carga-masiva/', views.carga_masiva_xml, name='carga_masiva_xml'),
+    path('xml/pendientes/', views.xml_pendientes, name='xml_pendientes'),
     # Rutas por referencia — <path:> porque num_refe contiene "/"  (ej. LCLF0331/26)
     path('referencias/<path:num_refe>/estado/', views.referencia_estado_financiero, name='referencia_estado'),
     path('referencias/<path:num_refe>/anticipo/', views.anticipo_crear, name='anticipo_crear'),

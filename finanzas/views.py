@@ -1,5 +1,6 @@
 import os
 import tempfile
+import zipfile
 from decimal import Decimal
 
 from django.contrib import messages
@@ -10,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from referencias.models import Referencia
 from .cfdi_parser import parsear_cfdi
-from .carga_xml import crear_gasto_desde_xml
+from .carga_xml import crear_gasto_desde_xml, expandir_subidas, procesar_lote
 from .balanza import calcular_balanza, totales_balanza
 from .cierre import CierreError, ejecutar_cierre_mensual
 from .comisiones import calcular_comisiones_mes
@@ -1054,3 +1055,46 @@ def polizas_exportar_xml(request):
     response = HttpResponse(xml, content_type='application/xml')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+# ── Carga masiva de XMLs de proveedor ──────────────────────────────────────
+
+@modulo_required('Finanzas')
+def carga_masiva_xml(request):
+    if request.method != 'POST':
+        return render(request, 'finanzas/carga_masiva_form.html')
+
+    archivos = request.FILES.getlist('archivos')
+    if not archivos:
+        messages.error(request, 'No se seleccionó ningún archivo.')
+        return redirect('finanzas:carga_masiva_xml')
+
+    try:
+        files = expandir_subidas(archivos)
+    except zipfile.BadZipFile:
+        messages.error(request, 'El archivo ZIP es inválido o está dañado.')
+        return redirect('finanzas:carga_masiva_xml')
+
+    resultados = procesar_lote(files, request.user)
+    if not resultados:
+        messages.error(request, 'No se encontró ningún archivo XML en lo subido.')
+        return redirect('finanzas:carga_masiva_xml')
+
+    conteos = {
+        'asignados': sum(1 for r in resultados if r.estado == 'ASIGNADO'),
+        'pendientes': sum(1 for r in resultados if r.estado == 'PENDIENTE'),
+        'duplicados': sum(1 for r in resultados if r.estado == 'DUPLICADO'),
+        'errores': sum(1 for r in resultados if r.estado == 'ERROR'),
+    }
+    return render(request, 'finanzas/carga_masiva_resultado.html', {
+        'resultados': resultados,
+        'conteos': conteos,
+    })
+
+
+@modulo_required('Finanzas')
+def xml_pendientes(request):
+    pendientes = XMLProveedor.objects.filter(
+        estado_asignacion='PENDIENTE'
+    ).order_by('-cargado_en')
+    return render(request, 'finanzas/xml_pendientes.html', {'pendientes': pendientes})

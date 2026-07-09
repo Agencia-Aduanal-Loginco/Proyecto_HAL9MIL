@@ -4,10 +4,11 @@ import zipfile
 from datetime import datetime
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from referencias.models import Contenedor, Referencia
 
@@ -140,3 +141,73 @@ class ProcesarLoteTests(TestCase):
         estados = {r.nombre: r.estado for r in resultados}
         self.assertEqual(estados['roto.xml'], 'ERROR')
         self.assertEqual(estados['lct.xml'], 'ASIGNADO')
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class CargaMasivaViewTests(TestCase):
+    fixtures = ['plan_cuentas_inicial.json']
+
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.usuario = User.objects.create_user('fin_carga', password='x')
+        self.usuario.groups.add(grupo)
+        self.client.force_login(self.usuario)
+        self.ref = Referencia.objects.create(
+            num_refe='LCRR1126/26', patente='1656', prefijo='LCRR',
+            num_pedimento='6001126',
+        )
+
+    def test_get_muestra_formulario(self):
+        response = self.client.get(reverse('finanzas:carga_masiva_xml'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Carga masiva')
+
+    def test_post_zip_procesa_y_muestra_resumen(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as zf:
+            zf.writestr('lct.xml', cfdi_lct())
+            zf.writestr('lct.pdf', b'%PDF')
+        archivo = SimpleUploadedFile('facturas.zip', buf.getvalue())
+        response = self.client.post(
+            reverse('finanzas:carga_masiva_xml'), {'archivos': [archivo]}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'LCRR1126/26')
+        xml_obj = XMLProveedor.objects.get()
+        self.assertEqual(xml_obj.estado_asignacion, 'ASIGNADO')
+        self.assertTrue(xml_obj.pdf_file)
+
+    def test_post_archivos_sueltos(self):
+        archivos = [
+            SimpleUploadedFile('lct.xml', cfdi_lct()),
+            SimpleUploadedFile('lct.pdf', b'%PDF'),
+        ]
+        response = self.client.post(
+            reverse('finanzas:carga_masiva_xml'), {'archivos': archivos}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(XMLProveedor.objects.count(), 1)
+
+    def test_post_sin_xmls_muestra_error(self):
+        archivo = SimpleUploadedFile('nota.txt', b'hola')
+        response = self.client.post(
+            reverse('finanzas:carga_masiva_xml'), {'archivos': [archivo]},
+            follow=True,
+        )
+        self.assertContains(response, 'ningún archivo XML')
+        self.assertEqual(XMLProveedor.objects.count(), 0)
+
+    def test_post_zip_invalido_muestra_error(self):
+        archivo = SimpleUploadedFile('roto.zip', b'no soy zip')
+        response = self.client.post(
+            reverse('finanzas:carga_masiva_xml'), {'archivos': [archivo]},
+            follow=True,
+        )
+        self.assertContains(response, 'ZIP')
+        self.assertEqual(XMLProveedor.objects.count(), 0)
+
+    def test_usuario_sin_grupo_es_redirigido(self):
+        otro = User.objects.create_user('sin_grupo', password='x')
+        self.client.force_login(otro)
+        response = self.client.get(reverse('finanzas:carga_masiva_xml'))
+        self.assertRedirects(response, reverse('dashboard'))

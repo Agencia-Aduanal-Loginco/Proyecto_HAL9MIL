@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Carga masiva de XMLs · Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 max-w-2xl">
+
+  <div class="mb-6">
+    <a href="{% url 'finanzas:dashboard' %}" class="text-sky-600 hover:underline text-sm">← Finanzas</a>
+    <h1 class="text-2xl font-bold text-slate-800 mt-2">Carga masiva de XMLs de proveedor</h1>
+    <p class="text-slate-500 text-sm">
+      Sube el ZIP del proveedor (LCT o APM) o los archivos XML/PDF sueltos.
+      Cada factura se liga automáticamente a su referencia por patente,
+      pedimento y contenedor, y genera su gasto de maniobras.
+    </p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data"
+        class="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">
+        Archivos (ZIP, XML y PDF) <span class="text-red-500">*</span>
+      </label>
+      <input type="file" name="archivos" multiple accept=".zip,.xml,.pdf"
+             class="block w-full text-sm text-slate-600">
+    </div>
+    <div class="pt-2 flex gap-3">
+      <button type="submit"
+              class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors">
+        Procesar
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
