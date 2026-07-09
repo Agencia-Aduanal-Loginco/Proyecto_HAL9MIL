@@ -294,5 +294,7 @@ plan_owa.md
 OpenWA.md
 #sync_agent/
 CorOpenWA.md
+Facturas*.zip
+invoices-*.zip
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,django
