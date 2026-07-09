@@ -51,3 +51,26 @@ class ExtractorLctTests(SimpleTestCase):
     def test_rfc_no_soportado_devuelve_none(self):
         xml = cfdi_lct().replace(b'LCT030408U39', b'XXX010101XXX')
         self.assertIsNone(extraer_datos_aduanales(ET.fromstring(xml)))
+
+
+class ExtractorApmTests(SimpleTestCase):
+    def _extraer(self, **kwargs):
+        return extraer_datos_aduanales(ET.fromstring(cfdi_apm(**kwargs)))
+
+    def test_extrae_pedimento_patente_contenedor_y_bl(self):
+        datos = self._extraer()
+        self.assertEqual(datos.pedimento, '6000517')
+        # AGENTEADUANAL = "1627/LUIS FELIPE VAZQUEZ DIAZ" → patente es el prefijo
+        self.assertEqual(datos.patente, '1627')
+        # Contenedor: prefijo "XXXX9999999-" de la Descripcion de los conceptos
+        self.assertEqual(datos.contenedor, 'BEAU4729066')
+        self.assertEqual(datos.bl, 'HLCUSHA2604CHSA6')
+
+    def test_concepto_sin_prefijo_de_contenedor_da_contenedor_vacio(self):
+        # "SERVICIO GENERAL" no cumple el patrón XXXX9999999-
+        datos = self._extraer(contenedor='SERVICIO GENERAL')
+        self.assertEqual(datos.contenedor, '')
+
+    def test_agente_aduanal_sin_diagonal_se_usa_completo(self):
+        datos = self._extraer(agente='1627')
+        self.assertEqual(datos.patente, '1627')

@@ -62,4 +62,29 @@ def _extraer_lct(root) -> DatosAduanales:
     )
 
 
-_EXTRACTORES = {RFC_LCT: _extraer_lct}
+def _extraer_apm(root) -> DatosAduanales:
+    # Addenda Edicom: <customized><APMTLZC><PEDIMENTO>... (con namespace default)
+    campos = {}
+    for el in root.iter():
+        if el.tag.endswith('}APMTLZC') or el.tag == 'APMTLZC':
+            for hijo in el:
+                local = hijo.tag.split('}')[-1]
+                campos[local] = (hijo.text or '').strip()
+            break
+    patente = campos.get('AGENTEADUANAL', '').split('/')[0].strip()
+    # El contenedor viene como prefijo en la Descripcion de cada concepto
+    contenedor = ''
+    for concepto in root.iter(f'{{{_ns(root)}}}Concepto'):
+        m = RE_CONTENEDOR.match(concepto.get('Descripcion') or '')
+        if m:
+            contenedor = m.group(1)
+            break
+    return DatosAduanales(
+        patente=patente,
+        pedimento=campos.get('PEDIMENTO', ''),
+        contenedor=contenedor,
+        bl=campos.get('CONOCIMIENTO', ''),
+    )
+
+
+_EXTRACTORES = {RFC_LCT: _extraer_lct, RFC_APM: _extraer_apm}
