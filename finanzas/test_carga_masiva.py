@@ -255,3 +255,14 @@ class XmlPendientesViewTests(TestCase):
         self.xml_obj.refresh_from_db()
         self.assertIsNone(self.xml_obj.referencia)
         self.assertContains(response, 'No existe la referencia')
+
+
+class DashboardEnlacesTests(TestCase):
+    def test_dashboard_enlaza_carga_masiva_y_pendientes(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        usuario = User.objects.create_user('fin_dash', password='x')
+        usuario.groups.add(grupo)
+        self.client.force_login(usuario)
+        response = self.client.get(reverse('finanzas:dashboard'))
+        self.assertContains(response, reverse('finanzas:carga_masiva_xml'))
+        self.assertContains(response, reverse('finanzas:xml_pendientes'))
