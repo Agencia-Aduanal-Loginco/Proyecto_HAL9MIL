@@ -234,6 +234,19 @@ class XmlPendientesViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'pedimento 7777777')
 
+    def test_lista_muestra_enlace_ver_pdf_cuando_hay_pdf(self):
+        self.xml_obj.pdf_file.save('prueba.pdf', ContentFile(b'%PDF'), save=True)
+        response = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertContains(
+            response, reverse('finanzas:xml_proveedor_ver_pdf', args=[self.xml_obj.pk])
+        )
+
+    def test_lista_no_muestra_enlace_sin_pdf(self):
+        response = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertNotContains(
+            response, reverse('finanzas:xml_proveedor_ver_pdf', args=[self.xml_obj.pk])
+        )
+
     def test_asignar_manualmente_liga_y_genera_gasto(self):
         response = self.client.post(reverse('finanzas:xml_pendientes'), {
             'xml_id': self.xml_obj.pk,
@@ -255,6 +268,73 @@ class XmlPendientesViewTests(TestCase):
         self.xml_obj.refresh_from_db()
         self.assertIsNone(self.xml_obj.referencia)
         self.assertContains(response, 'No existe la referencia')
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class XmlProveedorVerPdfViewTests(TestCase):
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.usuario = User.objects.create_user('fin_pdf', password='x')
+        self.usuario.groups.add(grupo)
+        self.client.force_login(self.usuario)
+
+    def test_devuelve_el_pdf_cuando_existe(self):
+        xml_obj = _crear_xml_proveedor()
+        xml_obj.pdf_file.save('prueba.pdf', ContentFile(b'%PDF'), save=True)
+        response = self.client.get(
+            reverse('finanzas:xml_proveedor_ver_pdf', args=[xml_obj.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_404_cuando_no_tiene_pdf(self):
+        xml_obj = _crear_xml_proveedor()
+        response = self.client.get(
+            reverse('finanzas:xml_proveedor_ver_pdf', args=[xml_obj.pk])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_usuario_sin_grupo_es_redirigido(self):
+        xml_obj = _crear_xml_proveedor()
+        xml_obj.pdf_file.save('prueba.pdf', ContentFile(b'%PDF'), save=True)
+        otro = User.objects.create_user('sin_grupo_pdf', password='x')
+        self.client.force_login(otro)
+        response = self.client.get(
+            reverse('finanzas:xml_proveedor_ver_pdf', args=[xml_obj.pk])
+        )
+        self.assertRedirects(response, reverse('dashboard'))
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ReferenciaEstadoPdfLinkTests(TestCase):
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.usuario = User.objects.create_user('fin_ref_pdf', password='x')
+        self.usuario.groups.add(grupo)
+        self.client.force_login(self.usuario)
+        self.ref = Referencia.objects.create(
+            num_refe='LCRR1126/26', patente='1656', prefijo='LCRR',
+        )
+
+    def test_muestra_enlace_ver_pdf_cuando_hay_pdf(self):
+        xml_obj = _crear_xml_proveedor(referencia=self.ref)
+        xml_obj.pdf_file.save('prueba.pdf', ContentFile(b'%PDF'), save=True)
+        response = self.client.get(
+            reverse('finanzas:referencia_estado', kwargs={'num_refe': self.ref.num_refe})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse('finanzas:xml_proveedor_ver_pdf', args=[xml_obj.pk])
+        )
+
+    def test_no_muestra_enlace_sin_pdf(self):
+        xml_obj = _crear_xml_proveedor(referencia=self.ref)
+        response = self.client.get(
+            reverse('finanzas:referencia_estado', kwargs={'num_refe': self.ref.num_refe})
+        )
+        self.assertNotContains(
+            response, reverse('finanzas:xml_proveedor_ver_pdf', args=[xml_obj.pk])
+        )
 
 
 class DashboardEnlacesTests(TestCase):

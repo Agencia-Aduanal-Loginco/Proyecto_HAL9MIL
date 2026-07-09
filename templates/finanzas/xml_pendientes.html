@@ -22,6 +22,7 @@
           <th class="px-4 py-3">Fecha</th>
           <th class="px-4 py-3">Total</th>
           <th class="px-4 py-3">Motivo</th>
+          <th class="px-4 py-3">PDF</th>
           <th class="px-4 py-3">Asignar a referencia</th>
         </tr>
       </thead>
@@ -33,6 +34,14 @@
           <td class="px-4 py-2">{{ xml.fecha_emision|date:'Y-m-d' }}</td>
           <td class="px-4 py-2">${{ xml.total }}</td>
           <td class="px-4 py-2 text-amber-700 text-xs">{{ xml.motivo_pendiente }}</td>
+          <td class="px-4 py-2">
+            {% if xml.pdf_file %}
+            <a href="{% url 'finanzas:xml_proveedor_ver_pdf' xml.pk %}" target="_blank"
+               class="text-sky-600 hover:underline text-xs">Ver PDF</a>
+            {% else %}
+            <span class="text-slate-300 text-xs">—</span>
+            {% endif %}
+          </td>
           <td class="px-4 py-2">
             <form method="post" class="flex gap-2">
               {% csrf_token %}

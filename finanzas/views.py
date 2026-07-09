@@ -7,6 +7,7 @@ from django.contrib import messages
 from core.permisos import modulo_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery, Sum
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from referencias.models import Referencia
@@ -1122,3 +1123,11 @@ def xml_pendientes(request):
         estado_asignacion='PENDIENTE'
     ).order_by('-cargado_en')
     return render(request, 'finanzas/xml_pendientes.html', {'pendientes': pendientes})
+
+
+@modulo_required('Finanzas')
+def xml_proveedor_ver_pdf(request, pk):
+    xml_obj = get_object_or_404(XMLProveedor, pk=pk)
+    if not xml_obj.pdf_file:
+        raise Http404('Este XML no tiene un PDF asociado.')
+    return FileResponse(xml_obj.pdf_file.open('rb'), content_type='application/pdf')

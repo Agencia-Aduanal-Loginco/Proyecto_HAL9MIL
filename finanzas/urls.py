@@ -40,6 +40,7 @@ urlpatterns = [
     # Carga masiva de XMLs de proveedor
     path('xml/carga-masiva/', views.carga_masiva_xml, name='carga_masiva_xml'),
     path('xml/pendientes/', views.xml_pendientes, name='xml_pendientes'),
+    path('xml-proveedor/<int:pk>/pdf/', views.xml_proveedor_ver_pdf, name='xml_proveedor_ver_pdf'),
     # Rutas por referencia — <path:> porque num_refe contiene "/"  (ej. LCLF0331/26)
     path('referencias/<path:num_refe>/estado/', views.referencia_estado_financiero, name='referencia_estado'),
     path('referencias/<path:num_refe>/anticipo/', views.anticipo_crear, name='anticipo_crear'),

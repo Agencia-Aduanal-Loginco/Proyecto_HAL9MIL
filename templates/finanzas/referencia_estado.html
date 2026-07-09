@@ -130,7 +130,8 @@
             <th class="text-left py-1 pr-4">Concepto</th>
             <th class="text-right py-1 pr-4">Total</th>
             <th class="text-left py-1 pr-4">Tipo</th>
-            <th class="text-center py-1">Procesado</th>
+            <th class="text-center py-1 pr-4">Procesado</th>
+            <th class="text-left py-1">PDF</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -148,9 +149,17 @@
                 {{ xml.tipo_comprobante }}
               </span>
             </td>
-            <td class="py-1.5 text-center">
+            <td class="py-1.5 pr-4 text-center">
               {% if xml.procesado %}
               <span class="text-green-600">✓</span>
+              {% else %}
+              <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+            <td class="py-1.5">
+              {% if xml.pdf_file %}
+              <a href="{% url 'finanzas:xml_proveedor_ver_pdf' xml.pk %}" target="_blank"
+                 class="text-sky-600 hover:underline">Ver PDF</a>
               {% else %}
               <span class="text-slate-300">—</span>
               {% endif %}
