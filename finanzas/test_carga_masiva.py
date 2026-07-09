@@ -211,3 +211,47 @@ class CargaMasivaViewTests(TestCase):
         self.client.force_login(otro)
         response = self.client.get(reverse('finanzas:carga_masiva_xml'))
         self.assertRedirects(response, reverse('dashboard'))
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class XmlPendientesViewTests(TestCase):
+    fixtures = ['plan_cuentas_inicial.json']
+
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.usuario = User.objects.create_user('fin_pend', password='x')
+        self.usuario.groups.add(grupo)
+        self.client.force_login(self.usuario)
+        self.ref = Referencia.objects.create(
+            num_refe='LCRR1126/26', patente='1656', prefijo='LCRR',
+        )
+        self.xml_obj = _crear_xml_proveedor(
+            motivo_pendiente='sin referencia para patente 1656 / pedimento 7777777',
+        )
+
+    def test_lista_muestra_pendientes_con_motivo(self):
+        response = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'pedimento 7777777')
+
+    def test_asignar_manualmente_liga_y_genera_gasto(self):
+        response = self.client.post(reverse('finanzas:xml_pendientes'), {
+            'xml_id': self.xml_obj.pk,
+            'num_refe': 'LCRR1126/26',
+        }, follow=True)
+        self.xml_obj.refresh_from_db()
+        self.assertEqual(self.xml_obj.referencia, self.ref)
+        self.assertEqual(self.xml_obj.estado_asignacion, 'ASIGNADO')
+        self.assertEqual(self.xml_obj.motivo_pendiente, '')
+        gasto = GastoReferencia.objects.get()
+        self.assertEqual(gasto.tipo, 'MANIOBRAS')
+        self.assertContains(response, 'asignado')
+
+    def test_referencia_inexistente_muestra_error(self):
+        response = self.client.post(reverse('finanzas:xml_pendientes'), {
+            'xml_id': self.xml_obj.pk,
+            'num_refe': 'NOEXISTE/99',
+        }, follow=True)
+        self.xml_obj.refresh_from_db()
+        self.assertIsNone(self.xml_obj.referencia)
+        self.assertContains(response, 'No existe la referencia')

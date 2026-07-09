@@ -1094,6 +1094,30 @@ def carga_masiva_xml(request):
 
 @modulo_required('Finanzas')
 def xml_pendientes(request):
+    if request.method == 'POST':
+        xml_obj = get_object_or_404(
+            XMLProveedor,
+            pk=request.POST.get('xml_id'),
+            estado_asignacion='PENDIENTE',
+        )
+        num_refe = request.POST.get('num_refe', '').strip()
+        referencia = Referencia.objects.filter(num_refe=num_refe).first()
+        if referencia is None:
+            messages.error(request, f'No existe la referencia "{num_refe}".')
+        else:
+            xml_obj.referencia = referencia
+            xml_obj.estado_asignacion = 'ASIGNADO'
+            xml_obj.motivo_pendiente = ''
+            xml_obj.save(update_fields=[
+                'referencia', 'estado_asignacion', 'motivo_pendiente',
+            ])
+            if xml_obj.tipo_comprobante == 'I' and not xml_obj.procesado:
+                crear_gasto_desde_xml(xml_obj, request.user)
+            messages.success(
+                request, f'XML asignado a {referencia.num_refe} y gasto generado.'
+            )
+        return redirect('finanzas:xml_pendientes')
+
     pendientes = XMLProveedor.objects.filter(
         estado_asignacion='PENDIENTE'
     ).order_by('-cargado_en')
