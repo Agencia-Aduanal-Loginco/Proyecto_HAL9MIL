@@ -17,9 +17,6 @@ def _decimal(value: str) -> Decimal:
 def parsear_cfdi(xml_path: str) -> dict:
     """
     Parsea CFDI 3.3 o 4.0 desde una ruta de archivo.
-    Retorna dict con:
-        uuid, fecha (datetime), rfc_emisor, nombre_emisor, rfc_receptor,
-        subtotal, iva, total (Decimal), moneda, tipo, concepto_principal
     Lanza ValueError si el XML no es un CFDI timbrado válido.
     """
     try:
@@ -27,7 +24,16 @@ def parsear_cfdi(xml_path: str) -> dict:
         root = tree.getroot()
     except ET.ParseError as e:
         raise ValueError(f'XML malformado: {e}')
+    return parsear_cfdi_root(root)
 
+
+def parsear_cfdi_root(root) -> dict:
+    """
+    Igual que parsear_cfdi pero recibe el elemento raíz ya parseado.
+    Retorna dict con:
+        uuid, fecha (datetime), rfc_emisor, nombre_emisor, rfc_receptor,
+        subtotal, iva, total (Decimal), moneda, tipo, concepto_principal
+    """
     # Detectar versión por namespace del elemento raíz
     if NS_CFDI4 in root.tag:
         ns = NS_CFDI4
