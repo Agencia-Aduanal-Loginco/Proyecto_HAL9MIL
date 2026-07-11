@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     Anticipo, CatalogoSAT, CierreMensual, ComisionReferencia, ConfiguracionFiscal,
     ConceptoFactura, CuentaBancaria, CuentaContable, DoctoRelacionado, Factura,
-    GastoReferencia, MovimientoBancario, Pago, PartidaPoliza, PolizaContable, XMLProveedor,
+    GastoReferencia, MovimientoBancario, Pago, PartidaPoliza, PolizaContable,
+    RecordatorioCobranza, XMLProveedor,
 )
 
 
@@ -216,3 +217,11 @@ class ComisionReferenciaAdmin(admin.ModelAdmin):
     def comision_fmt(self, obj):
         return f'${obj.monto_comision:,.2f}'
     comision_fmt.short_description = 'Comisión'
+
+
+@admin.register(RecordatorioCobranza)
+class RecordatorioCobranzaAdmin(admin.ModelAdmin):
+    list_display  = ('factura', 'tipo', 'enviado_en', 'enviado_por', 'exitoso')
+    list_filter   = ('tipo', 'exitoso')
+    search_fields = ('factura__nombre_receptor', 'factura__rfc_receptor')
+    readonly_fields = ('enviado_en',)
