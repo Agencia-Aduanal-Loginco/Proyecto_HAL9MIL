@@ -53,6 +53,7 @@ def ejecutar_cobranza_automatica():
 
             tipos_enviados = set(
                 factura.recordatorios
+                .filter(exitoso=True)
                 .exclude(tipo='manual')
                 .values_list('tipo', flat=True)
             )
