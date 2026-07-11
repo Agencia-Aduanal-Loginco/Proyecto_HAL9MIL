@@ -1163,9 +1163,8 @@ def cobranza_enviar(request, cve_cliente):
     from clientes.models import Cliente
     from .cobranza import enviar_estado_cuenta_cliente
 
-    try:
-        cliente = Cliente.objects.get(cve_cliente=cve_cliente)
-    except Cliente.DoesNotExist:
+    cliente = Cliente.objects.filter(cve_cliente=cve_cliente).first()
+    if not cliente:
         messages.error(request, 'Cliente no encontrado.')
         return redirect('finanzas:cobranza_list')
 
