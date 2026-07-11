@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estado de Cuenta — Reiki Logística</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0; color: #1e293b; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+    .header { background: #0ea5e9; padding: 28px 32px; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; }
+    .header p { margin: 4px 0 0; color: #bae6fd; font-size: 13px; }
+    .body { padding: 32px; }
+    .intro { font-size: 14px; color: #475569; margin-bottom: 24px; line-height: 1.6; }
+    .intro.urgente { color: #b91c1c; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
+    th { background: #f1f5f9; text-align: left; padding: 10px 12px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+    .mono { font-family: monospace; }
+    .text-right { text-align: right; }
+    .saldo-total { background: #f0f9ff; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+    .saldo-total .label { font-size: 13px; color: #475569; }
+    .saldo-total .amount { font-size: 20px; font-weight: 700; color: #0369a1; font-family: monospace; }
+    .footer-note { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+    .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>Reiki Logística</h1>
+    <p>Estado de Cuenta · Agencia Aduanal · Patente 3772</p>
+  </div>
+
+  <div class="body">
+
+    <p class="intro{% if tipo == '60d' %} urgente{% endif %}">
+      Estimado(a) <strong>{{ cliente.nombre_cliente }}</strong>,<br><br>
+      {% if tipo == '15d' %}
+        Le informamos que tiene facturas con saldo pendiente de pago. Le enviamos este recordatorio para facilitar la gestión de su cuenta.
+      {% elif tipo == '30d' %}
+        Le solicitamos atender el pago de las siguientes facturas, las cuales llevan más de 30 días con saldo pendiente.
+      {% elif tipo == '60d' %}
+        Le comunicamos de manera urgente que las siguientes facturas tienen más de 60 días con saldo vencido. Le pedimos realizar el pago a la brevedad posible.
+      {% else %}
+        Le enviamos el estado de cuenta actualizado con los saldos pendientes a la fecha.
+      {% endif %}
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Folio</th>
+          <th>Fecha</th>
+          <th class="text-right">Total</th>
+          <th class="text-right">Saldo pendiente</th>
+          <th class="text-right">Días</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fi in facturas_info %}
+        <tr>
+          <td class="mono">{{ fi.factura.serie }}{{ fi.factura.folio }}</td>
+          <td>{{ fi.fecha_base }}</td>
+          <td class="text-right mono">${{ fi.factura.total|floatformat:2 }}</td>
+          <td class="text-right mono"><strong>${{ fi.saldo|floatformat:2 }}</strong></td>
+          <td class="text-right">{{ fi.dias }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="saldo-total">
+      <span class="label">Total adeudado</span>
+      <span class="amount">${{ saldo_total|floatformat:2 }} MXN</span>
+    </div>
+
+    <p class="footer-note">
+      Para realizar su pago o aclarar cualquier duda, comuníquese con nosotros directamente.<br>
+      Este es un mensaje generado automáticamente por el sistema de Reiki Logística.
+    </p>
+  </div>
+
+  <div class="footer">
+    Reiki Logística — Agencia Aduanal — Patente 3772<br>
+    Este correo fue enviado a {{ cliente.email_cobranza }}
+  </div>
+</div>
+</body>
+</html>
