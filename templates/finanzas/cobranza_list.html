@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block title %}Cobranza — Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas</p>
+      <h1 class="text-2xl font-bold text-slate-800">Cobranza de Honorarios</h1>
+      <p class="text-slate-500 text-sm mt-0.5">Facturas timbradas con saldo pendiente</p>
+    </div>
+    <a href="{% url 'finanzas:facturas_list' %}"
+       class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Ver todas las facturas
+    </a>
+  </div>
+
+  <!-- KPIs -->
+  {% if items %}
+  <div class="grid grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Clientes con saldo</p>
+      <p class="text-3xl font-bold text-slate-800 mt-1">{{ num_clientes }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Total cartera vencida</p>
+      <p class="text-3xl font-bold text-red-600 mt-1 font-mono">${{ saldo_total|floatformat:2 }}</p>
+    </div>
+  </div>
+
+  <!-- Tabla por cliente -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-3 text-left">Cliente</th>
+          <th class="px-5 py-3 text-center">Facturas</th>
+          <th class="px-5 py-3 text-right">Saldo total</th>
+          <th class="px-5 py-3 text-center">Antigüedad</th>
+          <th class="px-5 py-3 text-left">Último recordatorio</th>
+          <th class="px-5 py-3 text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for item in items %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3">
+            <p class="font-medium text-slate-800">{{ item.nombre }}</p>
+            <p class="text-xs text-slate-400 font-mono">{{ item.cve_cliente }}</p>
+          </td>
+          <td class="px-5 py-3 text-center text-slate-600">{{ item.facturas|length }}</td>
+          <td class="px-5 py-3 text-right font-mono font-semibold text-red-600">
+            ${{ item.saldo_total|floatformat:2 }}
+          </td>
+          <td class="px-5 py-3 text-center">
+            {% if item.dias_mayor >= 60 %}
+              <span class="bg-red-100 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full">{{ item.dias_mayor }}d — Urgente</span>
+            {% elif item.dias_mayor >= 30 %}
+              <span class="bg-orange-100 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full">{{ item.dias_mayor }}d — Vencida</span>
+            {% elif item.dias_mayor >= 15 %}
+              <span class="bg-yellow-100 text-yellow-700 text-xs font-medium px-2.5 py-1 rounded-full">{{ item.dias_mayor }}d — Por vencer</span>
+            {% else %}
+              <span class="bg-slate-100 text-slate-600 text-xs font-medium px-2.5 py-1 rounded-full">{{ item.dias_mayor }}d — Reciente</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 text-slate-500 text-xs">
+            {% if item.ultimo_recordatorio %}
+              {{ item.ultimo_recordatorio|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="text-slate-300">Nunca enviado</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 text-center">
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="toggleDetalle('detalle-{{ forloop.counter }}')"
+                      class="text-sky-600 hover:text-sky-800 text-xs font-medium underline">
+                Ver detalle
+              </button>
+              {% if item.cliente and item.cliente.email_cobranza %}
+              <form method="post" action="{% url 'finanzas:cobranza_enviar' cve_cliente=item.cve_cliente %}"
+                    onsubmit="return confirm('¿Enviar estado de cuenta a {{ item.cliente.email_cobranza }}?')">
+                {% csrf_token %}
+                <button type="submit"
+                        class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                  Enviar estado de cuenta
+                </button>
+              </form>
+              {% else %}
+              <span class="text-xs text-slate-300 italic">Sin email configurado</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        <!-- Detalle expandible -->
+        <tr id="detalle-{{ forloop.counter }}" class="hidden bg-slate-50">
+          <td colspan="6" class="px-8 py-4">
+            <table class="w-full text-xs text-slate-600">
+              <thead>
+                <tr class="text-slate-400 uppercase text-xs">
+                  <th class="text-left pb-2">Folio</th>
+                  <th class="text-left pb-2">Fecha emisión</th>
+                  <th class="text-right pb-2">Total factura</th>
+                  <th class="text-right pb-2">Saldo pendiente</th>
+                  <th class="text-right pb-2">Días</th>
+                  <th class="text-left pb-2">Recordatorios enviados</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for fi in item.facturas %}
+                <tr class="border-t border-slate-100">
+                  <td class="py-2 font-mono">
+                    <a href="{% url 'finanzas:factura_detalle' fi.factura.pk %}"
+                       class="text-sky-600 hover:underline">
+                      {{ fi.factura.serie }}{{ fi.factura.folio }}
+                    </a>
+                  </td>
+                  <td class="py-2">{{ fi.fecha_base }}</td>
+                  <td class="py-2 text-right font-mono">${{ fi.factura.total|floatformat:2 }}</td>
+                  <td class="py-2 text-right font-mono font-semibold text-red-600">${{ fi.saldo|floatformat:2 }}</td>
+                  <td class="py-2 text-right">{{ fi.dias }}d</td>
+                  <td class="py-2">
+                    {% for r in fi.factura.recordatorios.all %}
+                      <span class="inline-block bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-xs mr-1">
+                        {{ r.get_tipo_display }} · {{ r.enviado_en|date:"d/m" }}
+                        {% if not r.exitoso %}<span class="text-red-500">✗</span>{% endif %}
+                      </span>
+                    {% empty %}
+                      <span class="text-slate-300 italic">Ninguno</span>
+                    {% endfor %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-16 text-center">
+    <svg class="w-12 h-12 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <p class="text-slate-500 text-sm font-medium">Sin saldos pendientes</p>
+    <p class="text-slate-300 text-xs mt-1">Todas las facturas están liquidadas.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function toggleDetalle(id) {
+  const row = document.getElementById(id);
+  row.classList.toggle('hidden');
+}
+</script>
+
+{% endblock %}
