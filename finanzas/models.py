@@ -1,9 +1,11 @@
 from decimal import Decimal
+from turtle import st
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Sum
 
+from hal9mil.storage_backends import MediaStorage
 
 class ConfiguracionFiscal(models.Model):
     patente = models.CharField(max_length=4, unique=True)
@@ -200,7 +202,7 @@ class XMLProveedor(models.Model):
     moneda = models.CharField(max_length=3, default='MXN')
     tipo_comprobante = models.CharField(max_length=1)   # I=Ingreso, E=Egreso
     concepto_principal = models.CharField(max_length=300, blank=True)
-    xml_file = models.FileField(upload_to='xmls_proveedores/%Y/%m/')
+    xml_file = models.FileField(storage=MediaStorage(), upload_to='xmls_proveedores/%Y/%m/')
     cargado_en = models.DateTimeField(auto_now_add=True)
     procesado = models.BooleanField(default=False)  # True si ya generó GastoReferencia
     ESTADO_ASIGNACION = [
@@ -208,7 +210,7 @@ class XMLProveedor(models.Model):
         ('PENDIENTE', 'Pendiente'),
     ]
     pdf_file = models.FileField(
-        upload_to='xmls_proveedores/%Y/%m/', null=True, blank=True
+        storage=MediaStorage(), upload_to='xmls_proveedores/%Y/%m/', null=True, blank=True
     )
     estado_asignacion = models.CharField(
         max_length=10, choices=ESTADO_ASIGNACION, default='PENDIENTE'
