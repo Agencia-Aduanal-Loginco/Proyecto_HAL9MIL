@@ -116,19 +116,18 @@ def _enviar_email(cliente, facturas_info, tipo, usuario=None):
     """
     from .models import RecordatorioCobranza
 
-    html = render_to_string('finanzas/email_recordatorio_cobranza.html', {
-        'cliente': cliente,
-        'facturas_info': facturas_info,
-        'tipo': tipo,
-        'saldo_total': sum(fi['saldo'] for fi in facturas_info),
-    })
-
     to = [cliente.email_cobranza]
     cc = [cliente.email_cobranza_cc] if cliente.email_cobranza_cc else []
 
     exitoso = True
     error_msg = ''
     try:
+        html = render_to_string('finanzas/email_recordatorio_cobranza.html', {
+            'cliente': cliente,
+            'facturas_info': facturas_info,
+            'tipo': tipo,
+            'saldo_total': sum(fi['saldo'] for fi in facturas_info),
+        })
         msg = EmailMultiAlternatives(
             subject=ASUNTOS.get(tipo, ASUNTOS['manual']),
             body='Este correo requiere un cliente con soporte HTML.',

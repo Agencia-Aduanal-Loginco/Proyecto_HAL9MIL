@@ -24,6 +24,7 @@ def ejecutar_cobranza_automatica():
     enviados = 0
     omitidos_saldo = 0
     omitidos_email = 0
+    errores = 0
 
     facturas = (
         Factura.objects
@@ -32,43 +33,48 @@ def ejecutar_cobranza_automatica():
     )
 
     for factura in facturas:
-        saldo = calcular_saldo_factura(factura)
-        if saldo <= Decimal('0'):
-            omitidos_saldo += 1
+        try:
+            saldo = calcular_saldo_factura(factura)
+            if saldo <= Decimal('0'):
+                omitidos_saldo += 1
+                continue
+
+            fecha_base = (
+                factura.fecha_emision.date()
+                if factura.fecha_emision
+                else factura.created_at.date()
+            )
+            dias = (hoy - fecha_base).days
+
+            cliente = buscar_cliente_de_factura(factura)
+            if not cliente or not cliente.email_cobranza:
+                omitidos_email += 1
+                continue
+
+            tipos_enviados = set(
+                factura.recordatorios
+                .exclude(tipo='manual')
+                .values_list('tipo', flat=True)
+            )
+
+            for hito, tipo in reversed(HITOS):  # 60d → 30d → 15d: enviar el más urgente primero
+                if dias >= hito and tipo not in tipos_enviados:
+                    exitoso = enviar_recordatorio_factura(factura, cliente, tipo)
+                    if exitoso:
+                        enviados += 1
+                        logger.info(
+                            '[Cobranza] Recordatorio %s enviado — Factura %s → %s',
+                            tipo, factura.pk, cliente.email_cobranza,
+                        )
+                    else:
+                        logger.warning('[Cobranza] Fallo al enviar %s — Factura %s', tipo, factura.pk)
+                    break  # un recordatorio por factura por ejecución del job
+        except Exception as e:
+            errores += 1
+            logger.error('[Cobranza] Error procesando Factura %s: %s', factura.pk, e)
             continue
-
-        fecha_base = (
-            factura.fecha_emision.date()
-            if factura.fecha_emision
-            else factura.created_at.date()
-        )
-        dias = (hoy - fecha_base).days
-
-        cliente = buscar_cliente_de_factura(factura)
-        if not cliente or not cliente.email_cobranza:
-            omitidos_email += 1
-            continue
-
-        tipos_enviados = set(
-            factura.recordatorios
-            .exclude(tipo='manual')
-            .values_list('tipo', flat=True)
-        )
-
-        for hito, tipo in reversed(HITOS):  # 60d → 30d → 15d: enviar el más urgente primero
-            if dias >= hito and tipo not in tipos_enviados:
-                exitoso = enviar_recordatorio_factura(factura, cliente, tipo)
-                if exitoso:
-                    enviados += 1
-                    logger.info(
-                        '[Cobranza] Recordatorio %s enviado — Factura %s → %s',
-                        tipo, factura.pk, cliente.email_cobranza,
-                    )
-                else:
-                    logger.warning('[Cobranza] Fallo al enviar %s — Factura %s', tipo, factura.pk)
-                break  # un recordatorio por factura por ejecución del job
 
     logger.info(
-        '[Cobranza] Job completado: %d enviados, %d sin saldo, %d sin email.',
-        enviados, omitidos_saldo, omitidos_email,
+        '[Cobranza] Job completado: %d enviados, %d sin saldo, %d sin email, %d errores.',
+        enviados, omitidos_saldo, omitidos_email, errores,
     )
