@@ -10,7 +10,7 @@ urlpatterns = [
     path('polizas/', views.polizas_list, name='polizas_list'),
     path('polizas/<int:pk>/', views.poliza_detalle, name='poliza_detalle'),
     # Fase 4 — Cobranza y facturas
-    path('cobranza/', views.cobranza_list, name='cobranza_list'),
+    path('referencias-por-facturar/', views.referencias_por_facturar, name='referencias_por_facturar'),
     path('facturas/', views.facturas_list, name='facturas_list'),
     path('facturas/<int:pk>/', views.factura_detalle, name='factura_detalle'),
     path('facturas/<int:pk>/timbrar/', views.factura_timbrar, name='factura_timbrar'),

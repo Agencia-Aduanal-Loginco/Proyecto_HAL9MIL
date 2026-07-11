@@ -238,7 +238,7 @@ def subir_xml_proveedor(request, num_refe):
 # ── Fase 4 ────────────────────────────────────────────────────────────────────
 
 @modulo_required('Finanzas')
-def cobranza_list(request):
+def referencias_por_facturar(request):
     gastos_sub = (
         GastoReferencia.objects
         .filter(referencia=OuterRef('pk'))
@@ -276,7 +276,7 @@ def cobranza_list(request):
             'saldo': total_a - total_g,
         })
 
-    return render(request, 'finanzas/cobranza_list.html', {'items': items})
+    return render(request, 'finanzas/referencias_por_facturar.html', {'items': items})
 
 
 @modulo_required('Finanzas')

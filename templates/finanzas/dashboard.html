@@ -36,7 +36,7 @@
       <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Pagos</p>
       <p class="text-3xl font-bold text-slate-800">{{ total_pagos }}</p>
     </a>
-    <a href="{% url 'finanzas:cobranza_list' %}"
+    <a href="{% url 'finanzas:referencias_por_facturar' %}"
        class="bg-white rounded-xl border border-orange-200 p-5 hover:border-orange-400 hover:shadow-sm transition-all">
       <p class="text-xs text-orange-500 uppercase tracking-wider mb-1">Cobranza pendiente</p>
       <p class="text-3xl font-bold {% if pendientes_cobro > 0 %}text-orange-600{% else %}text-slate-800{% endif %}">
