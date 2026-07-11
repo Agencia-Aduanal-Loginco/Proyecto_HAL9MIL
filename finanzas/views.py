@@ -1141,3 +1141,53 @@ def xml_proveedor_ver_pdf(request, pk):
     if not xml_obj.pdf_file:
         raise Http404('Este XML no tiene un PDF asociado.')
     return FileResponse(xml_obj.pdf_file.open('rb'), content_type='application/pdf')
+
+
+@modulo_required('Finanzas')
+def cobranza_list(request):
+    from .cobranza import calcular_saldos_por_cliente
+    items = calcular_saldos_por_cliente()
+    saldo_total = sum(i['saldo_total'] for i in items)
+    return render(request, 'finanzas/cobranza_list.html', {
+        'items': items,
+        'saldo_total': saldo_total,
+        'num_clientes': len(items),
+    })
+
+
+@modulo_required('Finanzas')
+def cobranza_enviar(request, cve_cliente):
+    if request.method != 'POST':
+        return redirect('finanzas:cobranza_list')
+
+    from clientes.models import Cliente
+    from .cobranza import enviar_estado_cuenta_cliente
+
+    try:
+        cliente = Cliente.objects.get(cve_cliente=cve_cliente)
+    except Cliente.DoesNotExist:
+        messages.error(request, 'Cliente no encontrado.')
+        return redirect('finanzas:cobranza_list')
+
+    if not cliente.email_cobranza:
+        messages.error(
+            request,
+            f'{cliente.nombre_cliente} no tiene email de cobranza configurado. '
+            f'Agrégalo en el panel de administración.'
+        )
+        return redirect('finanzas:cobranza_list')
+
+    exitoso = enviar_estado_cuenta_cliente(cliente, usuario=request.user)
+
+    if exitoso:
+        messages.success(
+            request,
+            f'Estado de cuenta enviado a {cliente.email_cobranza}.'
+        )
+    else:
+        messages.error(
+            request,
+            'Error al enviar el correo. Verifica la configuración de SendGrid.'
+        )
+
+    return redirect('finanzas:cobranza_list')

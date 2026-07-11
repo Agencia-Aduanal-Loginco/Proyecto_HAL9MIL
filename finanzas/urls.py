@@ -4,6 +4,9 @@ from . import views
 app_name = 'finanzas'
 
 urlpatterns = [
+    # Cobranza de honorarios
+    path('cobranza/', views.cobranza_list, name='cobranza_list'),
+    path('cobranza/<str:cve_cliente>/enviar/', views.cobranza_enviar, name='cobranza_enviar'),
     path('', views.dashboard_financiero, name='dashboard'),
     path('anticipos/', views.anticipos_list, name='anticipos_list'),
     path('gastos/', views.gastos_list, name='gastos_list'),
