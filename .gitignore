@@ -296,5 +296,6 @@ OpenWA.md
 CorOpenWA.md
 Facturas*.zip
 invoices-*.zip
+docs/
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,django
