@@ -508,3 +508,31 @@ class ComisionReferencia(models.Model):
 
     def __str__(self):
         return f'Comisión {self.referencia_id} — {self.mes:02d}/{self.anio}'
+
+
+# ── Cobranza ──────────────────────────────────────────────────────────────────
+
+class RecordatorioCobranza(models.Model):
+    TIPO_CHOICES = [
+        ('15d', '15 días'), ('30d', '30 días'), ('60d', '60 días'), ('manual', 'Manual'),
+    ]
+
+    factura     = models.ForeignKey(
+        Factura, on_delete=models.CASCADE, related_name='recordatorios'
+    )
+    tipo        = models.CharField(max_length=6, choices=TIPO_CHOICES)
+    enviado_en  = models.DateTimeField(auto_now_add=True)
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+'
+    )
+    exitoso     = models.BooleanField(default=True)
+    error_msg   = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-enviado_en']
+        verbose_name = 'Recordatorio de Cobranza'
+        verbose_name_plural = 'Recordatorios de Cobranza'
+
+    def __str__(self):
+        return f'{self.factura} | {self.get_tipo_display()} | {self.enviado_en:%Y-%m-%d}'

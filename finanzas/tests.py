@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from finanzas.models import (
     ConfiguracionFiscal, DoctoRelacionado, Factura, GastoReferencia,
-    Pago, PolizaContable, XMLProveedor,
+    Pago, PolizaContable, RecordatorioCobranza, XMLProveedor,
 )
 from finanzas.pipeline import (
     calcular_embudo_ap, calcular_embudo_ar, calcular_tendencia_semanal,
@@ -239,3 +239,42 @@ class DashboardPipelineViewTest(TestCase):
         self.assertIn('Cuentas por Cobrar', content)
         self.assertIn('Cuentas por Pagar', content)
         self.assertIn('id="chartTendencia"', content)
+
+
+class RecordatorioCobranzaTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('testuser', password='x')
+        config = ConfiguracionFiscal.objects.create(
+            patente='3772', rfc='REI123456789', razon_social='Reiki',
+            regimen_fiscal='601', codigo_postal='06600',
+            cert_path='', key_path='',
+        )
+        self.factura = Factura.objects.create(
+            folio=1,
+            rfc_receptor='CLI123456789',
+            nombre_receptor='Cliente Test',
+            domicilio_fiscal_receptor='06600',
+            regimen_fiscal_receptor='601',
+            subtotal=Decimal('1000.00'),
+            iva=Decimal('160.00'),
+            total=Decimal('1160.00'),
+            estado='TIMBRADA',
+            configuracion_fiscal=config,
+        )
+
+    def test_crear_recordatorio(self):
+        r = RecordatorioCobranza.objects.create(
+            factura=self.factura,
+            tipo='15d',
+            enviado_por=self.user,
+            exitoso=True,
+        )
+        self.assertEqual(r.tipo, '15d')
+        self.assertTrue(r.exitoso)
+        self.assertEqual(r.error_msg, '')
+
+    def test_multiples_tipos_permitidos(self):
+        RecordatorioCobranza.objects.create(factura=self.factura, tipo='15d')
+        RecordatorioCobranza.objects.create(factura=self.factura, tipo='30d')
+        RecordatorioCobranza.objects.create(factura=self.factura, tipo='manual')
+        self.assertEqual(RecordatorioCobranza.objects.filter(factura=self.factura).count(), 3)
