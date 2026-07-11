@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import zipfile
@@ -27,6 +28,7 @@ from .models import (
     DoctoRelacionado, Factura, GastoReferencia, MovimientoBancario, Pago,
     PolizaContable, XMLProveedor,
 )
+from .pipeline import calcular_embudo_ap, calcular_embudo_ar, calcular_tendencia_semanal
 from .polizas import generar_poliza_anticipo, generar_poliza_gasto
 from .saldo import saldo_referencia
 from .utils import get_configuracion_fiscal
@@ -46,6 +48,9 @@ def dashboard_financiero(request):
         .distinct()
         .count()
     )
+    embudo_ar = calcular_embudo_ar()
+    embudo_ap = calcular_embudo_ap()
+    tendencia = calcular_tendencia_semanal()
     return render(request, 'finanzas/dashboard.html', {
         'total_anticipos': total_anticipos,
         'total_gastos': total_gastos,
@@ -53,6 +58,11 @@ def dashboard_financiero(request):
         'total_facturas': total_facturas,
         'total_pagos': total_pagos,
         'pendientes_cobro': pendientes_cobro,
+        'embudo_ar': embudo_ar,
+        'embudo_ap': embudo_ap,
+        'tendencia_labels_json': json.dumps(tendencia['labels']),
+        'tendencia_facturas_json': json.dumps(tendencia['facturas_timbradas']),
+        'tendencia_polizas_json': json.dumps(tendencia['polizas_generadas']),
     })
 
 

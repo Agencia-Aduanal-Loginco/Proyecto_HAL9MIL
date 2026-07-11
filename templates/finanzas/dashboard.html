@@ -59,5 +59,106 @@
     Para ver el estado financiero de una referencia, navega al detalle de la referencia
     o accede directo en <code class="font-mono bg-amber-100 px-1 rounded">/finanzas/referencias/&lt;num_refe&gt;/estado/</code>
   </div>
+  <!-- Pipeline de trabajo (mes actual + anterior) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Cuentas por Cobrar</h2>
+        <div class="space-y-4">
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Facturas emitidas</span>
+              <span>{{ embudo_ar.emitidas }}</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-sky-500 h-2 rounded-full" style="width: 100%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Timbradas</span>
+              <span>{{ embudo_ar.timbradas }} / {{ embudo_ar.emitidas }} ({% widthratio embudo_ar.timbradas embudo_ar.emitidas 100 %}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-sky-500 h-2 rounded-full" style="width: {% widthratio embudo_ar.timbradas embudo_ar.emitidas 100 %}%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Cobradas</span>
+              <span>{{ embudo_ar.cobradas }} / {{ embudo_ar.timbradas }} ({% widthratio embudo_ar.cobradas embudo_ar.timbradas 100 %}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-emerald-500 h-2 rounded-full" style="width: {% widthratio embudo_ar.cobradas embudo_ar.timbradas 100 %}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Cuentas por Pagar</h2>
+        <div class="space-y-4">
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>XML de proveedor recibidos</span>
+              <span>{{ embudo_ap.recibidos }}</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-violet-500 h-2 rounded-full" style="width: 100%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Procesados</span>
+              <span>{{ embudo_ap.procesados }} / {{ embudo_ap.recibidos }} ({% widthratio embudo_ap.procesados embudo_ap.recibidos 100 %}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-violet-500 h-2 rounded-full" style="width: {% widthratio embudo_ap.procesados embudo_ap.recibidos 100 %}%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Con póliza generada</span>
+              <span>{{ embudo_ap.con_poliza }} / {{ embudo_ap.procesados }} ({% widthratio embudo_ap.con_poliza embudo_ap.procesados 100 %}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-emerald-500 h-2 rounded-full" style="width: {% widthratio embudo_ap.con_poliza embudo_ap.procesados 100 %}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tendencia semanal -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Tendencia semanal (últimas 8 semanas)</h2>
+      <canvas id="chartTendencia" height="80"></canvas>
+    </div>
 </div>
+
+<script>
+new Chart(document.getElementById('chartTendencia'), {
+  type: 'line',
+  data: {
+    labels: {{ tendencia_labels_json|safe }},
+    datasets: [
+      {
+        label: 'Facturas timbradas', data: {{ tendencia_facturas_json|safe }},
+        borderColor: '#0284c7', borderWidth: 2, pointRadius: 3, tension: .3, fill: false,
+      },
+      {
+        label: 'Pólizas generadas', data: {{ tendencia_polizas_json|safe }},
+        borderColor: '#7c3aed', borderWidth: 2, pointRadius: 3, tension: .3, fill: false,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: true, position: 'bottom' } },
+    scales: {
+      x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 } } },
+      y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 } }, beginAtZero: true },
+    },
+  },
+});
+</script>
 {% endblock %}
