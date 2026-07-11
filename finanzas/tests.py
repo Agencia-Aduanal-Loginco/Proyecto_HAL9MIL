@@ -278,3 +278,62 @@ class RecordatorioCobranzaTest(TestCase):
         RecordatorioCobranza.objects.create(factura=self.factura, tipo='30d')
         RecordatorioCobranza.objects.create(factura=self.factura, tipo='manual')
         self.assertEqual(RecordatorioCobranza.objects.filter(factura=self.factura).count(), 3)
+
+
+from finanzas.cobranza import calcular_saldo_factura, calcular_saldos_por_cliente
+from clientes.models import Cliente
+
+
+class CalcSaldoFacturaTest(TestCase):
+    def setUp(self):
+        config = ConfiguracionFiscal.objects.create(
+            patente='3772', rfc='REI123456789', razon_social='Reiki',
+            regimen_fiscal='601', codigo_postal='06600',
+            cert_path='', key_path='',
+        )
+        self.factura = Factura.objects.create(
+            folio=2,
+            rfc_receptor='CLI123456789',
+            nombre_receptor='Cliente Test',
+            domicilio_fiscal_receptor='06600',
+            regimen_fiscal_receptor='601',
+            subtotal=Decimal('1000.00'),
+            iva=Decimal('160.00'),
+            total=Decimal('1160.00'),
+            estado='TIMBRADA',
+            configuracion_fiscal=config,
+        )
+
+    def test_saldo_sin_pagos(self):
+        saldo = calcular_saldo_factura(self.factura)
+        self.assertEqual(saldo, Decimal('1160.00'))
+
+    def test_saldo_con_pago_parcial(self):
+        pago = Pago.objects.create(
+            fecha_pago='2026-06-01', monto=Decimal('500.00'),
+            moneda='MXN', forma_pago='03',
+        )
+        DoctoRelacionado.objects.create(
+            pago=pago, factura=self.factura,
+            num_parcialidad=1,
+            imp_saldo_anterior=Decimal('1160.00'),
+            imp_pagado=Decimal('500.00'),
+            imp_saldo_insoluto=Decimal('660.00'),
+        )
+        saldo = calcular_saldo_factura(self.factura)
+        self.assertEqual(saldo, Decimal('660.00'))
+
+    def test_saldo_cero_si_pagada_completo(self):
+        pago = Pago.objects.create(
+            fecha_pago='2026-06-01', monto=Decimal('1160.00'),
+            moneda='MXN', forma_pago='03',
+        )
+        DoctoRelacionado.objects.create(
+            pago=pago, factura=self.factura,
+            num_parcialidad=1,
+            imp_saldo_anterior=Decimal('1160.00'),
+            imp_pagado=Decimal('1160.00'),
+            imp_saldo_insoluto=Decimal('0.00'),
+        )
+        saldo = calcular_saldo_factura(self.factura)
+        self.assertEqual(saldo, Decimal('0.00'))
