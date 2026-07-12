@@ -132,12 +132,13 @@ def get_file_url(file_field):
         logger.error(f"❌ Error obteniendo URL de archivo: {e}")
         return None
 
-def delete_file_from_storage(file_path, storage_class=MediaStorage):
+def delete_file_from_storage(file_path, storage_class=None):
     """
-    Elimina un archivo del storage de manera segura
+    Elimina un archivo del storage de manera segura.
+    Por default usa el mismo criterio de entorno que el guardado (media_storage()).
     """
     try:
-        storage = storage_class()
+        storage = storage_class() if storage_class else media_storage()
         if storage.exists(file_path):
             storage.delete(file_path)
             logger.info(f"🗑️ Archivo eliminado: {file_path}")
@@ -233,37 +234,37 @@ class FileUploadMiddleware:
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 
-@receiver(post_delete)
 def delete_file_on_model_delete(sender, instance, **kwargs):
     """
-    Elimina archivos del storage cuando se elimina un modelo
+    Elimina archivos del storage cuando se elimina un XMLProveedor.
+    Conectada a la señal post_delete con sender=XMLProveedor desde
+    finanzas.apps.FinanzasConfig.ready() — ver ese archivo para el porqué.
     """
-    # Buscar campos de archivo en el modelo
     for field in instance._meta.fields:
         if hasattr(field, 'upload_to'):
             file_field = getattr(instance, field.name)
             if file_field:
                 delete_file_from_storage(file_field.name)
 
-@receiver(pre_save)
 def delete_old_file_on_change(sender, instance, **kwargs):
     """
-    Elimina archivo anterior cuando se actualiza con uno nuevo
+    Elimina archivo anterior de un XMLProveedor cuando se actualiza con uno
+    nuevo. Conectada a la señal pre_save con sender=XMLProveedor desde
+    finanzas.apps.FinanzasConfig.ready() — ver ese archivo para el porqué.
     """
     if not instance.pk:
         return  # Es un nuevo objeto, no hay archivo anterior
-    
+
     try:
         old_instance = sender.objects.get(pk=instance.pk)
     except sender.DoesNotExist:
         return
-    
-    # Verificar campos de archivo
+
     for field in instance._meta.fields:
         if hasattr(field, 'upload_to'):
             old_file = getattr(old_instance, field.name)
             new_file = getattr(instance, field.name)
-            
+
             if old_file and old_file != new_file:
                 delete_file_from_storage(old_file.name)
 
