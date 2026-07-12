@@ -627,3 +627,12 @@ Después de completar todos los tasks:
 - [ ] **`manage.py check`** limpio con `USE_SPACES` en ambos valores (ver Task 1 Step 3).
 - [ ] **Verificación real contra Spaces completada** (Task 4) — archivo subido, accedido vía URL firmada, rechazado sin firma, y borrado.
 - [ ] **Confirmar que local sigue sin tocar Spaces**: con el `.env` de desarrollo tal cual (sin forzar `USE_SPACES=True`), subir un XML de prueba vía `/finanzas/xml/carga-cliente/` y confirmar que el archivo aparece en `media/` local, no en el bucket.
+
+Verificación real contra Spaces: 2026-07-12 — subida (OK) y rechazo sin firma (403, OK)
+exitosos; borrado exitoso, sin objetos huérfanos. HALLAZGO: el acceso vía URL "firmada"
+devolvió 403 en vez de 200 — `storage.url()` no está firmando realmente la URL porque
+`AWS_S3_CUSTOM_DOMAIN` está configurado sin `cloudfront_signer`, causando que
+`querystring_auth=True` se ignore silenciosamente (ver detalle en
+`.superpowers/sdd/task-4-report.md`). El bucket está seguro (nada accesible sin
+credenciales), pero el mecanismo de URLs firmadas para usuarios legítimos no funciona
+aún — requiere task de seguimiento. Bucket: disco-loginco.
