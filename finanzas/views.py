@@ -1099,6 +1099,7 @@ def _procesar_subida_xml(request, url_retorno):
     return render(request, 'finanzas/carga_masiva_resultado.html', {
         'resultados': resultados,
         'conteos': conteos,
+        'url_retorno': url_retorno,
     })
 
 
