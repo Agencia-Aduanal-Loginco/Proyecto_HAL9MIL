@@ -28,7 +28,12 @@ cliente necesitan:
 
 ## Arquitectura
 
-**Sin modelos nuevos ni migraciones.** `XMLProveedor` ya tiene `rfc_receptor`
+**Sin modelos nuevos.** (Prerequisito descubierto al planear: los `FileField`
+de `XMLProveedor` tienen `storage=MediaStorage()` de DO Spaces hardcodeado, lo
+que rompe el guardado de archivos en entornos sin bucket — local y tests. El
+plan incluye una tarea inicial que lo vuelve un callable seleccionable por
+entorno, con su migración `AlterField`; eso además repara 24 tests existentes
+que hoy fallan por esta causa.) `XMLProveedor` ya tiene `rfc_receptor`
 (el parser `cfdi_parser.parsear_cfdi_root` ya lo extrae) y el pipeline
 `carga_xml.procesar_lote` ya cubre: parseo, dedupe por UUID, pareo de PDF por
 nombre de archivo (stem), guardado y estado `PENDIENTE` con motivo cuando el
