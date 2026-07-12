@@ -11,6 +11,7 @@ from django.db.models import OuterRef, Subquery, Sum
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
+from clientes.models import Cliente
 from referencias.models import Referencia
 from .cfdi_parser import parsear_cfdi
 from .carga_xml import crear_gasto_desde_xml, expandir_subidas, procesar_lote
@@ -1141,9 +1142,30 @@ def xml_pendientes(request):
             )
         return redirect('finanzas:xml_pendientes')
 
-    pendientes = XMLProveedor.objects.filter(
-        estado_asignacion='PENDIENTE'
-    ).order_by('-cargado_en')
+    pendientes = list(
+        XMLProveedor.objects
+        .filter(estado_asignacion='PENDIENTE')
+        .order_by('-cargado_en')
+    )
+    rfcs = {x.rfc_receptor for x in pendientes if x.rfc_receptor}
+    clientes_por_rfc = {
+        c.rfc: c for c in Cliente.objects.filter(rfc__in=rfcs)
+    }
+    referencias_por_cve = {}
+    for xml_obj in pendientes:
+        cliente = clientes_por_rfc.get(xml_obj.rfc_receptor)
+        xml_obj.cliente_detectado = cliente
+        if cliente and cliente.cve_cliente:
+            cve = cliente.cve_cliente
+            if cve not in referencias_por_cve:
+                referencias_por_cve[cve] = list(
+                    Referencia.objects
+                    .filter(cve_cliente=cve)
+                    .order_by('-fecha_pago')[:15]
+                )
+            xml_obj.referencias_sugeridas = referencias_por_cve[cve]
+        else:
+            xml_obj.referencias_sugeridas = []
     return render(request, 'finanzas/xml_pendientes.html', {'pendientes': pendientes})
 
 

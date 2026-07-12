@@ -19,6 +19,8 @@
       <thead class="bg-slate-50 text-left text-xs text-slate-500 uppercase tracking-wider">
         <tr>
           <th class="px-4 py-3">Emisor</th>
+          <th class="px-4 py-3">RFC receptor</th>
+          <th class="px-4 py-3">Cliente</th>
           <th class="px-4 py-3">Folio fiscal</th>
           <th class="px-4 py-3">Fecha</th>
           <th class="px-4 py-3">Total</th>
@@ -31,6 +33,16 @@
         {% for xml in pendientes %}
         <tr>
           <td class="px-4 py-2">{{ xml.nombre_emisor|truncatechars:30 }}</td>
+          <td class="px-4 py-2 font-mono text-xs">
+            {% if xml.rfc_receptor %}{{ xml.rfc_receptor }}{% else %}<span class="text-slate-300">—</span>{% endif %}
+          </td>
+          <td class="px-4 py-2 text-xs">
+            {% if xml.cliente_detectado %}
+              {{ xml.cliente_detectado.nombre_cliente|truncatechars:25 }}
+            {% else %}
+              <span class="text-slate-300">—</span>
+            {% endif %}
+          </td>
           <td class="px-4 py-2 font-mono text-xs">{{ xml.uuid_fiscal }}</td>
           <td class="px-4 py-2">{{ xml.fecha_emision|date:'Y-m-d' }}</td>
           <td class="px-4 py-2">${{ xml.total }}</td>
@@ -44,10 +56,19 @@
             {% endif %}
           </td>
           <td class="px-4 py-2">
-            <form method="post" class="flex gap-2">
+            <form method="post" class="flex gap-2 items-center">
               {% csrf_token %}
               <input type="hidden" name="xml_id" value="{{ xml.pk }}">
-              <input type="text" name="num_refe" placeholder="LCRR0000/26" required
+              {% if xml.referencias_sugeridas %}
+              <select onchange="document.getElementById('numrefe-{{ xml.pk }}').value = this.value"
+                      class="border border-slate-300 rounded px-2 py-1 text-xs w-36">
+                <option value="">Sugerencias…</option>
+                {% for ref in xml.referencias_sugeridas %}
+                <option value="{{ ref.num_refe }}">{{ ref.num_refe }}</option>
+                {% endfor %}
+              </select>
+              {% endif %}
+              <input type="text" id="numrefe-{{ xml.pk }}" name="num_refe" placeholder="LCRR0000/26" required
                      class="border border-slate-300 rounded px-2 py-1 text-xs w-32">
               <button type="submit"
                       class="bg-slate-600 hover:bg-slate-700 text-white px-3 py-1 rounded text-xs">

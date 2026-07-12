@@ -1,9 +1,15 @@
 import tempfile
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+
+from clientes.models import Cliente
+from referencias.models import Referencia
 
 from .cfdi_de_prueba import cfdi_cliente
 from .models import XMLProveedor
@@ -62,3 +68,60 @@ class CargaClienteViewTests(TestCase):
             ).count(),
             1,
         )
+
+
+def _crear_pendiente(rfc_receptor, uuid='44444444-4444-4444-4444-444444444444'):
+    obj = XMLProveedor(
+        uuid_fiscal=uuid,
+        fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+        rfc_emisor='FPA010101AA1',
+        nombre_emisor='FLETES DEL PACIFICO',
+        rfc_receptor=rfc_receptor,
+        subtotal=Decimal('5000.00'),
+        iva=Decimal('800.00'),
+        total=Decimal('5800.00'),
+        tipo_comprobante='I',
+        estado_asignacion='PENDIENTE',
+        motivo_pendiente='Proveedor no soportado',
+    )
+    obj.xml_file.save('cliente.xml', ContentFile(b'<x/>'), save=False)
+    obj.save()
+    return obj
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class XmlPendientesClienteTests(TestCase):
+    def setUp(self):
+        _login_finanzas(self, username='pendientes_user')
+        self.cliente = Cliente.objects.create(
+            nombre_cliente='CACIPA INTERNACIONAL',
+            cve_cliente='CACIPA',
+            rfc='CIN220216BS2',
+        )
+        self.ref_cliente = Referencia.objects.create(
+            num_refe='LCRR0001/26', patente='1656', prefijo='LCRR',
+            cve_cliente='CACIPA', fecha_pago=date(2026, 7, 1),
+        )
+        self.ref_ajena = Referencia.objects.create(
+            num_refe='LCRR0002/26', patente='1656', prefijo='LCRR',
+            cve_cliente='OTRO', fecha_pago=date(2026, 7, 2),
+        )
+
+    def test_muestra_rfc_receptor_y_cliente_detectado(self):
+        _crear_pendiente('CIN220216BS2')
+        resp = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertContains(resp, 'CIN220216BS2')
+        self.assertContains(resp, 'CACIPA INTERNACIONAL')
+
+    def test_sugiere_solo_referencias_del_cliente(self):
+        _crear_pendiente('CIN220216BS2')
+        resp = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertContains(resp, 'LCRR0001/26')
+        self.assertNotContains(resp, 'LCRR0002/26')
+
+    def test_rfc_sin_cliente_no_muestra_sugerencias(self):
+        _crear_pendiente('ZZZ990101ZZ9')
+        resp = self.client.get(reverse('finanzas:xml_pendientes'))
+        self.assertContains(resp, 'ZZZ990101ZZ9')
+        self.assertNotContains(resp, 'Sugerencias')
+        self.assertNotContains(resp, 'CACIPA INTERNACIONAL')
