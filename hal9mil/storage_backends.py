@@ -27,16 +27,18 @@ class StaticStorage(S3Boto3Storage):
         logger.info("💫 StaticStorage inicializado para DigitalOcean Spaces")
 
 class MediaStorage(S3Boto3Storage):
-    """Storage personalizado para archivos media (fotos de tickets)"""
+    """Storage personalizado para archivos media — privado, con URLs firmadas."""
     location = 'media'
-    default_acl = 'public-read'
+    default_acl = 'private'
     file_overwrite = False  # No sobreescribir archivos media
-    
+    querystring_auth = True
+    querystring_expire = 3600  # URLs firmadas expiran en 1 hora
+
     def __init__(self, *args, **kwargs):
         kwargs['custom_domain'] = getattr(settings, 'AWS_S3_CUSTOM_DOMAIN', None)
         super().__init__(*args, **kwargs)
         logger.info("📸 MediaStorage inicializado para DigitalOcean Spaces")
-    
+
     def _save(self, name, content):
         """Personaliza el guardado de archivos media"""
         # Agregar timestamp para evitar colisiones
@@ -69,16 +71,6 @@ class ReportesStorage(S3Boto3Storage):
         import re
         name = re.sub(r'[^\w\-_\.]', '_', name)
         return super().get_valid_name(name)
-
-class SecureMediaStorage(MediaStorage):
-    """Storage para archivos media que requieren autenticación"""
-    default_acl = 'private'
-    querystring_auth = True
-    querystring_expire = 3600  # URLs expiran en 1 hora
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        logger.info("🔐 SecureMediaStorage inicializado para archivos privados")
 
 # === UTILIDADES PARA MANEJO DE ARCHIVOS ===
 
