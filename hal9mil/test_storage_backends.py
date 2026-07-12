@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from .storage_backends import MediaStorage
 
@@ -12,6 +12,21 @@ class MediaStoragePrivacyTest(TestCase):
 
     def test_querystring_expire_una_hora(self):
         self.assertEqual(MediaStorage.querystring_expire, 3600)
+
+    @override_settings(
+        AWS_S3_CUSTOM_DOMAIN='cdn.ejemplo.com',
+        AWS_STORAGE_BUCKET_NAME='x',
+        AWS_ACCESS_KEY_ID='x',
+        AWS_SECRET_ACCESS_KEY='x',
+    )
+    def test_custom_domain_nunca_se_hereda_de_settings(self):
+        # AWS_S3_CUSTOM_DOMAIN está pensado para StaticStorage (público, con
+        # CDN). Si MediaStorage lo hereda, storages/backends/s3.py arma la
+        # URL directo con el dominio custom y NUNCA llama a
+        # generate_presigned_url — la URL resultante queda sin firma y
+        # devuelve 403 al accederla, aunque querystring_auth=True.
+        storage = MediaStorage()
+        self.assertFalse(storage.custom_domain)
 
 
 from django.db.models.signals import post_delete, pre_save

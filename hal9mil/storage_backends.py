@@ -35,7 +35,12 @@ class MediaStorage(S3Boto3Storage):
     querystring_expire = 3600  # URLs firmadas expiran en 1 hora
 
     def __init__(self, *args, **kwargs):
-        kwargs['custom_domain'] = getattr(settings, 'AWS_S3_CUSTOM_DOMAIN', None)
+        # No usar AWS_S3_CUSTOM_DOMAIN aquí: ese setting es para archivos
+        # públicos vía CDN (StaticStorage). Si MediaStorage lo hereda,
+        # storages/backends/s3.py arma la URL directo con el dominio custom
+        # y nunca llama a generate_presigned_url — la URL queda sin firma y
+        # devuelve 403 al accederla, aunque querystring_auth=True.
+        kwargs['custom_domain'] = None
         super().__init__(*args, **kwargs)
         logger.info("📸 MediaStorage inicializado para DigitalOcean Spaces")
 
