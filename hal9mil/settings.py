@@ -88,6 +88,17 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# ── DigitalOcean Spaces (solo si USE_SPACES=True; si no, disco local) ────────
+USE_SPACES = os.getenv('USE_SPACES', 'False').lower() in ('true', '1', 'yes')
+
+if USE_SPACES:
+    AWS_ACCESS_KEY_ID = os.getenv('DO_SPACES_ACCESS_KEY', '')
+    AWS_SECRET_ACCESS_KEY = os.getenv('DO_SPACES_SECRET_KEY', '')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('DO_SPACES_BUCKET_NAME', '')
+    AWS_S3_ENDPOINT_URL = os.getenv('DO_SPACES_ENDPOINT_URL', '')
+    AWS_S3_REGION_NAME = os.getenv('DO_SPACES_REGION', '')
+    AWS_S3_CUSTOM_DOMAIN = os.getenv('DO_SPACES_CDN_ENDPOINT', '') or None
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
