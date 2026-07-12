@@ -48,6 +48,11 @@
       <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Carga masiva XML</p>
       <p class="text-sm text-slate-600 mt-2">Subir facturas de LCT / APM</p>
     </a>
+    <a href="{% url 'finanzas:carga_xml_cliente' %}"
+       class="bg-white rounded-xl border border-slate-200 p-5 hover:border-sky-400 hover:shadow-sm transition-all">
+      <p class="text-xs text-sky-500 uppercase tracking-wider mb-1">Facturas de cliente</p>
+      <p class="text-sm text-slate-600">Cargar XML/PDF dirigidos a clientes</p>
+    </a>
     <a href="{% url 'finanzas:xml_pendientes' %}"
        class="bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-sm transition-all">
       <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">XMLs pendientes</p>

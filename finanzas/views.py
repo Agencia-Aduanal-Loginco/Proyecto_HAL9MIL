@@ -1070,26 +1070,24 @@ def polizas_exportar_xml(request):
 
 # ── Carga masiva de XMLs de proveedor ──────────────────────────────────────
 
-@modulo_required('Finanzas')
-def carga_masiva_xml(request):
-    if request.method != 'POST':
-        return render(request, 'finanzas/carga_masiva_form.html')
-
+def _procesar_subida_xml(request, url_retorno):
+    """Procesa request.FILES['archivos'] con el pipeline de carga y devuelve
+    la respuesta (resumen o redirect con mensaje de error)."""
     archivos = request.FILES.getlist('archivos')
     if not archivos:
         messages.error(request, 'No se seleccionó ningún archivo.')
-        return redirect('finanzas:carga_masiva_xml')
+        return redirect(url_retorno)
 
     try:
         files = expandir_subidas(archivos)
     except zipfile.BadZipFile:
         messages.error(request, 'El archivo ZIP es inválido o está dañado.')
-        return redirect('finanzas:carga_masiva_xml')
+        return redirect(url_retorno)
 
     resultados = procesar_lote(files, request.user)
     if not resultados:
         messages.error(request, 'No se encontró ningún archivo XML en lo subido.')
-        return redirect('finanzas:carga_masiva_xml')
+        return redirect(url_retorno)
 
     conteos = {
         'asignados': sum(1 for r in resultados if r.estado == 'ASIGNADO'),
@@ -1101,6 +1099,20 @@ def carga_masiva_xml(request):
         'resultados': resultados,
         'conteos': conteos,
     })
+
+
+@modulo_required('Finanzas')
+def carga_masiva_xml(request):
+    if request.method != 'POST':
+        return render(request, 'finanzas/carga_masiva_form.html')
+    return _procesar_subida_xml(request, 'finanzas:carga_masiva_xml')
+
+
+@modulo_required('Finanzas')
+def carga_xml_cliente(request):
+    if request.method != 'POST':
+        return render(request, 'finanzas/carga_cliente_form.html')
+    return _procesar_subida_xml(request, 'finanzas:carga_xml_cliente')
 
 
 @modulo_required('Finanzas')

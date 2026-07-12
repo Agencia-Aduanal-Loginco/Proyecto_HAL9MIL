@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Cargar facturas de cliente · Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 max-w-2xl">
+
+  <div class="mb-6">
+    <a href="{% url 'finanzas:dashboard' %}" class="text-sky-600 hover:underline text-sm">← Finanzas</a>
+    <h1 class="text-2xl font-bold text-slate-800 mt-2">Cargar facturas de cliente</h1>
+    <p class="text-slate-500 text-sm">
+      Sube los XML y sus PDF (emparejados por nombre de archivo, ej.
+      <span class="font-mono">F123.xml</span> + <span class="font-mono">F123.pdf</span>).
+      Las facturas quedarán en
+      <a href="{% url 'finanzas:xml_pendientes' %}" class="text-sky-600 hover:underline">XMLs pendientes</a>,
+      donde el RFC del receptor te ayudará a anexarlas a la referencia del cliente.
+    </p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data"
+        class="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">
+        Archivos (XML y PDF) <span class="text-red-500">*</span>
+      </label>
+      <input type="file" name="archivos" multiple accept=".xml,.pdf"
+             class="block w-full text-sm text-slate-600">
+    </div>
+    <div class="pt-2 flex gap-3">
+      <button type="submit"
+              class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors">
+        Procesar
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

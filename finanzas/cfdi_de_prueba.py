@@ -83,3 +83,33 @@ def cfdi_apm(uuid='22222222-2222-2222-2222-222222222222', pedimento='6000517',
         uuid=uuid, pedimento=pedimento, agente=agente,
         contenedor=contenedor, bl=bl,
     ).encode('utf-8')
+
+
+_PLANTILLA_CLIENTE = '''<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+    Version="4.0" Serie="F" Folio="10234" Fecha="2026-07-10T12:00:00"
+    SubTotal="5000.00" Moneda="MXN" Total="5800.00" TipoDeComprobante="I"
+    MetodoPago="PPD" LugarExpedicion="06600">
+  <cfdi:Emisor Rfc="FPA010101AA1" Nombre="FLETES DEL PACIFICO" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="{rfc_receptor}" Nombre="{nombre_receptor}" UsoCFDI="G03" DomicilioFiscalReceptor="06600" RegimenFiscalReceptor="601"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto Cantidad="1" ClaveProdServ="78101800" ClaveUnidad="E48" Descripcion="FLETE TERRESTRE" ValorUnitario="5000.00" Importe="5000.00" ObjetoImp="02"/>
+  </cfdi:Conceptos>
+  <cfdi:Impuestos TotalImpuestosTrasladados="800.00">
+    <cfdi:Traslados>
+      <cfdi:Traslado Impuesto="002" TipoFactor="Tasa" Base="5000.00" TasaOCuota="0.160000" Importe="800.00"/>
+    </cfdi:Traslados>
+  </cfdi:Impuestos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="{uuid}" FechaTimbrado="2026-07-10T12:00:05"/>
+  </cfdi:Complemento>
+</cfdi:Comprobante>'''
+
+
+def cfdi_cliente(uuid='33333333-3333-3333-3333-333333333333',
+                 rfc_receptor='XAXX010101ABC',
+                 nombre_receptor='CLIENTE EJEMPLO'):
+    """CFDI de un emisor NO soportado por los extractores (cae a PENDIENTE)."""
+    return _PLANTILLA_CLIENTE.format(
+        uuid=uuid, rfc_receptor=rfc_receptor, nombre_receptor=nombre_receptor,
+    ).encode('utf-8')
