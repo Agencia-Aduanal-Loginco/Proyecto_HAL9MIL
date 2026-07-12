@@ -274,3 +274,12 @@ def delete_old_file_on_change(sender, instance, **kwargs):
             
             if old_file and old_file != new_file:
                 delete_file_from_storage(old_file.name)
+
+
+def media_storage():
+    """Storage para FileFields de media: DO Spaces si hay bucket configurado,
+    disco local (default_storage) si no — p. ej. en desarrollo y tests."""
+    from django.core.files.storage import default_storage
+    if getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None):
+        return MediaStorage()
+    return default_storage
