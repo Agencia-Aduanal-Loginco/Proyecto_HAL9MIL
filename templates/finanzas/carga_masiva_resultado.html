@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load permisos_tags %}
 {% block title %}Resultado de carga masiva · Finanzas{% endblock %}
 {% block content %}
 <div class="p-6 max-w-4xl">
@@ -47,7 +48,7 @@
     </table>
   </div>
 
-  {% if conteos.pendientes %}
+  {% if conteos.pendientes and request.user|tiene_modulo:'Finanzas' %}
   <div class="mt-4">
     <a href="{% url 'finanzas:xml_pendientes' %}" class="text-sky-600 hover:underline text-sm">
       Asignar los pendientes →

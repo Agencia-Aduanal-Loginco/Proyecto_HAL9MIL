@@ -75,6 +75,34 @@ class CargaClienteViewTests(TestCase):
             1,
         )
 
+    def test_usuario_sin_finanzas_no_ve_enlace_a_pendientes(self):
+        User.objects.create_user('sin_grupo2', password='x')
+        self.client.login(username='sin_grupo2', password='x')
+        resp = self.client.get(reverse('finanzas:carga_xml_cliente'))
+        self.assertNotContains(resp, reverse('finanzas:xml_pendientes'))
+
+    def test_usuario_finanzas_si_ve_enlace_a_pendientes(self):
+        resp = self.client.get(reverse('finanzas:carga_xml_cliente'))
+        self.assertContains(resp, reverse('finanzas:xml_pendientes'))
+
+    def test_resultado_oculta_asignar_pendientes_a_usuario_sin_finanzas(self):
+        User.objects.create_user('sin_grupo3', password='x')
+        self.client.login(username='sin_grupo3', password='x')
+        xml = SimpleUploadedFile('F99999.xml', cfdi_cliente(
+            uuid='55555555-5555-5555-5555-555555555555',
+        ))
+        resp = self.client.post(reverse('finanzas:carga_xml_cliente'), {'archivos': [xml]})
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'Asignar los pendientes')
+
+    def test_resultado_muestra_asignar_pendientes_a_finanzas(self):
+        xml = SimpleUploadedFile('F88888.xml', cfdi_cliente(
+            uuid='66666666-6666-6666-6666-666666666666',
+        ))
+        resp = self.client.post(reverse('finanzas:carga_xml_cliente'), {'archivos': [xml]})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Asignar los pendientes')
+
 
 def _crear_pendiente(rfc_receptor, uuid='44444444-4444-4444-4444-444444444444'):
     obj = XMLProveedor(
