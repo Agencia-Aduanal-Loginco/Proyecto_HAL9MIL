@@ -34,11 +34,17 @@ class CargaClienteViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Cargar facturas de cliente')
 
-    def test_usuario_sin_grupo_es_redirigido(self):
+    def test_usuario_sin_grupo_finanzas_puede_acceder(self):
         User.objects.create_user('sin_grupo', password='x')
         self.client.login(username='sin_grupo', password='x')
         resp = self.client.get(reverse('finanzas:carga_xml_cliente'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_usuario_anonimo_es_redirigido_a_login(self):
+        self.client.logout()
+        resp = self.client.get(reverse('finanzas:carga_xml_cliente'))
         self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login/', resp.url)
 
     def test_post_sin_archivos_redirige_con_error(self):
         resp = self.client.post(reverse('finanzas:carga_xml_cliente'), {})

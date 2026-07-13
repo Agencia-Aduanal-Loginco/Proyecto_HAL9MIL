@@ -5,6 +5,7 @@ import zipfile
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from core.permisos import modulo_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery, Sum
@@ -1110,7 +1111,7 @@ def carga_masiva_xml(request):
     return _procesar_subida_xml(request, 'finanzas:carga_masiva_xml')
 
 
-@modulo_required('Finanzas')
+@login_required
 def carga_xml_cliente(request):
     if request.method != 'POST':
         return render(request, 'finanzas/carga_cliente_form.html')
