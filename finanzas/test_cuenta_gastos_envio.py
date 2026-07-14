@@ -177,3 +177,49 @@ class EnviarCuentaGastosTests(TestCase):
         builder.assert_not_called()
         self.assertTrue(segunda.es_reenvio)
         self.assertEqual(segunda.zip_file.name, primera.zip_file.name)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP, SENDGRID_API_KEY='SG.test')
+class EnviarCgViewTests(TestCase):
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('envia_cg', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='envia_cg', password='x')
+        self.referencia = _referencia('LCRR0400/26')
+        _xml_proveedor(self.referencia)
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        self.url = reverse('finanzas:enviar_cg',
+                           kwargs={'num_refe': self.referencia.num_refe})
+
+    def test_post_envia_y_registra(self):
+        from finanzas.models import NotificacionCuentaGastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cls:
+            cls.return_value.send.return_value = _resp_sendgrid()
+            resp = self.client.post(self.url, {'destinatario': 'c@x.com'})
+        self.assertEqual(resp.status_code, 302)
+        notif = NotificacionCuentaGastos.objects.get()
+        self.assertEqual(notif.enviado_por, self.user)
+        self.assertFalse(notif.es_reenvio)
+
+    def test_segundo_envio_es_reenvio(self):
+        from finanzas.models import NotificacionCuentaGastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cls:
+            cls.return_value.send.return_value = _resp_sendgrid()
+            self.client.post(self.url, {'destinatario': 'c@x.com'})
+            self.client.post(self.url, {'destinatario': 'otro@x.com'})
+        segunda = NotificacionCuentaGastos.objects.order_by('pk').last()
+        self.assertTrue(segunda.es_reenvio)
+
+    def test_sin_destinatario_no_envia(self):
+        from finanzas.models import NotificacionCuentaGastos
+        self.client.post(self.url, {'destinatario': ''})
+        self.assertEqual(NotificacionCuentaGastos.objects.count(), 0)
+
+    def test_sin_cierre_activo_no_envia(self):
+        from finanzas.models import CierreCuentaGastos, NotificacionCuentaGastos
+        CierreCuentaGastos.objects.all().delete()
+        self.client.post(self.url, {'destinatario': 'c@x.com'})
+        self.assertEqual(NotificacionCuentaGastos.objects.count(), 0)

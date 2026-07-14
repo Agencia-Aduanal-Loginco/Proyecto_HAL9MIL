@@ -94,3 +94,65 @@ class GuardCierreViewsTests(TestCase):
         url = reverse('finanzas:anticipo_crear', kwargs={'num_refe': otra.num_refe})
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+
+
+class CerrarReabrirViewsTests(TestCase):
+    def setUp(self):
+        _login_finanzas(self)
+        self.referencia = _referencia('LCRR0004/26')
+
+    def _url(self, name):
+        return reverse(name, kwargs={'num_refe': self.referencia.num_refe})
+
+    def test_cerrar_crea_cierre_activo(self):
+        from finanzas.models import CierreCuentaGastos
+        resp = self.client.post(self._url('finanzas:cerrar_cg'), {'nota': 'lista'})
+        self.assertRedirects(resp, self._url('finanzas:referencia_estado'))
+        cierre = CierreCuentaGastos.activo_para(self.referencia)
+        self.assertIsNotNone(cierre)
+        self.assertEqual(cierre.cerrada_por, self.user)
+        self.assertEqual(cierre.nota, 'lista')
+
+    def test_get_no_cierra(self):
+        from finanzas.models import CierreCuentaGastos
+        self.client.get(self._url('finanzas:cerrar_cg'))
+        self.assertIsNone(CierreCuentaGastos.activo_para(self.referencia))
+
+    def test_usuario_sin_finanzas_no_puede_cerrar(self):
+        from django.contrib.auth.models import User as U
+        U.objects.create_user('ajeno', password='x')
+        self.client.login(username='ajeno', password='x')
+        self.client.post(self._url('finanzas:cerrar_cg'))
+        from finanzas.models import CierreCuentaGastos
+        self.assertIsNone(CierreCuentaGastos.activo_para(self.referencia))
+
+    def test_reabrir_requiere_superusuario(self):
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        self.client.post(self._url('finanzas:reabrir_cg'))
+        self.assertIsNotNone(CierreCuentaGastos.activo_para(self.referencia))
+
+    def test_superusuario_reabre(self):
+        from django.contrib.auth.models import User as U
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        superu = U.objects.create_superuser('root', password='x')
+        self.client.login(username='root', password='x')
+        self.client.post(self._url('finanzas:reabrir_cg'))
+        self.assertIsNone(CierreCuentaGastos.activo_para(self.referencia))
+        cierre = CierreCuentaGastos.objects.get(referencia=self.referencia)
+        self.assertEqual(cierre.reabierta_por, superu)
+
+    def test_recierre_tras_reapertura_limpia_campos(self):
+        from django.utils import timezone as tz
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(
+            referencia=self.referencia, cerrada_por=self.user,
+            reabierta_por=self.user, reabierta_en=tz.now(),
+        )
+        self.client.post(self._url('finanzas:cerrar_cg'))
+        cierre = CierreCuentaGastos.objects.get(referencia=self.referencia)
+        self.assertTrue(cierre.activa)
+        self.assertIsNone(cierre.reabierta_por)

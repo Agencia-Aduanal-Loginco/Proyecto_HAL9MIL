@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, views_cuenta_gastos
 
 app_name = 'finanzas'
 
@@ -51,4 +51,8 @@ urlpatterns = [
     path('referencias/<path:num_refe>/gasto/', views.gasto_crear, name='gasto_crear'),
     path('referencias/<path:num_refe>/xml-proveedor/', views.subir_xml_proveedor, name='subir_xml'),
     path('referencias/<path:num_refe>/factura/', views.factura_crear, name='factura_crear'),
+    # Cierre y envío de cuenta de gastos
+    path('referencias/<path:num_refe>/cerrar-cg/', views_cuenta_gastos.cerrar_cg, name='cerrar_cg'),
+    path('referencias/<path:num_refe>/reabrir-cg/', views_cuenta_gastos.reabrir_cg, name='reabrir_cg'),
+    path('referencias/<path:num_refe>/enviar-cg/', views_cuenta_gastos.enviar_cg, name='enviar_cg'),
 ]
