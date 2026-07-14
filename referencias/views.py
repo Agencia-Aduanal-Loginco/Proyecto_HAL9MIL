@@ -514,7 +514,7 @@ def glosa(request):
         fir_elec='',
         num_operacion='',
         linea_captura='',
-        es_rectificacion=False,
+        es_rectificacion=True,
     ).filter(
         Q(fecha_arribo__year=year,      fecha_arribo__month=month)       |
         Q(fecha_arribo__year=prev_year, fecha_arribo__month=prev_month)  |
