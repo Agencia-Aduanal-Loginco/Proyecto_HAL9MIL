@@ -81,7 +81,7 @@ def enviar_cuenta_gastos(referencia, destinatario, cc='', usuario=None,
     Nunca lanza: en fallo la notificación queda en ERROR con error_msg y el
     llamador decide qué mostrar. Retorna la NotificacionCuentaGastos.
     """
-    from .models import NotificacionCuentaGastos
+    from .models import CierreCuentaGastos, NotificacionCuentaGastos
 
     notif = NotificacionCuentaGastos.objects.create(
         referencia=referencia, destinatario=destinatario, cc=cc or '',
@@ -96,6 +96,19 @@ def enviar_cuenta_gastos(referencia, destinatario, cc='', usuario=None,
                 .exclude(zip_file='').exclude(pk=notif.pk)
                 .order_by('-enviado_en').first()
             )
+            if previa:
+                # Si la cuenta se (re)cerró después de que se envió `previa`,
+                # hubo una reapertura de por medio en la que pudieron
+                # agregarse o quitarse CFDIs: el ZIP de `previa` ya no es
+                # confiable y hay que reconstruirlo. `cerrada_en` se
+                # actualiza en cada cierre y re-cierre (a diferencia de
+                # `reabierta_en`, que un re-cierre limpia de inmediato), así
+                # que es el campo que sí conserva la señal para este chequeo.
+                cierre = CierreCuentaGastos.objects.filter(
+                    referencia=referencia
+                ).first()
+                if cierre and cierre.cerrada_en > previa.enviado_en:
+                    previa = None
         if previa:
             with previa.zip_file.open('rb') as f:
                 data = f.read()

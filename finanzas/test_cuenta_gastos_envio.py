@@ -164,6 +164,11 @@ class EnviarCuentaGastosTests(TestCase):
         self.assertEqual(notif.estado, 'ERROR')
 
     def test_reenvio_reutiliza_zip(self):
+        """Reenvío normal (sin reapertura de por medio): se reutiliza el ZIP.
+
+        Es el caso común: la mayoría de los reenvíos solo corrigen un correo
+        mal capturado, no reflejan cambios en los CFDIs.
+        """
         from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
         with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
             cliente_cls.return_value.send.return_value = _resp_sendgrid()
@@ -177,6 +182,61 @@ class EnviarCuentaGastosTests(TestCase):
         builder.assert_not_called()
         self.assertTrue(segunda.es_reenvio)
         self.assertEqual(segunda.zip_file.name, primera.zip_file.name)
+
+    def test_reenvio_tras_reapertura_reconstruye_zip(self):
+        """close -> send -> reabrir -> (cambian CFDIs) -> re-cerrar -> send.
+
+        El segundo envío es un reenvío (ya existe una notificación previa),
+        pero la cuenta se reabrió y se volvió a cerrar desde entonces, así
+        que el conjunto de CFDIs pudo cambiar. El ZIP de la notificación
+        previa ya no es confiable y debe reconstruirse en vez de
+        reutilizarse, para que el ZIP adjunto coincida con la balanza que
+        se renderiza en el correo (siempre calculada con el estado actual).
+        """
+        from finanzas import cuenta_gastos_envio
+        from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
+        from finanzas.models import CierreCuentaGastos
+
+        cierre = CierreCuentaGastos.objects.create(
+            referencia=self.referencia, cerrada_por=self.user,
+        )
+
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
+            cliente_cls.return_value.send.return_value = _resp_sendgrid()
+            primera = enviar_cuenta_gastos(self.referencia, 'a@example.com')
+
+            # Superusuario reabre la cuenta de gastos...
+            cierre.reabierta_por = self.user
+            cierre.reabierta_en = timezone.now()
+            cierre.save()
+
+            # ...se agregan/quitan CFDIs mientras está reabierta...
+            _xml_proveedor(
+                self.referencia,
+                uuid='33333333-3333-3333-3333-333333333333',
+            )
+
+            # ...y se vuelve a cerrar (mismo comportamiento que
+            # views_cuenta_gastos.cerrar_cg en su rama de re-cierre: limpia
+            # la reapertura y refresca cerrada_en).
+            cierre.cerrada_por = self.user
+            cierre.cerrada_en = timezone.now()
+            cierre.reabierta_por = None
+            cierre.reabierta_en = None
+            cierre.save()
+
+            with patch(
+                'finanzas.cuenta_gastos_envio.construir_zip_cuenta_gastos',
+                wraps=cuenta_gastos_envio.construir_zip_cuenta_gastos,
+            ) as builder:
+                segunda = enviar_cuenta_gastos(
+                    self.referencia, 'otro@example.com', es_reenvio=True
+                )
+
+        builder.assert_called_once_with(self.referencia)
+        self.assertTrue(segunda.es_reenvio)
+        self.assertEqual(segunda.estado, 'ENVIADO')
+        self.assertNotEqual(segunda.zip_file.name, primera.zip_file.name)
 
 
 @override_settings(MEDIA_ROOT=MEDIA_TMP, SENDGRID_API_KEY='SG.test')
