@@ -89,3 +89,27 @@ class ConstruirZipTests(TestCase):
         with patch.object(cuenta_gastos_envio, 'LIMITE_ZIP_BYTES', 10):
             with self.assertRaises(ValueError):
                 cuenta_gastos_envio.construir_zip_cuenta_gastos(self.referencia)
+
+
+class EmailBalanzaTemplateTests(TestCase):
+    def test_render_contiene_balanza(self):
+        from django.template.loader import render_to_string
+        from finanzas.cuenta_gastos_envio import contexto_balanza
+        from finanzas.models import Anticipo, GastoReferencia
+        referencia = _referencia('LCRR0200/26')
+        Anticipo.objects.create(
+            referencia=referencia, fecha=timezone.now().date(),
+            monto=Decimal('5000'), forma_pago='03',
+        )
+        GastoReferencia.objects.create(
+            referencia=referencia, tipo='MANIOBRAS', concepto='MUELLAJE',
+            fecha=timezone.now().date(), monto=Decimal('11094'),
+        )
+        html = render_to_string(
+            'finanzas/email_cuenta_gastos.html', contexto_balanza(referencia)
+        )
+        self.assertIn('LCRR0200/26', html)
+        self.assertIn('Anticipos del cliente', html)
+        self.assertIn('MUELLAJE', html)
+        self.assertIn('5000', html.replace(',', ''))
+        self.assertIn('Saldo', html)

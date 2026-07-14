@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;">
+  <tr><td align="center">
+    <table role="presentation" width="640" cellpadding="0" cellspacing="0"
+           style="background:#ffffff;border-radius:12px;overflow:hidden;">
+      <tr>
+        <td style="background:#0f172a;padding:20px 28px;">
+          <p style="margin:0;color:#94a3b8;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Cuenta de gastos</p>
+          <h1 style="margin:4px 0 0;color:#ffffff;font-size:22px;">{{ referencia.num_refe }}</h1>
+          <p style="margin:4px 0 0;color:#cbd5e1;font-size:13px;">{{ referencia.nombre_cliente }}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:24px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <!-- Anticipos -->
+              <td width="49%" valign="top" style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
+                <p style="margin:0 0 10px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#16a34a;font-weight:bold;">Anticipos del cliente</p>
+                {% for a in anticipos %}
+                <p style="margin:0 0 6px;font-size:13px;">
+                  {{ a.fecha|date:"d/m/Y" }} —
+                  <strong>${{ a.monto|floatformat:2 }} {{ a.moneda }}</strong>
+                </p>
+                {% empty %}
+                <p style="margin:0;font-size:13px;color:#94a3b8;">Sin anticipos registrados</p>
+                {% endfor %}
+                <p style="margin:12px 0 0;padding-top:10px;border-top:1px solid #e2e8f0;font-size:14px;">
+                  Total: <strong style="color:#16a34a;">${{ saldo.total_anticipos|floatformat:2 }}</strong>
+                </p>
+              </td>
+              <td width="2%"></td>
+              <!-- Gastos -->
+              <td width="49%" valign="top" style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
+                <p style="margin:0 0 10px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#dc2626;font-weight:bold;">Gastos</p>
+                {% for g in gastos %}
+                <p style="margin:0 0 6px;font-size:13px;">
+                  {{ g.concepto }} —
+                  <strong>${{ g.monto|floatformat:2 }} {{ g.moneda }}</strong>
+                </p>
+                {% empty %}
+                <p style="margin:0;font-size:13px;color:#94a3b8;">Sin gastos registrados</p>
+                {% endfor %}
+                <p style="margin:12px 0 0;padding-top:10px;border-top:1px solid #e2e8f0;font-size:14px;">
+                  Total: <strong style="color:#dc2626;">${{ saldo.total_gastos|floatformat:2 }}</strong>
+                </p>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;">
+            <tr>
+              <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;">
+                <p style="margin:0;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Saldo</p>
+                <p style="margin:4px 0 0;font-size:20px;font-weight:bold;color:{% if saldo.saldo >= 0 %}#0284c7{% else %}#ea580c{% endif %};">
+                  ${{ saldo.saldo|floatformat:2 }}
+                </p>
+                <p style="margin:2px 0 0;font-size:12px;color:#94a3b8;">
+                  {% if saldo.saldo > 0 %}Remanente a su favor{% elif saldo.saldo < 0 %}Pendiente de cobro{% else %}Saldo cero{% endif %}
+                </p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:20px 0 0;font-size:13px;color:#475569;">
+            Se adjunta un archivo ZIP con los XML y PDF de los comprobantes fiscales de esta cuenta de gastos.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:14px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+          <p style="margin:0;font-size:11px;color:#94a3b8;">Este correo fue generado automáticamente por el sistema HAL9MIL.</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
