@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Sum
+from django.utils import timezone
 
 from hal9mil.storage_backends import media_storage
 
@@ -537,3 +538,87 @@ class RecordatorioCobranza(models.Model):
 
     def __str__(self):
         return f'{self.factura} | {self.get_tipo_display()} | {self.enviado_en:%Y-%m-%d}'
+
+
+# ── Envío de cuenta de gastos al cliente ─────────────────────────────────────
+
+class CierreCuentaGastos(models.Model):
+    """Cierre financiero de la cuenta de gastos de una referencia.
+
+    Cerrada = existe el registro y reabierta_en IS NULL. La reapertura (solo
+    superusuario) llena reabierta_por/reabierta_en; un re-cierre posterior
+    actualiza cerrada_por/cerrada_en y limpia la reapertura (se audita solo
+    el último ciclo).
+    """
+    referencia = models.OneToOneField(
+        'referencias.Referencia',
+        on_delete=models.PROTECT, related_name='cierre_cg'
+    )
+    cerrada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True,
+        on_delete=models.SET_NULL, related_name='cierres_cg'
+    )
+    cerrada_en = models.DateTimeField(default=timezone.now)
+    nota = models.CharField(max_length=300, blank=True)
+    reabierta_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='reaperturas_cg'
+    )
+    reabierta_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Cierre de cuenta de gastos'
+        verbose_name_plural = 'Cierres de cuenta de gastos'
+
+    @property
+    def activa(self):
+        return self.reabierta_en is None
+
+    @classmethod
+    def activo_para(cls, referencia):
+        return cls.objects.filter(
+            referencia=referencia, reabierta_en__isnull=True
+        ).first()
+
+    def __str__(self):
+        estado = 'cerrada' if self.activa else 'reabierta'
+        return f'{self.referencia} | {estado} ({self.cerrada_en:%Y-%m-%d})'
+
+
+class NotificacionCuentaGastos(models.Model):
+    ESTADOS = [
+        ('ENVIADO', 'Enviado'),
+        ('ENTREGADO', 'Entregado'),
+        ('LEIDO', 'Leído'),
+        ('REBOTADO', 'Rebotado'),
+        ('ERROR', 'Error'),
+    ]
+    referencia = models.ForeignKey(
+        'referencias.Referencia',
+        on_delete=models.PROTECT, related_name='notificaciones_cg'
+    )
+    destinatario = models.EmailField()
+    cc = models.EmailField(blank=True)
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True,
+        on_delete=models.SET_NULL, related_name='notificaciones_cg_enviadas'
+    )
+    enviado_en = models.DateTimeField(auto_now_add=True)
+    estado = models.CharField(max_length=10, choices=ESTADOS, default='ENVIADO')
+    entregado_en = models.DateTimeField(null=True, blank=True)
+    leido_en = models.DateTimeField(null=True, blank=True)
+    sg_message_id = models.CharField(max_length=100, blank=True, db_index=True)
+    error_msg = models.TextField(blank=True)
+    es_reenvio = models.BooleanField(default=False)
+    zip_file = models.FileField(
+        storage=media_storage, upload_to='cuentas_gastos/%Y/%m/',
+        null=True, blank=True
+    )
+
+    class Meta:
+        ordering = ['-enviado_en']
+        verbose_name = 'Notificación de cuenta de gastos'
+        verbose_name_plural = 'Notificaciones de cuenta de gastos'
+
+    def __str__(self):
+        return f'{self.referencia} → {self.destinatario} [{self.estado}]'
