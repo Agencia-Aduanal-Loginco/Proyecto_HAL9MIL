@@ -223,3 +223,55 @@ class EnviarCgViewTests(TestCase):
         CierreCuentaGastos.objects.all().delete()
         self.client.post(self.url, {'destinatario': 'c@x.com'})
         self.assertEqual(NotificacionCuentaGastos.objects.count(), 0)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class NotificacionesListTests(TestCase):
+    def setUp(self):
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('lista_cg', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='lista_cg', password='x')
+        from finanzas.models import NotificacionCuentaGastos
+        self.referencia = _referencia('LCRR0600/26')
+        self.notif = NotificacionCuentaGastos.objects.create(
+            referencia=self.referencia, destinatario='c@x.com',
+            enviado_por=self.user, estado='ENTREGADO',
+        )
+        self.url = reverse('finanzas:notificaciones_cg')
+
+    def test_lista_muestra_notificacion(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'c@x.com')
+        self.assertContains(resp, 'LCRR0600/26')
+        self.assertContains(resp, 'Entregado')
+
+    def test_filtro_por_estado(self):
+        resp = self.client.get(self.url, {'estado': 'LEIDO'})
+        self.assertNotContains(resp, 'c@x.com')
+
+    def test_busqueda_por_referencia(self):
+        resp = self.client.get(self.url, {'q': 'LCRR0600'})
+        self.assertContains(resp, 'c@x.com')
+        resp = self.client.get(self.url, {'q': 'NOEXISTE'})
+        self.assertNotContains(resp, 'c@x.com')
+
+    def test_descarga_zip(self):
+        from django.core.files.base import ContentFile
+        self.notif.zip_file.save('CG_test.zip', ContentFile(b'PK\x05\x06zipdata'))
+        url = reverse('finanzas:notificacion_cg_zip', kwargs={'pk': self.notif.pk})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+
+    def test_zip_inexistente_404(self):
+        url = reverse('finanzas:notificacion_cg_zip', kwargs={'pk': self.notif.pk})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_requiere_modulo_finanzas(self):
+        User.objects.create_user('sin_modulo', password='x')
+        self.client.login(username='sin_modulo', password='x')
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 302)

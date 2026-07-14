@@ -1,12 +1,17 @@
 """Vistas del flujo de cierre y envío de la cuenta de gastos al cliente."""
 import json
 import logging
+import os
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
-from django.shortcuts import get_object_or_404, redirect
+from django.db.models import Q
+from django.http import (
+    FileResponse, Http404, HttpResponse, HttpResponseForbidden,
+    HttpResponseNotAllowed,
+)
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from sendgrid.helpers.eventwebhook import EventWebhook, EventWebhookHeader
@@ -15,7 +20,7 @@ from core.permisos import modulo_required
 from referencias.models import Referencia
 
 from .cuenta_gastos_envio import enviar_cuenta_gastos, procesar_evento_sendgrid
-from .models import CierreCuentaGastos
+from .models import CierreCuentaGastos, NotificacionCuentaGastos
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +101,40 @@ def enviar_cg(request, num_refe):
     else:
         messages.success(request, f'Cuenta de gastos enviada a {destinatario}.')
     return _redirect_estado(num_refe)
+
+
+@modulo_required('Finanzas')
+def notificaciones_cg_list(request):
+    qs = (NotificacionCuentaGastos.objects
+          .select_related('referencia', 'enviado_por')
+          .order_by('-enviado_en'))
+    estado = request.GET.get('estado', '')
+    if estado:
+        qs = qs.filter(estado=estado)
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(referencia__num_refe__icontains=q)
+            | Q(referencia__nombre_cliente__icontains=q)
+            | Q(destinatario__icontains=q)
+        )
+    return render(request, 'finanzas/notificaciones_cg.html', {
+        'notificaciones': qs[:200],
+        'estado_filtro': estado,
+        'q': q,
+        'estados': NotificacionCuentaGastos.ESTADOS,
+    })
+
+
+@modulo_required('Finanzas')
+def notificacion_cg_zip(request, pk):
+    notif = get_object_or_404(NotificacionCuentaGastos, pk=pk)
+    if not notif.zip_file:
+        raise Http404('Esta notificación no tiene ZIP guardado.')
+    return FileResponse(
+        notif.zip_file.open('rb'), content_type='application/zip',
+        as_attachment=True, filename=os.path.basename(notif.zip_file.name),
+    )
 
 
 @csrf_exempt

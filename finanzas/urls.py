@@ -55,5 +55,7 @@ urlpatterns = [
     path('referencias/<path:num_refe>/cerrar-cg/', views_cuenta_gastos.cerrar_cg, name='cerrar_cg'),
     path('referencias/<path:num_refe>/reabrir-cg/', views_cuenta_gastos.reabrir_cg, name='reabrir_cg'),
     path('referencias/<path:num_refe>/enviar-cg/', views_cuenta_gastos.enviar_cg, name='enviar_cg'),
+    path('notificaciones-cg/', views_cuenta_gastos.notificaciones_cg_list, name='notificaciones_cg'),
+    path('notificaciones-cg/<int:pk>/zip/', views_cuenta_gastos.notificacion_cg_zip, name='notificacion_cg_zip'),
     path('webhooks/sendgrid/', views_cuenta_gastos.sendgrid_webhook, name='sendgrid_webhook'),
 ]

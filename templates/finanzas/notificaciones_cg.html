@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Notificaciones de Cuenta de Gastos{% endblock %}
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs text-slate-500 uppercase tracking-wider">Finanzas</p>
+      <h1 class="text-2xl font-bold text-slate-800">Notificaciones de cuenta de gastos</h1>
+      <p class="text-slate-500 text-sm mt-0.5">Envíos al cliente con su estado de entrega y lectura.</p>
+    </div>
+  </div>
+
+  {% for msg in messages %}
+  <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">{{ msg }}</div>
+  {% endfor %}
+
+  <!-- Filtros -->
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Estado</label>
+      <select name="estado" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
+        <option value="">Todos</option>
+        {% for valor, etiqueta in estados %}
+        <option value="{{ valor }}" {% if estado_filtro == valor %}selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Buscar</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Referencia, cliente o correo"
+             class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64">
+    </div>
+    <button type="submit"
+            class="bg-slate-600 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+      Filtrar
+    </button>
+  </form>
+
+  <!-- Tabla -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    {% if notificaciones %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+        <tr>
+          <th class="px-5 py-2 text-left">Referencia</th>
+          <th class="px-5 py-2 text-left">Cliente</th>
+          <th class="px-5 py-2 text-left">Destinatario</th>
+          <th class="px-5 py-2 text-left">Enviado por</th>
+          <th class="px-5 py-2 text-left">Fecha</th>
+          <th class="px-5 py-2 text-left">Estado</th>
+          <th class="px-5 py-2 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for n in notificaciones %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-2.5">
+            <a href="{% url 'finanzas:referencia_estado' num_refe=n.referencia.num_refe %}"
+               class="text-sky-600 hover:underline font-mono">{{ n.referencia.num_refe }}</a>
+            {% if n.es_reenvio %}<span class="text-xs text-slate-400 ml-1">(reenvío)</span>{% endif %}
+          </td>
+          <td class="px-5 py-2.5 text-slate-600">{{ n.referencia.nombre_cliente|default:"—" }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs">{{ n.destinatario }}</td>
+          <td class="px-5 py-2.5 text-slate-500 text-xs">{{ n.enviado_por|default:"—" }}</td>
+          <td class="px-5 py-2.5 text-slate-600">{{ n.enviado_en|date:"d/m/Y H:i" }}</td>
+          <td class="px-5 py-2.5">
+            <span class="px-2 py-0.5 rounded-full text-xs
+              {% if n.estado == 'LEIDO' %}bg-green-100 text-green-700
+              {% elif n.estado == 'ENTREGADO' %}bg-sky-100 text-sky-700
+              {% elif n.estado == 'ENVIADO' %}bg-slate-100 text-slate-600
+              {% else %}bg-red-100 text-red-700{% endif %}"
+              {% if n.error_msg %}title="{{ n.error_msg }}"{% endif %}>
+              {{ n.get_estado_display }}
+            </span>
+          </td>
+          <td class="px-5 py-2.5 space-x-3 whitespace-nowrap">
+            {% if n.zip_file %}
+            <a href="{% url 'finanzas:notificacion_cg_zip' n.pk %}"
+               class="text-sky-600 hover:underline text-xs">ZIP</a>
+            {% endif %}
+            <a href="{% url 'finanzas:referencia_estado' num_refe=n.referencia.num_refe %}"
+               class="text-indigo-600 hover:underline text-xs">Reenviar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="px-5 py-10 text-center text-slate-400 text-sm">Sin notificaciones registradas</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
