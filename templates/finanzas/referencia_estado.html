@@ -11,6 +11,7 @@
       <p class="text-slate-500 text-sm mt-0.5">{{ referencia.nombre_cliente }}</p>
     </div>
     <div class="flex gap-2">
+      {% if not cierre %}
       <a href="{% url 'finanzas:anticipo_crear' num_refe=referencia.num_refe %}"
          class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
         + Anticipo
@@ -19,6 +20,15 @@
          class="bg-slate-600 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
         + Gasto
       </a>
+      <form method="post" action="{% url 'finanzas:cerrar_cg' num_refe=referencia.num_refe %}"
+            onsubmit="return confirm('¿Cerrar la cuenta de gastos? Ya no se podrán registrar anticipos ni gastos.');">
+        {% csrf_token %}
+        <button type="submit"
+                class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          Cerrar cuenta de gastos
+        </button>
+      </form>
+      {% endif %}
       <a href="{% url 'finanzas:factura_crear' num_refe=referencia.num_refe %}"
          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
         Emitir factura
@@ -30,6 +40,25 @@
   {% for msg in messages %}
   <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">{{ msg }}</div>
   {% endfor %}
+
+  {% if cierre %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+    <p class="text-sm text-amber-800">
+      🔒 Cuenta de gastos cerrada el {{ cierre.cerrada_en|date:"d/m/Y H:i" }}
+      por {{ cierre.cerrada_por|default:"—" }}.
+      {% if cierre.nota %}<span class="text-amber-600">{{ cierre.nota }}</span>{% endif %}
+    </p>
+    {% if request.user.is_superuser %}
+    <form method="post" action="{% url 'finanzas:reabrir_cg' num_refe=referencia.num_refe %}"
+          onsubmit="return confirm('¿Reabrir la cuenta de gastos?');">
+      {% csrf_token %}
+      <button type="submit" class="text-xs text-amber-700 border border-amber-300 hover:bg-amber-100 px-3 py-1.5 rounded-lg">
+        Reabrir cuenta
+      </button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <!-- Saldo resumen -->
   <div class="grid grid-cols-3 gap-4">
@@ -96,6 +125,7 @@
   </div>
 
   <!-- Upload XML proveedor -->
+  {% if not cierre %}
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h2 class="font-semibold text-slate-700 mb-3">Subir XML de proveedor (CFDI)</h2>
     <form method="post" enctype="multipart/form-data"
@@ -171,6 +201,103 @@
     </div>
     {% endif %}
   </div>
+  {% endif %}
+
+  {% if cierre %}
+  <!-- Balanza y envío al cliente -->
+  <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+    <h2 class="font-semibold text-slate-700">Balanza de la cuenta de gastos</h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="border border-slate-200 rounded-lg p-4">
+        <p class="text-xs text-green-600 font-semibold uppercase tracking-wider mb-2">Anticipos del cliente</p>
+        {% for a in anticipos %}
+        <div class="flex justify-between text-sm py-1 border-b border-slate-50">
+          <span class="text-slate-600">{{ a.fecha|date:"d/m/Y" }}</span>
+          <span class="font-mono text-green-700">${{ a.monto|floatformat:2 }} {{ a.moneda }}</span>
+        </div>
+        {% empty %}
+        <p class="text-sm text-slate-400">Sin anticipos registrados</p>
+        {% endfor %}
+        <p class="text-sm font-semibold mt-2 pt-2 border-t border-slate-200">
+          Total: <span class="text-green-600">${{ saldo.total_anticipos|floatformat:2 }}</span>
+        </p>
+      </div>
+      <div class="border border-slate-200 rounded-lg p-4">
+        <p class="text-xs text-red-600 font-semibold uppercase tracking-wider mb-2">Gastos</p>
+        {% for g in gastos %}
+        <div class="flex justify-between text-sm py-1 border-b border-slate-50">
+          <span class="text-slate-600 truncate pr-2">{{ g.concepto }}</span>
+          <span class="font-mono text-red-700 whitespace-nowrap">${{ g.monto|floatformat:2 }} {{ g.moneda }}</span>
+        </div>
+        {% empty %}
+        <p class="text-sm text-slate-400">Sin gastos registrados</p>
+        {% endfor %}
+        <p class="text-sm font-semibold mt-2 pt-2 border-t border-slate-200">
+          Total: <span class="text-red-600">${{ saldo.total_gastos|floatformat:2 }}</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Envío -->
+    <form method="post" action="{% url 'finanzas:enviar_cg' num_refe=referencia.num_refe %}"
+          class="flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Destinatario</label>
+        <input type="email" name="destinatario" required
+               value="{% if not notificaciones %}{{ destinatario_sugerido }}{% endif %}"
+               placeholder="correo@cliente.com"
+               class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">CC (opcional)</label>
+        <input type="email" name="cc" value="{% if not notificaciones %}{{ cc_sugerido }}{% endif %}"
+               class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64">
+      </div>
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        {% if notificaciones %}Reenviar{% else %}Enviar al cliente{% endif %}
+      </button>
+      <p class="text-xs text-slate-400 w-full">
+        Se enviará la balanza con un ZIP de los {{ referencia.xmls_proveedor.count }} CFDI de la referencia.
+      </p>
+    </form>
+
+    {% if notificaciones %}
+    <div>
+      <h3 class="text-sm font-semibold text-slate-600 mb-2">Historial de envíos</h3>
+      <table class="w-full text-xs">
+        <thead class="text-slate-400 uppercase">
+          <tr>
+            <th class="text-left py-1 pr-4">Fecha</th>
+            <th class="text-left py-1 pr-4">Destinatario</th>
+            <th class="text-left py-1 pr-4">Enviado por</th>
+            <th class="text-left py-1">Estado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for n in notificaciones %}
+          <tr>
+            <td class="py-1.5 pr-4 text-slate-600">{{ n.enviado_en|date:"d/m/Y H:i" }}</td>
+            <td class="py-1.5 pr-4 font-mono">{{ n.destinatario }}</td>
+            <td class="py-1.5 pr-4 text-slate-500">{{ n.enviado_por|default:"—" }}</td>
+            <td class="py-1.5">
+              <span class="px-2 py-0.5 rounded-full
+                {% if n.estado == 'LEIDO' %}bg-green-100 text-green-700
+                {% elif n.estado == 'ENTREGADO' %}bg-sky-100 text-sky-700
+                {% elif n.estado == 'ENVIADO' %}bg-slate-100 text-slate-600
+                {% else %}bg-red-100 text-red-700{% endif %}">
+                {{ n.get_estado_display }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <!-- Gastos -->
   <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">

@@ -156,3 +156,72 @@ class CerrarReabrirViewsTests(TestCase):
         cierre = CierreCuentaGastos.objects.get(referencia=self.referencia)
         self.assertTrue(cierre.activa)
         self.assertIsNone(cierre.reabierta_por)
+
+
+class EstadoFinancieroTemplateTests(TestCase):
+    def setUp(self):
+        _login_finanzas(self)
+        self.referencia = _referencia('LCRR0005/26')
+        self.url = reverse('finanzas:referencia_estado',
+                           kwargs={'num_refe': self.referencia.num_refe})
+
+    def test_abierta_muestra_botones_y_upload(self):
+        resp = self.client.get(self.url)
+        self.assertContains(resp, '+ Anticipo')
+        self.assertContains(resp, 'Subir XML de proveedor')
+        self.assertContains(resp, 'Cerrar cuenta de gastos')
+        self.assertNotContains(resp, 'Enviar al cliente')
+
+    def test_cerrada_oculta_botones_y_muestra_balanza(self):
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, '+ Anticipo')
+        self.assertNotContains(resp, 'Subir XML de proveedor')
+        self.assertContains(resp, 'Cuenta de gastos cerrada')
+        self.assertContains(resp, 'Balanza de la cuenta de gastos')
+        self.assertContains(resp, 'Enviar al cliente')
+        self.assertContains(resp, 'Emitir factura')  # nunca se bloquea
+
+    def test_cerrada_no_muestra_reabrir_a_no_superusuario(self):
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, 'Reabrir cuenta')
+
+    def test_cerrada_muestra_reabrir_a_superusuario(self):
+        from django.contrib.auth.models import User as U
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        U.objects.create_superuser('root2', password='x')
+        self.client.login(username='root2', password='x')
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'Reabrir cuenta')
+
+    def test_con_envio_previo_muestra_historial_y_reenviar(self):
+        from finanzas.models import CierreCuentaGastos, NotificacionCuentaGastos
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        NotificacionCuentaGastos.objects.create(
+            referencia=self.referencia, destinatario='c@x.com',
+            enviado_por=self.user,
+        )
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'Historial de envíos')
+        self.assertContains(resp, 'c@x.com')
+        self.assertContains(resp, 'Reenviar')
+
+    def test_destinatario_prellenado_con_fallback(self):
+        from clientes.models import Cliente
+        from finanzas.models import CierreCuentaGastos
+        self.referencia.cve_cliente = 'CAC001'
+        self.referencia.save(update_fields=['cve_cliente'])
+        Cliente.objects.create(nombre_cliente='CACIPA', cve_cliente='CAC001',
+                               email_cobranza='cob@cacipa.com')
+        CierreCuentaGastos.objects.create(referencia=self.referencia,
+                                          cerrada_por=self.user)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'cob@cacipa.com')

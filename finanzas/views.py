@@ -70,15 +70,30 @@ def dashboard_financiero(request):
 
 @modulo_required('Finanzas')
 def referencia_estado_financiero(request, num_refe):
+    from clientes.models import Cliente
+    from .cuenta_gastos_envio import destinatarios_cliente
+    from .models import CierreCuentaGastos
+
     referencia = get_object_or_404(Referencia, num_refe=num_refe)
     anticipos = referencia.anticipos.select_related('registrado_por').order_by('-fecha')
     gastos = referencia.gastos_finanzas.select_related('cuenta_gasto', 'registrado_por').order_by('-fecha')
     saldo = saldo_referencia(referencia)
+
+    cierre = CierreCuentaGastos.activo_para(referencia)
+    notificaciones = referencia.notificaciones_cg.select_related('enviado_por')
+    cliente = Cliente.objects.filter(cve_cliente=referencia.cve_cliente).first() \
+        if referencia.cve_cliente else None
+    destinatario_sugerido, cc_sugerido = destinatarios_cliente(cliente)
+
     return render(request, 'finanzas/referencia_estado.html', {
         'referencia': referencia,
         'anticipos': anticipos,
         'gastos': gastos,
         'saldo': saldo,
+        'cierre': cierre,
+        'notificaciones': notificaciones,
+        'destinatario_sugerido': destinatario_sugerido,
+        'cc_sugerido': cc_sugerido,
     })
 
 
