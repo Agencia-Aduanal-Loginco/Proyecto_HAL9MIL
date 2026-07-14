@@ -10,4 +10,5 @@ class ClienteAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {'fields': ('nombre_cliente', 'cve_cliente', 'rfc')}),
         ('Cobranza', {'fields': ('email_cobranza', 'email_cobranza_cc')}),
+        ('Cuenta de gastos', {'fields': ('email_cuenta_gastos', 'email_cuenta_gastos_cc')}),
     )

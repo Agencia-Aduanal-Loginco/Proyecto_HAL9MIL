@@ -7,6 +7,8 @@ class Cliente(models.Model):
     rfc               = models.CharField(max_length=13, blank=True)
     email_cobranza    = models.EmailField(blank=True)
     email_cobranza_cc = models.EmailField(blank=True)
+    email_cuenta_gastos    = models.EmailField(blank=True)
+    email_cuenta_gastos_cc = models.EmailField(blank=True)
 
     class Meta:
         ordering        = ['nombre_cliente']

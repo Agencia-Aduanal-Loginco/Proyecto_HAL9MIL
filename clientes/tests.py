@@ -18,3 +18,20 @@ class ClienteEmailTest(TestCase):
         c.refresh_from_db()
         self.assertEqual(c.email_cobranza, 'cuentas@acme.com')
         self.assertEqual(c.email_cobranza_cc, 'contador@acme.com')
+
+
+class ClienteEmailCuentaGastosTests(TestCase):
+    def test_campos_nuevos_aceptan_blank(self):
+        cliente = Cliente.objects.create(nombre_cliente='ACME SA')
+        self.assertEqual(cliente.email_cuenta_gastos, '')
+        self.assertEqual(cliente.email_cuenta_gastos_cc, '')
+
+    def test_campos_nuevos_guardan_valor(self):
+        cliente = Cliente.objects.create(
+            nombre_cliente='CACIPA',
+            email_cuenta_gastos='cg@cacipa.com',
+            email_cuenta_gastos_cc='cc@cacipa.com',
+        )
+        cliente.refresh_from_db()
+        self.assertEqual(cliente.email_cuenta_gastos, 'cg@cacipa.com')
+        self.assertEqual(cliente.email_cuenta_gastos_cc, 'cc@cacipa.com')
