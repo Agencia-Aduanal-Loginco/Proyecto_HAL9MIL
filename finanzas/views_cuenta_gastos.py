@@ -1,13 +1,19 @@
 """Vistas del flujo de cierre y envío de la cuenta de gastos al cliente."""
+import json
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from sendgrid.helpers.eventwebhook import EventWebhook, EventWebhookHeader
 
 from core.permisos import modulo_required
 from referencias.models import Referencia
 
-from .cuenta_gastos_envio import enviar_cuenta_gastos
+from .cuenta_gastos_envio import enviar_cuenta_gastos, procesar_evento_sendgrid
 from .models import CierreCuentaGastos
 
 
@@ -87,3 +93,30 @@ def enviar_cg(request, num_refe):
     else:
         messages.success(request, f'Cuenta de gastos enviada a {destinatario}.')
     return _redirect_estado(num_refe)
+
+
+@csrf_exempt
+def sendgrid_webhook(request):
+    """Recibe eventos del Event Webhook de SendGrid (firma obligatoria)."""
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    clave_publica = getattr(settings, 'SENDGRID_WEBHOOK_PUBLIC_KEY', '')
+    if not clave_publica:
+        return HttpResponseForbidden('Webhook no configurado.')
+
+    verificador = EventWebhook()
+    firma = request.headers.get(EventWebhookHeader.SIGNATURE, '')
+    timestamp = request.headers.get(EventWebhookHeader.TIMESTAMP, '')
+    llave = verificador.convert_public_key_to_ecdsa(clave_publica)
+    if not verificador.verify_signature(
+            request.body.decode('utf-8'), firma, timestamp, llave):
+        return HttpResponseForbidden('Firma inválida.')
+
+    try:
+        eventos = json.loads(request.body)
+    except json.JSONDecodeError:
+        return HttpResponse(status=400)
+    for evento in eventos:
+        procesar_evento_sendgrid(evento)
+    return HttpResponse(status=200)

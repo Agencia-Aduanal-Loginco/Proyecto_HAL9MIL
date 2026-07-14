@@ -118,6 +118,9 @@ DEFAULT_FROM_EMAIL = os.getenv('FROM_EMAIL', 'noreply@loginco.com.mx')
 # que usa el SMTP de arriba.
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY', '')
 
+# Llave pública del Signed Event Webhook de SendGrid (tracking de entregas)
+SENDGRID_WEBHOOK_PUBLIC_KEY = os.getenv('SENDGRID_WEBHOOK_PUBLIC_KEY', '')
+
 # ── Inteligencia Artificial (Anthropic Claude) ────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 IA_HABILITADA = os.getenv('IA_HABILITADA', 'False').lower() in ('true', '1', 'yes')

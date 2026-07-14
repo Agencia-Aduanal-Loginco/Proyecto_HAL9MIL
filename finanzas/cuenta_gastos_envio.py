@@ -9,11 +9,12 @@ import io
 import logging
 import os
 import zipfile
-from datetime import date
+from datetime import date, datetime, timezone as dt_timezone
 
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
+from django.utils import timezone
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Attachment, CustomArg, Disposition, FileContent, FileName, FileType, Mail,
@@ -137,3 +138,53 @@ def enviar_cuenta_gastos(referencia, destinatario, cc='', usuario=None,
                      referencia.num_refe, e)
     notif.save()
     return notif
+
+
+_MAPEO_EVENTOS = {
+    'delivered': 'ENTREGADO',
+    'open': 'LEIDO',
+    'bounce': 'REBOTADO',
+    'dropped': 'REBOTADO',
+}
+_ORDEN_ESTADOS = {'ENVIADO': 1, 'ENTREGADO': 2, 'LEIDO': 3}
+
+
+def procesar_evento_sendgrid(evento):
+    """Aplica un evento del Event Webhook a su NotificacionCuentaGastos.
+
+    Eventos sin notificacion_cg_id (otros correos de la cuenta SendGrid),
+    con id inexistente o de tipo no mapeado se ignoran en silencio.
+    Los estados solo avanzan; los timestamps se llenan aunque el evento
+    llegue fuera de orden.
+    """
+    from .models import NotificacionCuentaGastos
+
+    notif_id = evento.get('notificacion_cg_id')
+    if not notif_id:
+        return
+    try:
+        notif = NotificacionCuentaGastos.objects.get(pk=int(notif_id))
+    except (NotificacionCuentaGastos.DoesNotExist, TypeError, ValueError):
+        return
+
+    nuevo = _MAPEO_EVENTOS.get(evento.get('event'))
+    if not nuevo:
+        return
+
+    if evento.get('timestamp'):
+        momento = datetime.fromtimestamp(evento['timestamp'], tz=dt_timezone.utc)
+    else:
+        momento = timezone.now()
+
+    if nuevo == 'REBOTADO':
+        notif.estado = 'REBOTADO'
+        notif.error_msg = evento.get('reason', 'Correo rebotado')
+    else:
+        if nuevo == 'ENTREGADO' and notif.entregado_en is None:
+            notif.entregado_en = momento
+        if nuevo == 'LEIDO' and notif.leido_en is None:
+            notif.leido_en = momento
+        if (notif.estado in _ORDEN_ESTADOS
+                and _ORDEN_ESTADOS[nuevo] > _ORDEN_ESTADOS[notif.estado]):
+            notif.estado = nuevo
+    notif.save()
