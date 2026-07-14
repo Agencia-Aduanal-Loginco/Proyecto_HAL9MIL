@@ -114,6 +114,10 @@ EMAIL_HOST_USER = 'apikey'
 EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_KEY', '')
 DEFAULT_FROM_EMAIL = os.getenv('FROM_EMAIL', 'noreply@loginco.com.mx')
 
+# API key para envíos vía SendGrid Web API (cuenta de gastos); mismo secreto
+# que usa el SMTP de arriba.
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY', '')
+
 # ── Inteligencia Artificial (Anthropic Claude) ────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 IA_HABILITADA = os.getenv('IA_HABILITADA', 'False').lower() in ('true', '1', 'yes')

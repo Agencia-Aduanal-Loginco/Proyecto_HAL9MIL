@@ -113,3 +113,67 @@ class EmailBalanzaTemplateTests(TestCase):
         self.assertIn('MUELLAJE', html)
         self.assertIn('5000', html.replace(',', ''))
         self.assertIn('Saldo', html)
+
+
+def _resp_sendgrid(status=202, message_id='sg-msg-001'):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.headers = {'X-Message-Id': message_id}
+    return resp
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP, SENDGRID_API_KEY='SG.test')
+class EnviarCuentaGastosTests(TestCase):
+    def setUp(self):
+        self.referencia = _referencia('LCRR0300/26')
+        _xml_proveedor(self.referencia)
+        self.user = User.objects.create_user('emisor', password='x')
+
+    def test_envio_exitoso_guarda_notificacion(self):
+        from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
+            cliente_cls.return_value.send.return_value = _resp_sendgrid()
+            notif = enviar_cuenta_gastos(
+                self.referencia, 'cliente@example.com', 'cc@example.com', self.user
+            )
+        self.assertEqual(notif.estado, 'ENVIADO')
+        self.assertEqual(notif.sg_message_id, 'sg-msg-001')
+        self.assertEqual(notif.destinatario, 'cliente@example.com')
+        self.assertTrue(notif.zip_file.name)
+        # custom_arg de correlación presente en el Mail enviado
+        mail_enviado = cliente_cls.return_value.send.call_args[0][0]
+        cuerpo = mail_enviado.get()
+        self.assertEqual(
+            cuerpo['custom_args']['notificacion_cg_id'], str(notif.pk)
+        )
+        self.assertEqual(len(cuerpo['attachments']), 1)
+
+    def test_error_de_api_deja_estado_error(self):
+        from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
+            cliente_cls.return_value.send.side_effect = Exception('boom sendgrid')
+            notif = enviar_cuenta_gastos(self.referencia, 'x@example.com')
+        self.assertEqual(notif.estado, 'ERROR')
+        self.assertIn('boom sendgrid', notif.error_msg)
+
+    def test_status_400_deja_estado_error(self):
+        from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
+            cliente_cls.return_value.send.return_value = _resp_sendgrid(status=401)
+            notif = enviar_cuenta_gastos(self.referencia, 'x@example.com')
+        self.assertEqual(notif.estado, 'ERROR')
+
+    def test_reenvio_reutiliza_zip(self):
+        from finanzas.cuenta_gastos_envio import enviar_cuenta_gastos
+        with patch('finanzas.cuenta_gastos_envio.SendGridAPIClient') as cliente_cls:
+            cliente_cls.return_value.send.return_value = _resp_sendgrid()
+            primera = enviar_cuenta_gastos(self.referencia, 'a@example.com')
+            with patch(
+                'finanzas.cuenta_gastos_envio.construir_zip_cuenta_gastos'
+            ) as builder:
+                segunda = enviar_cuenta_gastos(
+                    self.referencia, 'otro@example.com', es_reenvio=True
+                )
+        builder.assert_not_called()
+        self.assertTrue(segunda.es_reenvio)
+        self.assertEqual(segunda.zip_file.name, primera.zip_file.name)
