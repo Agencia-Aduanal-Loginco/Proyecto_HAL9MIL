@@ -1,5 +1,6 @@
 """Vistas del flujo de cierre y envío de la cuenta de gastos al cliente."""
 import json
+import logging
 
 from django.conf import settings
 from django.contrib import messages
@@ -15,6 +16,8 @@ from referencias.models import Referencia
 
 from .cuenta_gastos_envio import enviar_cuenta_gastos, procesar_evento_sendgrid
 from .models import CierreCuentaGastos
+
+logger = logging.getLogger(__name__)
 
 
 def _redirect_estado(num_refe):
@@ -118,5 +121,10 @@ def sendgrid_webhook(request):
     except json.JSONDecodeError:
         return HttpResponse(status=400)
     for evento in eventos:
-        procesar_evento_sendgrid(evento)
+        try:
+            procesar_evento_sendgrid(evento)
+        except Exception:
+            # Un evento malformado no debe abortar el resto del lote ni
+            # devolver 500 (SendGrid reintentaría todo el batch).
+            logger.exception('[CG webhook] Error procesando evento: %r', evento)
     return HttpResponse(status=200)

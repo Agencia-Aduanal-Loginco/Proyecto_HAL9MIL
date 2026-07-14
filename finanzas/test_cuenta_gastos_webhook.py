@@ -1,10 +1,14 @@
+import base64
 import json
 from unittest.mock import patch
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from referencias.models import Referencia
+from sendgrid.helpers.eventwebhook import EventWebhookHeader
 
 
 def _notif(num='LCRR0500/26'):
@@ -48,6 +52,12 @@ class ProcesarEventoTests(TestCase):
         self._procesar('bounce', reason='mailbox unavailable')
         self.assertEqual(self.notif.estado, 'REBOTADO')
         self.assertIn('mailbox unavailable', self.notif.error_msg)
+
+    def test_bounce_tardio_no_degrada_leido(self):
+        self._procesar('open')
+        self._procesar('bounce', reason='mailbox unavailable')
+        self.assertEqual(self.notif.estado, 'LEIDO')
+        self.assertIn('mailbox unavailable', self.notif.error_msg)  # diagnóstico sí se guarda
 
     def test_evento_sin_id_se_ignora(self):
         from finanzas.cuenta_gastos_envio import procesar_evento_sendgrid
@@ -99,3 +109,98 @@ class WebhookViewTests(TestCase):
     def test_get_no_permitido(self):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 405)
+
+    def test_evento_malformado_no_aborta_el_lote(self):
+        payload = json.dumps([
+            'esto-no-es-un-dict',
+            {
+                'event': 'delivered',
+                'notificacion_cg_id': str(self.notif.pk),
+                'timestamp': 1770000000,
+            },
+        ])
+        with patch('finanzas.views_cuenta_gastos.EventWebhook') as ew:
+            ew.return_value.verify_signature.return_value = True
+            resp = self.client.post(self.url, payload, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.notif.refresh_from_db()
+        self.assertEqual(self.notif.estado, 'ENTREGADO')
+
+
+def _header_kwarg(nombre_header):
+    """'X-Foo-Bar' -> 'HTTP_X_FOO_BAR', como espera el test client de Django."""
+    return 'HTTP_' + nombre_header.upper().replace('-', '_')
+
+
+class WebhookFirmaRealTests(TestCase):
+    """Ejercita la verificación ECDSA real de sendgrid.EventWebhook (sin mocks).
+
+    SendGrid firma con una llave privada EC sobre curva prime256v1/P-256
+    (secp256r1 en `cryptography`): firma = base64(privada.sign(timestamp +
+    payload, ECDSA(SHA256))). El webhook recibe SENDGRID_WEBHOOK_PUBLIC_KEY
+    como el cuerpo base64 de una SubjectPublicKeyInfo PEM (sin las líneas
+    BEGIN/END, que `EventWebhook.convert_public_key_to_ecdsa` agrega).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.llave_privada = ec.generate_private_key(ec.SECP256R1())
+        llave_publica_der = cls.llave_privada.public_key().public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        cls.llave_publica_b64 = base64.b64encode(llave_publica_der).decode()
+
+    def setUp(self):
+        self.notif = _notif('LCRR0502/26')
+        self.url = reverse('finanzas:sendgrid_webhook')
+
+    def _firmar(self, payload_str, timestamp='1770000000'):
+        mensaje = (timestamp + payload_str).encode('utf-8')
+        firma_der = self.llave_privada.sign(mensaje, ec.ECDSA(hashes.SHA256()))
+        return base64.b64encode(firma_der).decode(), timestamp
+
+    def test_firma_real_valida_procesa_eventos(self):
+        with override_settings(SENDGRID_WEBHOOK_PUBLIC_KEY=self.llave_publica_b64):
+            payload = json.dumps([{
+                'event': 'delivered',
+                'notificacion_cg_id': str(self.notif.pk),
+                'timestamp': 1770000000,
+            }])
+            firma, timestamp = self._firmar(payload)
+            resp = self.client.post(
+                self.url, payload, content_type='application/json',
+                **{
+                    _header_kwarg(EventWebhookHeader.SIGNATURE): firma,
+                    _header_kwarg(EventWebhookHeader.TIMESTAMP): timestamp,
+                },
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.notif.refresh_from_db()
+        self.assertEqual(self.notif.estado, 'ENTREGADO')
+
+    def test_firma_real_payload_alterado_devuelve_403_y_no_muta(self):
+        with override_settings(SENDGRID_WEBHOOK_PUBLIC_KEY=self.llave_publica_b64):
+            payload_firmado = json.dumps([{
+                'event': 'delivered',
+                'notificacion_cg_id': str(self.notif.pk),
+                'timestamp': 1770000000,
+            }])
+            firma, timestamp = self._firmar(payload_firmado)
+            # Se altera el payload después de firmarlo: la firma ya no corresponde.
+            payload_alterado = json.dumps([{
+                'event': 'delivered',
+                'notificacion_cg_id': str(self.notif.pk),
+                'timestamp': 9999999999,
+            }])
+            resp = self.client.post(
+                self.url, payload_alterado, content_type='application/json',
+                **{
+                    _header_kwarg(EventWebhookHeader.SIGNATURE): firma,
+                    _header_kwarg(EventWebhookHeader.TIMESTAMP): timestamp,
+                },
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.notif.refresh_from_db()
+        self.assertEqual(self.notif.estado, 'ENVIADO')

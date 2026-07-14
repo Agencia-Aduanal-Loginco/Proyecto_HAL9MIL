@@ -155,7 +155,8 @@ def procesar_evento_sendgrid(evento):
     Eventos sin notificacion_cg_id (otros correos de la cuenta SendGrid),
     con id inexistente o de tipo no mapeado se ignoran en silencio.
     Los estados solo avanzan; los timestamps se llenan aunque el evento
-    llegue fuera de orden.
+    llegue fuera de orden. Un bounce tardío (después de ENTREGADO/LEIDO)
+    no degrada el estado, aunque sí se registra el motivo en error_msg.
     """
     from .models import NotificacionCuentaGastos
 
@@ -177,8 +178,11 @@ def procesar_evento_sendgrid(evento):
         momento = timezone.now()
 
     if nuevo == 'REBOTADO':
-        notif.estado = 'REBOTADO'
         notif.error_msg = evento.get('reason', 'Correo rebotado')
+        # Un bounce tardío (llegado después de ENTREGADO/LEIDO) no debe
+        # regresar el estado: los estados solo avanzan.
+        if notif.estado not in ('ENTREGADO', 'LEIDO'):
+            notif.estado = 'REBOTADO'
     else:
         if nuevo == 'ENTREGADO' and notif.entregado_en is None:
             notif.entregado_en = momento
