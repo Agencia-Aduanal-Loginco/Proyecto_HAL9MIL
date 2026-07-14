@@ -85,6 +85,10 @@ def referencia_estado_financiero(request, num_refe):
 @modulo_required('Finanzas')
 def anticipo_crear(request, num_refe):
     referencia = get_object_or_404(Referencia, num_refe=num_refe)
+    from .models import CierreCuentaGastos
+    if CierreCuentaGastos.activo_para(referencia):
+        messages.error(request, 'La cuenta de gastos está cerrada; no se pueden registrar movimientos.')
+        return redirect('finanzas:referencia_estado', num_refe=num_refe)
     if request.method == 'POST':
         form = AnticipoForm(request.POST)
         if form.is_valid():
@@ -108,6 +112,10 @@ def anticipo_crear(request, num_refe):
 @modulo_required('Finanzas')
 def gasto_crear(request, num_refe):
     referencia = get_object_or_404(Referencia, num_refe=num_refe)
+    from .models import CierreCuentaGastos
+    if CierreCuentaGastos.activo_para(referencia):
+        messages.error(request, 'La cuenta de gastos está cerrada; no se pueden registrar movimientos.')
+        return redirect('finanzas:referencia_estado', num_refe=num_refe)
     if request.method == 'POST':
         form = GastoReferenciaForm(request.POST)
         if form.is_valid():
@@ -173,6 +181,10 @@ def poliza_detalle(request, pk):
 @modulo_required('Finanzas')
 def subir_xml_proveedor(request, num_refe):
     referencia = get_object_or_404(Referencia, num_refe=num_refe)
+    from .models import CierreCuentaGastos
+    if CierreCuentaGastos.activo_para(referencia):
+        messages.error(request, 'La cuenta de gastos está cerrada; no se pueden registrar movimientos.')
+        return redirect('finanzas:referencia_estado', num_refe=num_refe)
     if request.method != 'POST':
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
 

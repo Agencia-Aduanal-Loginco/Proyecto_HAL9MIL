@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from referencias.models import Referencia
@@ -53,3 +54,43 @@ class NotificacionCuentaGastosModelTests(TestCase):
         self.assertFalse(notif.es_reenvio)
         self.assertIsNone(notif.entregado_en)
         self.assertIsNone(notif.leido_en)
+
+
+class GuardCierreViewsTests(TestCase):
+    def setUp(self):
+        _login_finanzas(self)
+        self.referencia = _referencia('LCRR0002/26')
+        from finanzas.models import CierreCuentaGastos
+        CierreCuentaGastos.objects.create(
+            referencia=self.referencia, cerrada_por=self.user
+        )
+
+    def _assert_bloqueada(self, url_name, **extra):
+        url = reverse(url_name, kwargs={'num_refe': self.referencia.num_refe})
+        resp = self.client.post(url, extra)
+        self.assertRedirects(
+            resp,
+            reverse('finanzas:referencia_estado',
+                    kwargs={'num_refe': self.referencia.num_refe}),
+        )
+
+    def test_anticipo_bloqueado_con_cierre(self):
+        self._assert_bloqueada('finanzas:anticipo_crear')
+        from finanzas.models import Anticipo
+        self.assertEqual(Anticipo.objects.count(), 0)
+
+    def test_gasto_bloqueado_con_cierre(self):
+        self._assert_bloqueada('finanzas:gasto_crear')
+        from finanzas.models import GastoReferencia
+        self.assertEqual(GastoReferencia.objects.count(), 0)
+
+    def test_subir_xml_bloqueado_con_cierre(self):
+        self._assert_bloqueada('finanzas:subir_xml')
+        from finanzas.models import XMLProveedor
+        self.assertEqual(XMLProveedor.objects.count(), 0)
+
+    def test_anticipo_permitido_sin_cierre(self):
+        otra = _referencia('LCRR0003/26')
+        url = reverse('finanzas:anticipo_crear', kwargs={'num_refe': otra.num_refe})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
