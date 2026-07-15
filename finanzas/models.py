@@ -226,6 +226,47 @@ class XMLProveedor(models.Model):
         return f'{self.rfc_emisor} | {self.uuid_fiscal} | ${self.total}'
 
 
+class ComplementoPago(models.Model):
+    """Complemento de Pago (CFDI tipo P): no es una factura, es la prueba de
+    que una factura (XMLProveedor) ya fue pagada. Su <DoctoRelacionado> trae
+    el UUID de esa factura."""
+    ESTADO = [
+        ('PENDIENTE', 'Pendiente'),        # no se encontró la factura aún
+        ('IDENTIFICADO', 'Identificado'),  # ligado a una factura
+        ('REVISION', 'Requiere revisión'), # trae más de un DoctoRelacionado
+    ]
+    factura = models.ForeignKey(
+        XMLProveedor, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='complementos_pago'
+    )
+    uuid_complemento = models.UUIDField(unique=True)
+    uuid_factura_relacionada = models.UUIDField(null=True, blank=True)
+    fecha_emision = models.DateTimeField()
+    rfc_emisor = models.CharField(max_length=13)
+    nombre_emisor = models.CharField(max_length=200)
+    monto_pagado = models.DecimalField(max_digits=14, decimal_places=2)
+    moneda_pago = models.CharField(max_length=3, default='MXN')
+    estado = models.CharField(max_length=12, choices=ESTADO, default='PENDIENTE')
+    xml_file = models.FileField(storage=media_storage, upload_to='complementos_pago/%Y/%m/')
+    pdf_file = models.FileField(
+        storage=media_storage, upload_to='complementos_pago/%Y/%m/',
+        null=True, blank=True,
+    )
+    referencia_sugerida = models.ForeignKey(
+        'referencias.Referencia', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='complementos_pago_sugeridos',
+    )
+    cargado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-cargado_en']
+        verbose_name = 'Complemento de Pago'
+        verbose_name_plural = 'Complementos de Pago'
+
+    def __str__(self):
+        return f'{self.rfc_emisor} | pago {self.monto_pagado} | {self.estado}'
+
+
 class GastoReferencia(models.Model):
     TIPO_GASTO = [
         ('FLETE', 'Flete'),
