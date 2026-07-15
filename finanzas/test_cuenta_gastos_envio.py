@@ -9,11 +9,22 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from pypdf import PdfReader
+from reportlab.pdfgen import canvas
 
 from clientes.models import Cliente
 from referencias.models import Referencia
 
 MEDIA_TMP = tempfile.mkdtemp()
+
+
+def _pdf_valido(texto='Factura de proveedor de prueba'):
+    """PDF real de una página, para pruebas que necesitan un PDF parseable."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(300, 200))
+    c.drawString(20, 100, texto)
+    c.save()
+    return buffer.getvalue()
 
 
 def _referencia(num='LCRR0100/26'):
@@ -30,7 +41,7 @@ def _xml_proveedor(referencia, uuid='11111111-1111-1111-1111-111111111111',
         subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
         tipo_comprobante='I',
         xml_file=SimpleUploadedFile(f'{uuid}.xml', b'<cfdi/>'),
-        pdf_file=SimpleUploadedFile(f'{uuid}.pdf', b'%PDF-1.4') if con_pdf else None,
+        pdf_file=SimpleUploadedFile(f'{uuid}.pdf', _pdf_valido()) if con_pdf else None,
     )
 
 
@@ -57,7 +68,7 @@ class DestinatariosClienteTests(TestCase):
         self.assertEqual(destinatarios_cliente(None), ('', ''))
 
 
-@override_settings(MEDIA_ROOT=MEDIA_TMP)
+@override_settings(MEDIA_ROOT=MEDIA_TMP, NOMBRE_AGENCIA='Loginco Corporativo')
 class ConstruirZipTests(TestCase):
     def setUp(self):
         self.referencia = _referencia()
@@ -78,6 +89,17 @@ class ConstruirZipTests(TestCase):
             'CFDI_22222222-2222-2222-2222-222222222222.xml',
         ])
 
+    def test_pdf_en_zip_queda_sellado_con_nombre_de_agencia(self):
+        from finanzas.cuenta_gastos_envio import construir_zip_cuenta_gastos
+        _xml_proveedor(self.referencia)
+        _, data = construir_zip_cuenta_gastos(self.referencia)
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            pdf_bytes = zf.read(
+                'CFDI_11111111-1111-1111-1111-111111111111.pdf'
+            )
+        texto = PdfReader(io.BytesIO(pdf_bytes)).pages[0].extract_text()
+        self.assertIn('Loginco Corporativo', texto)
+
     def test_sin_cfdis_lanza_error(self):
         from finanzas.cuenta_gastos_envio import construir_zip_cuenta_gastos
         with self.assertRaises(ValueError):
@@ -89,6 +111,26 @@ class ConstruirZipTests(TestCase):
         with patch.object(cuenta_gastos_envio, 'LIMITE_ZIP_BYTES', 10):
             with self.assertRaises(ValueError):
                 cuenta_gastos_envio.construir_zip_cuenta_gastos(self.referencia)
+
+
+@override_settings(NOMBRE_AGENCIA='Loginco Corporativo')
+class SellarPdfProveedorTests(TestCase):
+    def test_agrega_nombre_de_agencia_al_pdf(self):
+        from finanzas.cuenta_gastos_envio import sellar_pdf_proveedor
+        sellado = sellar_pdf_proveedor(_pdf_valido())
+        texto = PdfReader(io.BytesIO(sellado)).pages[0].extract_text()
+        self.assertIn('Loginco Corporativo', texto)
+
+    def test_conserva_contenido_original(self):
+        from finanzas.cuenta_gastos_envio import sellar_pdf_proveedor
+        sellado = sellar_pdf_proveedor(_pdf_valido('Factura de proveedor de prueba'))
+        texto = PdfReader(io.BytesIO(sellado)).pages[0].extract_text()
+        self.assertIn('Factura de proveedor de prueba', texto)
+
+    def test_pdf_invalido_se_retorna_sin_cambios(self):
+        from finanzas.cuenta_gastos_envio import sellar_pdf_proveedor
+        data = b'esto no es un pdf valido'
+        self.assertEqual(sellar_pdf_proveedor(data), data)
 
 
 class EmailBalanzaTemplateTests(TestCase):

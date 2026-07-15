@@ -15,6 +15,9 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from django.utils import timezone
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
+from reportlab.pdfgen import canvas
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Attachment, CustomArg, Disposition, FileContent, FileName, FileType, Mail,
@@ -34,6 +37,37 @@ def destinatarios_cliente(cliente):
     return to, cc
 
 
+def sellar_pdf_proveedor(data):
+    """Superpone 'Gestionado por {NOMBRE_AGENCIA}' en cada página del PDF.
+
+    El PDF es un comprobante subido por el proveedor externo, no generado
+    por el sistema; si no se puede leer (archivo corrupto o no es un PDF
+    válido) se retorna sin modificar en vez de romper el envío.
+    """
+    texto = f'Gestionado por {settings.NOMBRE_AGENCIA}'
+    try:
+        lector = PdfReader(io.BytesIO(data))
+        escritor = PdfWriter()
+        for pagina in lector.pages:
+            ancho = float(pagina.mediabox.width)
+            alto = float(pagina.mediabox.height)
+            overlay_buffer = io.BytesIO()
+            c = canvas.Canvas(overlay_buffer, pagesize=(ancho, alto))
+            c.setFont('Helvetica', 8)
+            c.setFillColorRGB(0.4, 0.4, 0.4)
+            c.drawString(10, 10, texto)
+            c.save()
+            overlay_buffer.seek(0)
+            pagina.merge_page(PdfReader(overlay_buffer).pages[0])
+            escritor.add_page(pagina)
+        salida = io.BytesIO()
+        escritor.write(salida)
+        return salida.getvalue()
+    except PdfReadError:
+        logger.warning('[CG] PDF de proveedor no válido, se adjunta sin sellar')
+        return data
+
+
 def construir_zip_cuenta_gastos(referencia):
     """Empaqueta xml_file + pdf_file de cada XMLProveedor de la referencia.
 
@@ -51,7 +85,10 @@ def construir_zip_cuenta_gastos(referencia):
                 zf.writestr(f'CFDI_{xml.uuid_fiscal}.xml', f.read())
             if xml.pdf_file:
                 with xml.pdf_file.open('rb') as f:
-                    zf.writestr(f'CFDI_{xml.uuid_fiscal}.pdf', f.read())
+                    zf.writestr(
+                        f'CFDI_{xml.uuid_fiscal}.pdf',
+                        sellar_pdf_proveedor(f.read()),
+                    )
 
     data = buffer.getvalue()
     if len(data) > LIMITE_ZIP_BYTES:

@@ -9,6 +9,8 @@ twilio>=9.0
 # módulo finanzas / CFDI
 cryptography>=42.0
 lxml>=5.0
+pypdf>=6.0
+reportlab>=5.0
 # producción
 gunicorn>=21.2
 psycopg2-binary>=2.9
