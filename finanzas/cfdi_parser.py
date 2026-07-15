@@ -128,7 +128,7 @@ def parsear_complemento_pago(root) -> list:
             doctos.append({
                 'uuid_factura': (docto.get('IdDocumento') or '').strip(),
                 'imp_pagado': _decimal(docto.get('ImpPagado', '0')),
-                'moneda_pago': docto.get('MonedaP', 'MXN'),
+                'moneda_pago': docto.get('MonedaDR', 'MXN'),
             })
     if not doctos:
         raise ValueError('Complemento de pago sin DoctoRelacionado')

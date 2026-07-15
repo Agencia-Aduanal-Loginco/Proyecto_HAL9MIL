@@ -105,3 +105,66 @@ class ParsearComplementoPagoTests(TestCase):
         )
         with self.assertRaises(ValueError):
             parsear_complemento_pago(root)
+
+    def test_extrae_moneda_correcta_doctorrelacionado(self):
+        """Pin: moneda_pago debe leer MonedaDR de DoctoRelacionado, no MonedaP."""
+        root = ET.fromstring(cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            monto='5000.00', moneda='USD',
+        ))
+        doctos = parsear_complemento_pago(root)
+        self.assertEqual(len(doctos), 1)
+        self.assertEqual(doctos[0]['moneda_pago'], 'USD')
+
+    def test_pago10_cfdi33_fallback(self):
+        """Cobertura: fallback pago10 (CFDI 3.3) cuando pago20 no existe."""
+        # CFDI 3.3 con complemento pago10 (no pago20)
+        cfdi33_pago = '''<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3"
+    Version="3.3" Fecha="2026-07-10T12:00:00" Total="0"
+    TipoDeComprobante="P" LugarExpedicion="06600">
+  <cfdi:Emisor Rfc="CIN220216BS2" Nombre="CACIPA INTERNACIONAL" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="LCT030408U39" Nombre="L C TERMINAL" UsoCFDI="CP01" RegimenFiscalReceptor="601"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01"/>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="55555555-5555-5555-5555-555555555555" FechaTimbrado="2026-07-10T12:00:05"/>
+    <pago10:Pagos xmlns:pago10="http://www.sat.gob.mx/Pagos" Version="1.0">
+      <pago10:Pago FechaPago="2026-07-10T12:00:00" FormaDePagoP="03" MonedaP="MXN" Monto="7000.00">
+        <pago10:DoctoRelacionado IdDocumento="11111111-1111-1111-1111-111111111111" MonedaDR="MXN" NumParcialidad="1" ImpSaldoAnt="7000.00" ImpPagado="7000.00" ImpSaldoInsoluto="0"/>
+      </pago10:Pago>
+    </pago10:Pagos>
+  </cfdi:Complemento>
+</cfdi:Comprobante>'''
+        root = ET.fromstring(cfdi33_pago)
+        doctos = parsear_complemento_pago(root)
+        self.assertEqual(len(doctos), 1)
+        self.assertEqual(doctos[0]['uuid_factura'], '11111111-1111-1111-1111-111111111111')
+        self.assertEqual(doctos[0]['imp_pagado'], Decimal('7000.00'))
+        self.assertEqual(doctos[0]['moneda_pago'], 'MXN')
+
+    def test_pagos_sin_doctos_relacionados_lanza_valueerror(self):
+        """Cobertura: Pagos presente pero sin DoctoRelacionado lanza ValueError."""
+        cfdi_sin_doctos = '''<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+    Version="4.0" Fecha="2026-07-10T12:00:00" Moneda="XXX" Total="0"
+    TipoDeComprobante="P" LugarExpedicion="06600">
+  <cfdi:Emisor Rfc="CIN220216BS2" Nombre="CACIPA INTERNACIONAL" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="LCT030408U39" Nombre="L C TERMINAL" UsoCFDI="CP01" DomicilioFiscalReceptor="06600" RegimenFiscalReceptor="601"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01"/>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="66666666-6666-6666-6666-666666666666" FechaTimbrado="2026-07-10T12:00:05"/>
+    <pago20:Pagos xmlns:pago20="http://www.sat.gob.mx/Pagos20" Version="2.0">
+      <pago20:Totales MontoTotalPagos="0"/>
+      <pago20:Pago FechaPago="2026-07-10T12:00:00" FormaDePagoP="03" MonedaP="MXN" Monto="0">
+      </pago20:Pago>
+    </pago20:Pagos>
+  </cfdi:Complemento>
+</cfdi:Comprobante>'''
+        root = ET.fromstring(cfdi_sin_doctos)
+        with self.assertRaises(ValueError) as cm:
+            parsear_complemento_pago(root)
+        self.assertIn('DoctoRelacionado', str(cm.exception))
