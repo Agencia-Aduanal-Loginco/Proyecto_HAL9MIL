@@ -168,3 +168,150 @@ class ParsearComplementoPagoTests(TestCase):
         with self.assertRaises(ValueError) as cm:
             parsear_complemento_pago(root)
         self.assertIn('DoctoRelacionado', str(cm.exception))
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ProcesarComplementoTests(TestCase):
+    def test_liga_de_inmediato_si_la_factura_ya_existe(self):
+        from .complementos_pago import procesar_complemento
+
+        factura = XMLProveedor(
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+
+        xml_bytes = cfdi_pago(uuid_factura=str(factura.uuid_fiscal))
+        root = ET.fromstring(xml_bytes)
+        complemento = procesar_complemento(
+            root, uuid_complemento='44444444-4444-4444-4444-444444444444',
+            fecha=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            nombre_archivo='pago.xml', xml_bytes=xml_bytes,
+        )
+        self.assertEqual(complemento.estado, 'IDENTIFICADO')
+        self.assertEqual(complemento.factura, factura)
+
+    def test_queda_pendiente_si_no_existe_la_factura(self):
+        from .complementos_pago import procesar_complemento
+
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        root = ET.fromstring(xml_bytes)
+        complemento = procesar_complemento(
+            root, uuid_complemento='44444444-4444-4444-4444-444444444444',
+            fecha=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            nombre_archivo='pago.xml', xml_bytes=xml_bytes,
+        )
+        self.assertEqual(complemento.estado, 'PENDIENTE')
+        self.assertIsNone(complemento.factura)
+        self.assertEqual(
+            str(complemento.uuid_factura_relacionada),
+            '99999999-9999-9999-9999-999999999999',
+        )
+
+    def test_varios_doctos_relacionados_queda_en_revision(self):
+        from .complementos_pago import procesar_complemento
+
+        xml_bytes = cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            uuids_factura_extra=['22222222-2222-2222-2222-222222222222'],
+        )
+        root = ET.fromstring(xml_bytes)
+        complemento = procesar_complemento(
+            root, uuid_complemento='44444444-4444-4444-4444-444444444444',
+            fecha=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            nombre_archivo='pago.xml', xml_bytes=xml_bytes,
+        )
+        self.assertEqual(complemento.estado, 'REVISION')
+
+    def test_adjunta_pdf_si_se_provee(self):
+        from .complementos_pago import procesar_complemento
+
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        root = ET.fromstring(xml_bytes)
+        complemento = procesar_complemento(
+            root, uuid_complemento='44444444-4444-4444-4444-444444444444',
+            fecha=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            nombre_archivo='pago.xml', xml_bytes=xml_bytes, pdf_bytes=b'%PDF-1.4',
+        )
+        self.assertTrue(complemento.pdf_file)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ConciliarPendientesTests(TestCase):
+    def test_liga_complemento_pendiente_cuando_llega_la_factura(self):
+        from .complementos_pago import conciliar_pendientes
+
+        pendiente = ComplementoPago.objects.create(
+            uuid_complemento='44444444-4444-4444-4444-444444444444',
+            uuid_factura_relacionada='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'),
+        )
+        pendiente.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=True)
+
+        factura = XMLProveedor(
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+
+        conciliar_pendientes(factura)
+
+        pendiente.refresh_from_db()
+        self.assertEqual(pendiente.estado, 'IDENTIFICADO')
+        self.assertEqual(pendiente.factura, factura)
+
+    def test_no_toca_complementos_ya_identificados(self):
+        from .complementos_pago import conciliar_pendientes
+
+        otra_factura = XMLProveedor(
+            uuid_fiscal='33333333-3333-3333-3333-333333333333',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        otra_factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        otra_factura.save()
+
+        ya_ligado = ComplementoPago.objects.create(
+            factura=otra_factura,
+            uuid_complemento='55555555-5555-5555-5555-555555555555',
+            uuid_factura_relacionada='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'), estado='IDENTIFICADO',
+        )
+        ya_ligado.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=True)
+
+        factura_nueva = XMLProveedor(
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura_nueva.xml_file.save('f2.xml', ContentFile(b'<x/>'), save=False)
+        factura_nueva.save()
+
+        conciliar_pendientes(factura_nueva)
+
+        ya_ligado.refresh_from_db()
+        self.assertEqual(ya_ligado.factura, otra_factura)
