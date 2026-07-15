@@ -113,3 +113,46 @@ def cfdi_cliente(uuid='33333333-3333-3333-3333-333333333333',
     return _PLANTILLA_CLIENTE.format(
         uuid=uuid, rfc_receptor=rfc_receptor, nombre_receptor=nombre_receptor,
     ).encode('utf-8')
+
+
+_PLANTILLA_PAGO = '''<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+    Version="4.0" Fecha="2026-07-10T12:00:00" Moneda="XXX" Total="0"
+    TipoDeComprobante="P" LugarExpedicion="06600">
+  <cfdi:Emisor Rfc="{rfc_emisor}" Nombre="{nombre_emisor}" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="{rfc_receptor}" Nombre="{nombre_receptor}" UsoCFDI="CP01" DomicilioFiscalReceptor="06600" RegimenFiscalReceptor="601"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01"/>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="{uuid}" FechaTimbrado="2026-07-10T12:00:05"/>
+    <pago20:Pagos xmlns:pago20="http://www.sat.gob.mx/Pagos20" Version="2.0">
+      <pago20:Totales MontoTotalPagos="{monto}"/>
+      <pago20:Pago FechaPago="2026-07-10T12:00:00" FormaDePagoP="03" MonedaP="{moneda}" Monto="{monto}">
+        {doctos}
+      </pago20:Pago>
+    </pago20:Pagos>
+  </cfdi:Complemento>
+</cfdi:Comprobante>'''
+
+_PLANTILLA_DOCTO = (
+    '<pago20:DoctoRelacionado IdDocumento="{uuid_factura}" MonedaDR="{moneda}" '
+    'NumParcialidad="1" ImpSaldoAnt="{monto}" ImpPagado="{monto}" ImpSaldoInsoluto="0"/>'
+)
+
+
+def cfdi_pago(uuid='44444444-4444-4444-4444-444444444444',
+              uuid_factura='11111111-1111-1111-1111-111111111111',
+              rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+              rfc_receptor='LCT030408U39', nombre_receptor='L C TERMINAL',
+              monto='11094.00', moneda='MXN', uuids_factura_extra=None):
+    """Complemento de pago (CFDI 4.0, pago20). `uuids_factura_extra` agrega
+    DoctoRelacionado adicionales, para simular el caso de revisión manual."""
+    doctos = _PLANTILLA_DOCTO.format(uuid_factura=uuid_factura, moneda=moneda, monto=monto)
+    for extra in (uuids_factura_extra or []):
+        doctos += _PLANTILLA_DOCTO.format(uuid_factura=extra, moneda=moneda, monto=monto)
+    return _PLANTILLA_PAGO.format(
+        uuid=uuid, rfc_emisor=rfc_emisor, nombre_emisor=nombre_emisor,
+        rfc_receptor=rfc_receptor, nombre_receptor=nombre_receptor,
+        monto=monto, moneda=moneda, doctos=doctos,
+    ).encode('utf-8')

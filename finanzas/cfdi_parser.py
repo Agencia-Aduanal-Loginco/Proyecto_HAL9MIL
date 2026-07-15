@@ -2,9 +2,11 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-NS_CFDI4 = 'http://www.sat.gob.mx/cfd/4'
-NS_CFDI3 = 'http://www.sat.gob.mx/cfd/3'
-NS_TFD   = 'http://www.sat.gob.mx/TimbreFiscalDigital'
+NS_CFDI4  = 'http://www.sat.gob.mx/cfd/4'
+NS_CFDI3  = 'http://www.sat.gob.mx/cfd/3'
+NS_TFD    = 'http://www.sat.gob.mx/TimbreFiscalDigital'
+NS_PAGO20 = 'http://www.sat.gob.mx/Pagos20'
+NS_PAGO10 = 'http://www.sat.gob.mx/Pagos'
 
 
 def _decimal(value: str) -> Decimal:
@@ -12,6 +14,15 @@ def _decimal(value: str) -> Decimal:
         return Decimal(value or '0')
     except InvalidOperation:
         return Decimal('0')
+
+
+def _detectar_ns(root) -> str:
+    """Detecta el namespace (CFDI 3.3 o 4.0) del elemento raíz."""
+    if NS_CFDI4 in root.tag:
+        return NS_CFDI4
+    if NS_CFDI3 in root.tag:
+        return NS_CFDI3
+    raise ValueError('El archivo no es un CFDI válido (namespace no reconocido)')
 
 
 def parsear_cfdi(xml_path: str) -> dict:
@@ -34,13 +45,7 @@ def parsear_cfdi_root(root) -> dict:
         uuid, fecha (datetime), rfc_emisor, nombre_emisor, rfc_receptor,
         subtotal, iva, total (Decimal), moneda, tipo, concepto_principal
     """
-    # Detectar versión por namespace del elemento raíz
-    if NS_CFDI4 in root.tag:
-        ns = NS_CFDI4
-    elif NS_CFDI3 in root.tag:
-        ns = NS_CFDI3
-    else:
-        raise ValueError('El archivo no es un CFDI válido (namespace no reconocido)')
+    ns = _detectar_ns(root)
 
     nsmap = {'cfdi': ns, 'tfd': NS_TFD}
 
@@ -97,3 +102,34 @@ def parsear_cfdi_root(root) -> dict:
         'tipo':             tipo,
         'concepto_principal': concepto,
     }
+
+
+def parsear_complemento_pago(root) -> list:
+    """
+    Extrae los DoctoRelacionado de un Complemento de Pago (CFDI tipo P).
+    Retorna lista de dicts: {'uuid_factura', 'imp_pagado' (Decimal), 'moneda_pago'}.
+    Soporta pago20 (CFDI 4.0) y pago10 (CFDI 3.3). Lanza ValueError si no
+    encuentra el nodo Pagos o ningún DoctoRelacionado.
+    """
+    ns = _detectar_ns(root)
+    nsmap = {'cfdi': ns, 'pago20': NS_PAGO20, 'pago10': NS_PAGO10}
+
+    pagos = root.find('cfdi:Complemento/pago20:Pagos', nsmap)
+    prefijo = 'pago20'
+    if pagos is None:
+        pagos = root.find('cfdi:Complemento/pago10:Pagos', nsmap)
+        prefijo = 'pago10'
+    if pagos is None:
+        raise ValueError('Complemento de pago sin nodo Pagos')
+
+    doctos = []
+    for pago in pagos.findall(f'{prefijo}:Pago', nsmap):
+        for docto in pago.findall(f'{prefijo}:DoctoRelacionado', nsmap):
+            doctos.append({
+                'uuid_factura': (docto.get('IdDocumento') or '').strip(),
+                'imp_pagado': _decimal(docto.get('ImpPagado', '0')),
+                'moneda_pago': docto.get('MonedaP', 'MXN'),
+            })
+    if not doctos:
+        raise ValueError('Complemento de pago sin DoctoRelacionado')
+    return doctos

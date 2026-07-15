@@ -1,4 +1,5 @@
 import tempfile
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from decimal import Decimal
 
@@ -8,6 +9,8 @@ from django.test import TestCase, override_settings
 from referencias.models import Referencia
 
 from .models import ComplementoPago, XMLProveedor
+from .cfdi_de_prueba import cfdi_pago
+from .cfdi_parser import parsear_complemento_pago
 
 MEDIA_TMP = tempfile.mkdtemp()
 
@@ -70,3 +73,35 @@ class ComplementoPagoModelTests(TestCase):
                 rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
                 monto_pagado=Decimal('50.00'),
             )
+
+
+class ParsearComplementoPagoTests(TestCase):
+    def test_extrae_un_docto_relacionado(self):
+        root = ET.fromstring(cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            monto='11094.00', moneda='MXN',
+        ))
+        doctos = parsear_complemento_pago(root)
+        self.assertEqual(len(doctos), 1)
+        self.assertEqual(doctos[0]['uuid_factura'], '11111111-1111-1111-1111-111111111111')
+        self.assertEqual(doctos[0]['imp_pagado'], Decimal('11094.00'))
+        self.assertEqual(doctos[0]['moneda_pago'], 'MXN')
+
+    def test_extrae_varios_doctos_relacionados(self):
+        root = ET.fromstring(cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            uuids_factura_extra=['22222222-2222-2222-2222-222222222222'],
+        ))
+        doctos = parsear_complemento_pago(root)
+        self.assertEqual(len(doctos), 2)
+
+    def test_sin_nodo_pagos_lanza_valueerror(self):
+        root = ET.fromstring(
+            '<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" '
+            'Version="4.0" Fecha="2026-07-10T12:00:00" TipoDeComprobante="P" '
+            'Total="0" Moneda="XXX"><cfdi:Emisor Rfc="AAA010101AAA" '
+            'Nombre="X"/><cfdi:Receptor Rfc="BBB010101BBB" Nombre="Y" '
+            'UsoCFDI="CP01"/></cfdi:Comprobante>'
+        )
+        with self.assertRaises(ValueError):
+            parsear_complemento_pago(root)
