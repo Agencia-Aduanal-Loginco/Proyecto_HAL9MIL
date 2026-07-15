@@ -9,12 +9,14 @@ from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
 
-ASUNTOS = {
-    '15d':    'Recordatorio de pago — Reiki Logística',
-    '30d':    'Saldo pendiente — Reiki Logística',
-    '60d':    'Aviso urgente de saldo vencido — Reiki Logística',
-    'manual': 'Estado de cuenta — Reiki Logística',
-}
+def _asunto(tipo):
+    etiquetas = {
+        '15d': 'Recordatorio de pago',
+        '30d': 'Saldo pendiente',
+        '60d': 'Aviso urgente de saldo vencido',
+        'manual': 'Estado de cuenta',
+    }
+    return f'{etiquetas.get(tipo, etiquetas["manual"])} — {settings.NOMBRE_AGENCIA}'
 
 
 def calcular_saldo_factura(factura):
@@ -127,9 +129,10 @@ def _enviar_email(cliente, facturas_info, tipo, usuario=None):
             'facturas_info': facturas_info,
             'tipo': tipo,
             'saldo_total': sum(fi['saldo'] for fi in facturas_info),
+            'nombre_agencia': settings.NOMBRE_AGENCIA,
         })
         msg = EmailMultiAlternatives(
-            subject=ASUNTOS.get(tipo, ASUNTOS['manual']),
+            subject=_asunto(tipo),
             body='Este correo requiere un cliente con soporte HTML.',
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=to,

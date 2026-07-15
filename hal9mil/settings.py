@@ -105,6 +105,9 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+# ── Identidad de la agencia (usada en asuntos y plantillas de correo) ────────
+NOMBRE_AGENCIA = os.getenv('NOMBRE_AGENCIA', 'Loginco Corporativo')
+
 # ── Email (SendGrid SMTP) ─────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.sendgrid.net'

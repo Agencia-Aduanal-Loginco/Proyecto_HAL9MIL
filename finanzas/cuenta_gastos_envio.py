@@ -124,7 +124,7 @@ def enviar_cuenta_gastos(referencia, destinatario, cc='', usuario=None,
         mensaje = Mail(
             from_email=settings.DEFAULT_FROM_EMAIL,
             to_emails=destinatario,
-            subject=f'Cuenta de gastos {referencia.num_refe} — Reiki Logística',
+            subject=f'Cuenta de gastos {referencia.num_refe} — {settings.NOMBRE_AGENCIA}',
             html_content=html,
         )
         if cc:

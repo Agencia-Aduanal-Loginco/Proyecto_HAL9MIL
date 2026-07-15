@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Estado de Cuenta — Reiki Logística</title>
+  <title>Estado de Cuenta — {{ nombre_agencia }}</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0; color: #1e293b; }
     .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
@@ -28,7 +28,7 @@
 <body>
 <div class="wrapper">
   <div class="header">
-    <h1>Reiki Logística</h1>
+    <h1>{{ nombre_agencia }}</h1>
     <p>Estado de Cuenta · Agencia Aduanal · Patente 3772</p>
   </div>
 
@@ -77,12 +77,12 @@
 
     <p class="footer-note">
       Para realizar su pago o aclarar cualquier duda, comuníquese con nosotros directamente.<br>
-      Este es un mensaje generado automáticamente por el sistema de Reiki Logística.
+      Este es un mensaje generado automáticamente por el sistema de {{ nombre_agencia }}.
     </p>
   </div>
 
   <div class="footer">
-    Reiki Logística — Agencia Aduanal — Patente 3772<br>
+    {{ nombre_agencia }} — Agencia Aduanal — Patente 3772<br>
     Este correo fue enviado a {{ cliente.email_cobranza }}
   </div>
 </div>
