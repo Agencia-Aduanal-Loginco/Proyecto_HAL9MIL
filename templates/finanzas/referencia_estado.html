@@ -174,21 +174,28 @@
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for xml in referencia.xmls_proveedor.all %}
+          {% with complementos=xml.complementos_pago.all %}
           <tr>
             <td class="py-1.5 pr-4 font-mono">{{ xml.rfc_emisor }}<br>
               <span class="text-slate-400 font-sans">{{ xml.nombre_emisor }}</span></td>
             <td class="py-1.5 pr-4 text-slate-600 max-w-xs truncate">{{ xml.concepto_principal|default:"—" }}</td>
             <td class="py-1.5 pr-4 text-right font-mono text-slate-800">${{ xml.total|floatformat:2 }} {{ xml.moneda }}</td>
             <td class="py-1.5 pr-4">
+              {% if complementos %}
+              <span class="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">COM. PAGO</span>
+              {% else %}
               <span class="px-1.5 py-0.5 rounded
                 {% if xml.tipo_comprobante == 'I' %}bg-green-100 text-green-700
                 {% elif xml.tipo_comprobante == 'E' %}bg-red-100 text-red-700
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
                 {{ xml.tipo_comprobante }}
               </span>
+              {% endif %}
             </td>
             <td class="py-1.5 pr-4 text-center">
-              {% if xml.procesado %}
+              {% if complementos %}
+              <span class="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[11px]">COM. PAGO</span>
+              {% elif xml.procesado %}
               <span class="text-green-600">✓</span>
               {% else %}
               <span class="text-slate-300">—</span>
@@ -201,8 +208,15 @@
               {% else %}
               <span class="text-slate-300">—</span>
               {% endif %}
+              {% for c in complementos %}
+              {% if c.pdf_file %}
+              <br><a href="{% url 'finanzas:complemento_pago_ver_pdf' c.pk %}" target="_blank"
+                 class="text-indigo-600 hover:underline text-xs">Ver PDF pago</a>
+              {% endif %}
+              {% endfor %}
             </td>
           </tr>
+          {% endwith %}
           {% endfor %}
         </tbody>
       </table>

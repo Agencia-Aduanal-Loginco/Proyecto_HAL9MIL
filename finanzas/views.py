@@ -75,7 +75,10 @@ def referencia_estado_financiero(request, num_refe):
     from .cuenta_gastos_envio import destinatarios_cliente
     from .models import CierreCuentaGastos
 
-    referencia = get_object_or_404(Referencia, num_refe=num_refe)
+    referencia = get_object_or_404(
+        Referencia.objects.prefetch_related('xmls_proveedor__complementos_pago'),
+        num_refe=num_refe,
+    )
     anticipos = referencia.anticipos.select_related('registrado_por').order_by('-fecha')
     gastos = referencia.gastos_finanzas.select_related('cuenta_gasto', 'registrado_por').order_by('-fecha')
     saldo = saldo_referencia(referencia)

@@ -519,3 +519,55 @@ class ComplementoPagoVerPdfViewTests(TestCase):
         url = reverse('finanzas:complemento_pago_ver_pdf', kwargs={'pk': self.complemento.pk})
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 404)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ReferenciaEstadoFilaFusionadaTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('verestado', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='verestado', password='x')
+        self.referencia = Referencia.objects.create(
+            num_refe='LCRR0904/26', patente='1656', prefijo='LCRR',
+        )
+        self.factura = XMLProveedor(
+            referencia=self.referencia,
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        self.factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        self.factura.save()
+        self.url = reverse('finanzas:referencia_estado', kwargs={'num_refe': self.referencia.num_refe})
+
+    def test_sin_complemento_muestra_tipo_normal(self):
+        resp = self.client.get(self.url)
+        # html=True: la plantilla envuelve "I" en espacios/saltos de línea, así
+        # que se compara la estructura del fragmento en vez de un substring literal.
+        self.assertContains(
+            resp,
+            '<span class="px-1.5 py-0.5 rounded bg-green-100 text-green-700">I</span>',
+            html=True,
+        )
+        self.assertNotContains(resp, 'COM. PAGO')
+
+    def test_con_complemento_ligado_muestra_com_pago(self):
+        complemento = ComplementoPago.objects.create(
+            factura=self.factura,
+            uuid_complemento='44444444-4444-4444-4444-444444444444',
+            uuid_factura_relacionada=self.factura.uuid_fiscal,
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'), estado='IDENTIFICADO',
+        )
+        complemento.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=False)
+        complemento.pdf_file.save('pago.pdf', ContentFile(b'%PDF-1.4'), save=True)
+
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'COM. PAGO')
+        self.assertContains(resp, 'Ver PDF pago')
