@@ -3,13 +3,15 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
 from referencias.models import Referencia
 
+from .carga_xml import procesar_lote
 from .models import ComplementoPago, XMLProveedor
-from .cfdi_de_prueba import cfdi_pago
+from .cfdi_de_prueba import cfdi_cliente, cfdi_pago
 from .cfdi_parser import parsear_complemento_pago
 
 MEDIA_TMP = tempfile.mkdtemp()
@@ -315,3 +317,59 @@ class ConciliarPendientesTests(TestCase):
 
         ya_ligado.refresh_from_db()
         self.assertEqual(ya_ligado.factura, otra_factura)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ProcesarLoteComplementosTests(TestCase):
+    def setUp(self):
+        self.usuario = User.objects.create_user('fin', password='x')
+
+    def test_complemento_no_crea_xmlproveedor(self):
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        resultados = procesar_lote([('pago.xml', xml_bytes)], self.usuario)
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(resultados[0].estado, 'COMPLEMENTO_PENDIENTE')
+        self.assertEqual(XMLProveedor.objects.count(), 0)
+        self.assertEqual(ComplementoPago.objects.count(), 1)
+
+    def test_complemento_liga_si_la_factura_ya_existe(self):
+        factura = XMLProveedor(
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+
+        xml_bytes = cfdi_pago(uuid_factura=str(factura.uuid_fiscal))
+        resultados = procesar_lote([('pago.xml', xml_bytes)], self.usuario)
+        self.assertEqual(resultados[0].estado, 'COMPLEMENTO_LIGADO')
+        complemento = ComplementoPago.objects.get()
+        self.assertEqual(complemento.factura, factura)
+
+    def test_complemento_duplicado_se_reporta(self):
+        xml_bytes = cfdi_pago(uuid='44444444-4444-4444-4444-444444444444')
+        procesar_lote([('pago.xml', xml_bytes)], self.usuario)
+        resultados = procesar_lote([('pago2.xml', xml_bytes)], self.usuario)
+        self.assertEqual(resultados[0].estado, 'DUPLICADO')
+
+    def test_factura_nueva_liga_complemento_pendiente_existente(self):
+        pendiente = ComplementoPago.objects.create(
+            uuid_complemento='44444444-4444-4444-4444-444444444444',
+            uuid_factura_relacionada='99999999-9999-9999-9999-999999999999',
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'),
+        )
+        pendiente.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=True)
+
+        # RFC no soportado por los extractores → factura queda sin referencia,
+        # pero conciliar_pendientes debe correr de todos modos.
+        xml_bytes = cfdi_cliente(uuid='99999999-9999-9999-9999-999999999999')
+        procesar_lote([('factura.xml', xml_bytes)], self.usuario)
+
+        pendiente.refresh_from_db()
+        self.assertEqual(pendiente.estado, 'IDENTIFICADO')

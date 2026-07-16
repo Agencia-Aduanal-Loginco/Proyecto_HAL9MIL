@@ -12,15 +12,17 @@ from dataclasses import dataclass
 from django.core.files.base import ContentFile
 
 from .cfdi_parser import parsear_cfdi_root
+from .complementos_pago import conciliar_pendientes, procesar_complemento
 from .extractores import buscar_referencia, extraer_datos_aduanales
-from .models import GastoReferencia, XMLProveedor
+from .models import ComplementoPago, GastoReferencia, XMLProveedor
 from .polizas import generar_poliza_gasto
 
 
 @dataclass
 class ResultadoArchivo:
     nombre: str
-    estado: str                 # ASIGNADO | PENDIENTE | DUPLICADO | ERROR
+    estado: str                 # ASIGNADO | PENDIENTE | DUPLICADO | ERROR |
+                                 # COMPLEMENTO_LIGADO | COMPLEMENTO_PENDIENTE
     referencia: object = None   # referencias.Referencia | None
     detalle: str = ''
 
@@ -93,6 +95,9 @@ def _procesar_uno(item, usuario):
     except (ET.ParseError, ValueError) as e:
         return ResultadoArchivo(nombre, 'ERROR', detalle=str(e))
 
+    if datos['tipo'] == 'P':
+        return _procesar_complemento_lote(item, root, datos)
+
     if XMLProveedor.objects.filter(uuid_fiscal=datos['uuid']).exists():
         return ResultadoArchivo(
             nombre, 'DUPLICADO', detalle=f'UUID {datos["uuid"]} ya registrado'
@@ -122,6 +127,7 @@ def _procesar_uno(item, usuario):
             item['stem'] + '.pdf', ContentFile(item['pdf']), save=False
         )
     xml_obj.save()
+    conciliar_pendientes(xml_obj)
 
     if referencia is None:
         return ResultadoArchivo(nombre, 'PENDIENTE', detalle=motivo)
@@ -129,3 +135,30 @@ def _procesar_uno(item, usuario):
     if datos['tipo'] == 'I':
         crear_gasto_desde_xml(xml_obj, usuario)
     return ResultadoArchivo(nombre, 'ASIGNADO', referencia=referencia)
+
+
+def _procesar_complemento_lote(item, root, datos):
+    nombre = item['nombre']
+    if ComplementoPago.objects.filter(uuid_complemento=datos['uuid']).exists():
+        return ResultadoArchivo(
+            nombre, 'DUPLICADO', detalle=f'Complemento {datos["uuid"]} ya registrado'
+        )
+    try:
+        complemento = procesar_complemento(
+            root, uuid_complemento=datos['uuid'], fecha=datos['fecha'],
+            rfc_emisor=datos['rfc_emisor'], nombre_emisor=datos['nombre_emisor'],
+            nombre_archivo=nombre, xml_bytes=item['xml'], pdf_bytes=item['pdf'],
+        )
+    except ValueError as e:
+        return ResultadoArchivo(nombre, 'ERROR', detalle=str(e))
+
+    if complemento.estado == 'IDENTIFICADO':
+        return ResultadoArchivo(
+            nombre, 'COMPLEMENTO_LIGADO',
+            referencia=complemento.factura.referencia,
+            detalle=f'liga con factura UUID {complemento.factura.uuid_fiscal}',
+        )
+    return ResultadoArchivo(
+        nombre, 'COMPLEMENTO_PENDIENTE',
+        detalle=f'esperando factura UUID {complemento.uuid_factura_relacionada}',
+    )
