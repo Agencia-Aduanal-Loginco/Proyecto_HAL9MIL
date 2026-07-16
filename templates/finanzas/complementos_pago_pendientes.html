@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Complementos de pago no identificados · Finanzas{% endblock %}
+{% block content %}
+<div class="p-6 max-w-6xl">
+
+  <div class="mb-6 flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="{% url 'finanzas:xml_pendientes' %}" class="text-sky-600 hover:underline">XMLs pendientes</a>
+      </div>
+      <h1 class="text-2xl font-bold text-slate-800 mt-2">Complementos de pago no identificados</h1>
+      <p class="text-slate-500 text-sm mt-0.5">
+        Escribe el número de referencia donde está la factura que este complemento paga.
+      </p>
+    </div>
+    {% if pendientes %}
+    <span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-full border border-amber-200 shrink-0">
+      {{ pendientes|length }} pendiente{{ pendientes|length|pluralize }}
+    </span>
+    {% endif %}
+  </div>
+
+  {% if pendientes %}
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3">Emisor</th>
+          <th class="px-4 py-3">Monto pagado</th>
+          <th class="px-4 py-3">Fecha</th>
+          <th class="px-4 py-3">UUID factura buscada</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3">PDF</th>
+          <th class="px-4 py-3">Ligar a referencia</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in pendientes %}
+        <tr class="hover:bg-slate-50 align-top">
+          <td class="px-4 py-3">
+            <p class="font-medium text-slate-800">{{ c.nombre_emisor }}</p>
+            <p class="text-xs text-slate-400 font-mono">{{ c.rfc_emisor }}</p>
+            {% if c.referencia_sugerida %}
+            <p class="text-xs text-slate-500 mt-0.5">Sugerida: {{ c.referencia_sugerida.num_refe }}</p>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 font-mono">${{ c.monto_pagado|floatformat:2 }} {{ c.moneda_pago }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ c.fecha_emision|date:'d/m/Y' }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500 break-all">{{ c.uuid_factura_relacionada|default:"—" }}</td>
+          <td class="px-4 py-3">
+            {% if c.estado == 'REVISION' %}
+            <span class="bg-red-50 text-red-700 text-xs px-2 py-1 rounded-full">Requiere revisión</span>
+            {% else %}
+            <span class="bg-amber-50 text-amber-700 text-xs px-2 py-1 rounded-full">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if c.pdf_file %}
+            <a href="{% url 'finanzas:complemento_pago_ver_pdf' c.pk %}" target="_blank"
+               class="text-sky-600 hover:underline text-xs">Ver PDF</a>
+            {% else %}
+            <span class="text-slate-300 text-xs">—</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <form method="post" class="flex gap-2">
+              {% csrf_token %}
+              <input type="hidden" name="complemento_id" value="{{ c.pk }}">
+              <input type="text" name="num_refe" placeholder="LCRR0000/26" required
+                     class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <button type="submit"
+                      class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer">
+                Ligar
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
+    <p class="text-slate-500 text-sm">No hay complementos de pago pendientes de identificar.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

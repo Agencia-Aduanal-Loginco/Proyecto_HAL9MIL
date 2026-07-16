@@ -421,3 +421,101 @@ class SubirXmlProveedorComplementoTests(TestCase):
         xml_obj = XMLProveedor.objects.get()
         self.assertTrue(xml_obj.pdf_file)
         self.assertEqual(xml_obj.referencia, self.referencia)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ComplementosPagoPendientesViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('verpend', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='verpend', password='x')
+        self.referencia = Referencia.objects.create(
+            num_refe='LCRR0902/26', patente='1656', prefijo='LCRR',
+        )
+        self.pendiente = ComplementoPago.objects.create(
+            uuid_complemento='44444444-4444-4444-4444-444444444444',
+            uuid_factura_relacionada='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'),
+        )
+        self.pendiente.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=True)
+        self.url = reverse('finanzas:complementos_pago_pendientes')
+
+    def test_lista_muestra_pendiente(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'CACIPA INTERNACIONAL')
+
+    def test_ligar_manualmente_por_num_refe_y_uuid(self):
+        factura = XMLProveedor(
+            referencia=self.referencia,
+            uuid_fiscal='11111111-1111-1111-1111-111111111111',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+
+        resp = self.client.post(self.url, {
+            'complemento_id': self.pendiente.pk,
+            'num_refe': self.referencia.num_refe,
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.pendiente.refresh_from_db()
+        self.assertEqual(self.pendiente.estado, 'IDENTIFICADO')
+        self.assertEqual(self.pendiente.factura, factura)
+
+    def test_ligar_con_referencia_incorrecta_no_liga(self):
+        otra_ref = Referencia.objects.create(
+            num_refe='LCRR0903/26', patente='1656', prefijo='LCRR',
+        )
+        resp = self.client.post(self.url, {
+            'complemento_id': self.pendiente.pk,
+            'num_refe': otra_ref.num_refe,
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.pendiente.refresh_from_db()
+        self.assertEqual(self.pendiente.estado, 'PENDIENTE')
+
+    def test_requiere_modulo_finanzas(self):
+        User.objects.create_user('sinmodulo', password='x')
+        self.client.logout()
+        self.client.login(username='sinmodulo', password='x')
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 302)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class ComplementoPagoVerPdfViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('verpdf', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='verpdf', password='x')
+        self.complemento = ComplementoPago.objects.create(
+            uuid_complemento='44444444-4444-4444-4444-444444444444',
+            fecha_emision=datetime(2026, 7, 10, 12, 0, 0),
+            rfc_emisor='CIN220216BS2', nombre_emisor='CACIPA INTERNACIONAL',
+            monto_pagado=Decimal('116.00'),
+        )
+        self.complemento.xml_file.save('pago.xml', ContentFile(b'<x/>'), save=False)
+        self.complemento.pdf_file.save('pago.pdf', ContentFile(b'%PDF-1.4'), save=True)
+
+    def test_descarga_pdf(self):
+        url = reverse('finanzas:complemento_pago_ver_pdf', kwargs={'pk': self.complemento.pk})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+
+    def test_404_si_no_tiene_pdf(self):
+        self.complemento.pdf_file.delete(save=True)
+        url = reverse('finanzas:complemento_pago_ver_pdf', kwargs={'pk': self.complemento.pk})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)

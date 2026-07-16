@@ -1224,6 +1224,51 @@ def xml_pendientes(request):
 
 
 @modulo_required('Finanzas')
+def complementos_pago_pendientes(request):
+    if request.method == 'POST':
+        complemento = get_object_or_404(
+            ComplementoPago,
+            pk=request.POST.get('complemento_id'),
+            estado__in=['PENDIENTE', 'REVISION'],
+        )
+        num_refe = request.POST.get('num_refe', '').strip()
+        factura = XMLProveedor.objects.filter(
+            referencia__num_refe=num_refe,
+            uuid_fiscal=complemento.uuid_factura_relacionada,
+        ).first()
+        if factura is None:
+            messages.error(
+                request,
+                f'No se encontró en "{num_refe}" ninguna factura con UUID '
+                f'{complemento.uuid_factura_relacionada}.'
+            )
+        else:
+            complemento.factura = factura
+            complemento.estado = 'IDENTIFICADO'
+            complemento.save(update_fields=['factura', 'estado'])
+            messages.success(request, f'Complemento ligado a la factura {factura.uuid_fiscal}.')
+        return redirect('finanzas:complementos_pago_pendientes')
+
+    pendientes = list(
+        ComplementoPago.objects
+        .filter(estado__in=['PENDIENTE', 'REVISION'])
+        .select_related('referencia_sugerida')
+        .order_by('-cargado_en')
+    )
+    return render(request, 'finanzas/complementos_pago_pendientes.html', {
+        'pendientes': pendientes,
+    })
+
+
+@modulo_required('Finanzas')
+def complemento_pago_ver_pdf(request, pk):
+    complemento = get_object_or_404(ComplementoPago, pk=pk)
+    if not complemento.pdf_file:
+        raise Http404('Este complemento no tiene un PDF asociado.')
+    return FileResponse(complemento.pdf_file.open('rb'), content_type='application/pdf')
+
+
+@modulo_required('Finanzas')
 def xml_proveedor_ver_pdf(request, pk):
     xml_obj = get_object_or_404(XMLProveedor, pk=pk)
     if not xml_obj.pdf_file:

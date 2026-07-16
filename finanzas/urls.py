@@ -44,6 +44,8 @@ urlpatterns = [
     path('xml/carga-masiva/', views.carga_masiva_xml, name='carga_masiva_xml'),
     path('xml/carga-cliente/', views.carga_xml_cliente, name='carga_xml_cliente'),
     path('xml/pendientes/', views.xml_pendientes, name='xml_pendientes'),
+    path('xml/complementos-pendientes/', views.complementos_pago_pendientes, name='complementos_pago_pendientes'),
+    path('complemento-pago/<int:pk>/pdf/', views.complemento_pago_ver_pdf, name='complemento_pago_ver_pdf'),
     path('xml-proveedor/<int:pk>/pdf/', views.xml_proveedor_ver_pdf, name='xml_proveedor_ver_pdf'),
     # Rutas por referencia — <path:> porque num_refe contiene "/"  (ej. LCLF0331/26)
     path('referencias/<path:num_refe>/estado/', views.referencia_estado_financiero, name='referencia_estado'),
