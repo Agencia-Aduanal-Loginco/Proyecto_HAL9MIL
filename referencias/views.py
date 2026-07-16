@@ -1,4 +1,5 @@
 import calendar as cal
+import itertools
 import json
 from datetime import date, timedelta
 
@@ -757,7 +758,7 @@ def cuenta_gastos(request):
             qs = qs.filter(fecha_pago__year=año)
         if mes:
             qs = qs.filter(fecha_pago__month=mes)
-        qs = qs.order_by('-fecha_pago')
+        qs = qs.order_by('nombre_cliente', '-fecha_pago')
 
         años_disponibles = (
             Referencia.objects
@@ -770,9 +771,17 @@ def cuenta_gastos(request):
         paginador = Paginator(qs, 50)
         pagina    = paginador.get_page(request.GET.get('page', 1))
 
+        grupos_cliente = [
+            {'nombre_cliente': nombre, 'referencias': list(refs)}
+            for nombre, refs in itertools.groupby(
+                pagina.object_list, key=lambda r: r.nombre_cliente
+            )
+        ]
+
         ctx = {
             'tab':              'pendientes',
             'page':             pagina,
+            'grupos_cliente':   grupos_cliente,
             'q':                q,
             'filtro_patente':   patente,
             'filtro_año':       año,

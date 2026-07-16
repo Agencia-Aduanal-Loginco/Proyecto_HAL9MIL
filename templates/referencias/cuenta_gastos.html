@@ -223,96 +223,103 @@
 
     {% else %}
     <!-- ── TAB PENDIENTES ─────────────────────────────────────────────────── -->
-    {% if page.object_list %}
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-100 bg-slate-50 text-left">
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Referencia</th>
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Cliente</th>
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">F. Pago</th>
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Contenedores</th>
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">BL</th>
-            {% if request.user.is_staff %}
-            <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Acción</th>
-            {% endif %}
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50">
-          {% for ref in page.object_list %}
-          <tr class="hover:bg-slate-50 transition-colors">
-
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-2">
-                {% if ref.patente == "1627" %}
-                  <span class="w-2 h-2 rounded-full bg-sky-500 flex-shrink-0"></span>
-                {% elif ref.patente == "1656" %}
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
-                {% else %}
-                  <span class="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0"></span>
+    {% if grupos_cliente %}
+    <div>
+      {% for grupo in grupos_cliente %}
+      <details class="border-b border-slate-100 last:border-0">
+        <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors">
+          <span class="font-semibold text-slate-700">{{ grupo.nombre_cliente|default:"Sin cliente" }}</span>
+          <span class="text-xs text-slate-400 font-medium">
+            {{ grupo.referencias|length }} referencia{{ grupo.referencias|length|pluralize }}
+          </span>
+        </summary>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-100 bg-white text-left">
+                <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Referencia</th>
+                <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">F. Pago</th>
+                <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Contenedores</th>
+                <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">BL</th>
+                {% if request.user.is_staff %}
+                <th class="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Acción</th>
                 {% endif %}
-                <a href="{% url 'detalle' ref.num_refe %}"
-                   class="font-mono font-medium text-sky-700 hover:text-sky-900 hover:underline">
-                  {{ ref.num_refe }}
-                </a>
-              </div>
-            </td>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              {% for ref in grupo.referencias %}
+              <tr class="hover:bg-slate-50 transition-colors">
 
-            <td class="px-4 py-3 text-slate-700 max-w-xs truncate" title="{{ ref.nombre_cliente }}">
-              {{ ref.nombre_cliente|default:"—" }}
-            </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    {% if ref.patente == "1627" %}
+                      <span class="w-2 h-2 rounded-full bg-sky-500 flex-shrink-0"></span>
+                    {% elif ref.patente == "1656" %}
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                    {% else %}
+                      <span class="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0"></span>
+                    {% endif %}
+                    <a href="{% url 'detalle' ref.num_refe %}"
+                       class="font-mono font-medium text-sky-700 hover:text-sky-900 hover:underline">
+                      {{ ref.num_refe }}
+                    </a>
+                  </div>
+                </td>
 
-            <td class="px-4 py-3 text-slate-500 whitespace-nowrap">
-              {{ ref.fecha_pago|date:"d/m/Y"|default:"—" }}
-            </td>
+                <td class="px-4 py-3 text-slate-500 whitespace-nowrap">
+                  {{ ref.fecha_pago|date:"d/m/Y"|default:"—" }}
+                </td>
 
-            <td class="px-4 py-3">
-              {% if ref.contenedores.all %}
-                <div class="flex flex-wrap gap-1">
-                  {% for cont in ref.contenedores.all %}
-                    <span class="inline-flex items-center gap-1 rounded bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 font-mono">
-                      {{ cont.num_cont }}
-                      {% if cont.tipo %}<span class="text-slate-400">{{ cont.tipo }}</span>{% endif %}
-                    </span>
-                  {% endfor %}
-                </div>
-              {% else %}
-                <span class="text-slate-300">—</span>
-              {% endif %}
-            </td>
+                <td class="px-4 py-3">
+                  {% if ref.contenedores.all %}
+                    <div class="flex flex-wrap gap-1">
+                      {% for cont in ref.contenedores.all %}
+                        <span class="inline-flex items-center gap-1 rounded bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 font-mono">
+                          {{ cont.num_cont }}
+                          {% if cont.tipo %}<span class="text-slate-400">{{ cont.tipo }}</span>{% endif %}
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span class="text-slate-300">—</span>
+                  {% endif %}
+                </td>
 
-            <td class="px-4 py-3">
-              {% if ref.guias.all %}
-                <div class="flex flex-wrap gap-1">
-                  {% for guia in ref.guias.all %}
-                    <span class="inline-flex items-center rounded bg-indigo-50 text-indigo-700 text-xs px-1.5 py-0.5 font-mono">
-                      {% if guia.tipo_guia == "H" %}<span class="text-indigo-400 mr-0.5">H·</span>{% endif %}
-                      {{ guia.numero_guia }}
-                    </span>
-                  {% endfor %}
-                </div>
-              {% else %}
-                <span class="text-slate-300">—</span>
-              {% endif %}
-            </td>
+                <td class="px-4 py-3">
+                  {% if ref.guias.all %}
+                    <div class="flex flex-wrap gap-1">
+                      {% for guia in ref.guias.all %}
+                        <span class="inline-flex items-center rounded bg-indigo-50 text-indigo-700 text-xs px-1.5 py-0.5 font-mono">
+                          {% if guia.tipo_guia == "H" %}<span class="text-indigo-400 mr-0.5">H·</span>{% endif %}
+                          {{ guia.numero_guia }}
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span class="text-slate-300">—</span>
+                  {% endif %}
+                </td>
 
-            {% if request.user.is_staff %}
-            <td class="px-4 py-3 text-right">
-              <button
-                onclick="abrirModal({{ ref.pk }}, '{{ ref.num_refe|escapejs }}')"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-                Finalizar
-              </button>
-            </td>
-            {% endif %}
+                {% if request.user.is_staff %}
+                <td class="px-4 py-3 text-right">
+                  <button
+                    onclick="abrirModal({{ ref.pk }}, '{{ ref.num_refe|escapejs }}')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Finalizar
+                  </button>
+                </td>
+                {% endif %}
 
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endfor %}
     </div>
     {% else %}
     <div class="py-16 text-center">
