@@ -342,7 +342,14 @@
     <!-- Paginación (común a ambas tabs) -->
     {% if page.has_other_pages %}
     <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-      <span>Página {{ page.number }} de {{ page.paginator.num_pages }} · {{ total }} registros</span>
+      <span>
+        Página {{ page.number }} de {{ page.paginator.num_pages }} ·
+        {% if tab == 'pendientes' %}
+          {{ page.paginator.count }} cliente{{ page.paginator.count|pluralize }}
+        {% else %}
+          {{ total }} registro{{ total|pluralize }}
+        {% endif %}
+      </span>
       <div class="flex gap-2">
         {% if page.has_previous %}
           <a href="?tab={{ tab }}{% if q %}&q={{ q }}{% endif %}{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if filtro_año %}&año={{ filtro_año }}{% endif %}{% if filtro_mes %}&mes={{ filtro_mes }}{% endif %}&page={{ page.previous_page_number }}"

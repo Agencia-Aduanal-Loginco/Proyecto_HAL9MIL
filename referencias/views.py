@@ -768,13 +768,20 @@ def cuenta_gastos(request):
             .order_by('-fecha_pago__year')
         )
 
-        paginador = Paginator(qs, 50)
+        clientes_distintos = list(
+            qs.values_list('nombre_cliente', flat=True)
+            .distinct().order_by('nombre_cliente')
+        )
+        paginador = Paginator(clientes_distintos, 50)
         pagina    = paginador.get_page(request.GET.get('page', 1))
 
+        referencias_pagina = qs.filter(
+            nombre_cliente__in=list(pagina.object_list)
+        ).order_by('nombre_cliente', '-fecha_pago')
         grupos_cliente = [
             {'nombre_cliente': nombre, 'referencias': list(refs)}
             for nombre, refs in itertools.groupby(
-                pagina.object_list, key=lambda r: r.nombre_cliente
+                referencias_pagina, key=lambda r: r.nombre_cliente
             )
         ]
 

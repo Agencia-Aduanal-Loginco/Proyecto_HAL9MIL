@@ -102,3 +102,41 @@ class CuentaGastosAgruparPorClienteTests(TestCase):
         resp = self.client.get(reverse('cuenta_gastos'))
         self.assertContains(resp, 'Finalizar')
         self.assertContains(resp, 'abrirModal(')
+
+
+class CuentaGastosPaginarPorClienteTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('cg_pagina', password='x')
+        self.client.force_login(self.user)
+        # CLIENTE 000 tiene 2 referencias, el resto (001..050) tiene 1 cada
+        # uno: 51 clientes distintos, 52 referencias en total. Con esta
+        # mezcla, paginar por filas (50 referencias) y paginar por clientes
+        # (50 clientes) dan resultados distintos en la página 1 (49 clientes
+        # completos vs. 50), lo que permite que las pruebas distingan de
+        # verdad el comportamiento nuevo del viejo.
+        _crear_referencia_pendiente('LCRR0000/26', 'CLIENTE 000', date(2026, 7, 1))
+        _crear_referencia_pendiente('LCRR0000B/26', 'CLIENTE 000', date(2026, 7, 2))
+        for i in range(1, 51):
+            _crear_referencia_pendiente(
+                f'LCRR{i:04d}/26', f'CLIENTE {i:03d}', date(2026, 7, 1),
+            )
+
+    def test_pagina_1_trae_50_clientes_completos(self):
+        resp = self.client.get(reverse('cuenta_gastos'))
+        grupos = resp.context['grupos_cliente']
+        self.assertEqual(len(grupos), 50)
+
+    def test_pagina_2_trae_el_cliente_restante(self):
+        resp = self.client.get(reverse('cuenta_gastos'), {'page': 2})
+        grupos = resp.context['grupos_cliente']
+        self.assertEqual(len(grupos), 1)
+        self.assertEqual(grupos[0]['nombre_cliente'], 'CLIENTE 050')
+
+    def test_total_de_paginas_es_por_clientes_no_por_referencias(self):
+        resp = self.client.get(reverse('cuenta_gastos'))
+        self.assertEqual(resp.context['page'].paginator.num_pages, 2)
+        self.assertEqual(resp.context['page'].paginator.count, 51)
+
+    def test_pie_de_pagina_muestra_clientes(self):
+        resp = self.client.get(reverse('cuenta_gastos'))
+        self.assertContains(resp, '51 clientes')
