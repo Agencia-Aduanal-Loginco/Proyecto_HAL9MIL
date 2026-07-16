@@ -5,7 +5,9 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from referencias.models import Referencia
 
@@ -373,3 +375,49 @@ class ProcesarLoteComplementosTests(TestCase):
 
         pendiente.refresh_from_db()
         self.assertEqual(pendiente.estado, 'IDENTIFICADO')
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
+class SubirXmlProveedorComplementoTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('subecg', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='subecg', password='x')
+        self.referencia = Referencia.objects.create(
+            num_refe='LCRR0901/26', patente='1656', prefijo='LCRR',
+        )
+        self.url = reverse('finanzas:subir_xml', kwargs={'num_refe': self.referencia.num_refe})
+
+    def test_complemento_no_crea_xmlproveedor_y_queda_pendiente(self):
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        resp = self.client.post(self.url, {
+            'xml_file': SimpleUploadedFile('pago.xml', xml_bytes),
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(XMLProveedor.objects.count(), 0)
+        complemento = ComplementoPago.objects.get()
+        self.assertEqual(complemento.estado, 'PENDIENTE')
+        self.assertEqual(complemento.referencia_sugerida, self.referencia)
+
+    def test_complemento_con_pdf_opcional(self):
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        resp = self.client.post(self.url, {
+            'xml_file': SimpleUploadedFile('pago.xml', xml_bytes),
+            'pdf_file': SimpleUploadedFile('pago.pdf', b'%PDF-1.4'),
+        })
+        self.assertEqual(resp.status_code, 302)
+        complemento = ComplementoPago.objects.get()
+        self.assertTrue(complemento.pdf_file)
+
+    def test_factura_normal_sigue_funcionando_con_pdf_opcional(self):
+        xml_bytes = cfdi_cliente(uuid='55555555-5555-5555-5555-555555555555')
+        resp = self.client.post(self.url, {
+            'xml_file': SimpleUploadedFile('factura.xml', xml_bytes),
+            'pdf_file': SimpleUploadedFile('factura.pdf', b'%PDF-1.4'),
+        })
+        self.assertEqual(resp.status_code, 302)
+        xml_obj = XMLProveedor.objects.get()
+        self.assertTrue(xml_obj.pdf_file)
+        self.assertEqual(xml_obj.referencia, self.referencia)

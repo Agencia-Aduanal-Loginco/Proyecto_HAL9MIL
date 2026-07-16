@@ -1,6 +1,5 @@
 import json
-import os
-import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 from decimal import Decimal
 
@@ -14,7 +13,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from clientes.models import Cliente
 from referencias.models import Referencia
-from .cfdi_parser import parsear_cfdi
+from .cfdi_parser import parsear_cfdi_root
+from .complementos_pago import conciliar_pendientes, procesar_complemento
+from django.core.files.base import ContentFile
 from .carga_xml import crear_gasto_desde_xml, expandir_subidas, procesar_lote
 from .balanza import calcular_balanza, totales_balanza
 from .cierre import CierreError, ejecutar_cierre_mensual
@@ -26,9 +27,9 @@ from .exportar_sat import (
 )
 from .forms import AnticipoForm, FacturaForm, GastoReferenciaForm, PagoForm
 from .models import (
-    Anticipo, CierreMensual, ComisionReferencia, ConceptoFactura, CuentaBancaria,
-    DoctoRelacionado, Factura, GastoReferencia, MovimientoBancario, Pago,
-    PolizaContable, XMLProveedor,
+    Anticipo, CierreMensual, ComisionReferencia, ComplementoPago, ConceptoFactura,
+    CuentaBancaria, DoctoRelacionado, Factura, GastoReferencia, MovimientoBancario,
+    Pago, PolizaContable, XMLProveedor,
 )
 from .pipeline import calcular_embudo_ap, calcular_embudo_ar, calcular_tendencia_semanal
 from .polizas import generar_poliza_anticipo, generar_poliza_gasto
@@ -204,6 +205,7 @@ def subir_xml_proveedor(request, num_refe):
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
 
     xml_file = request.FILES.get('xml_file')
+    pdf_file = request.FILES.get('pdf_file')
     if not xml_file:
         messages.error(request, 'No se seleccionó ningún archivo XML.')
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
@@ -212,28 +214,47 @@ def subir_xml_proveedor(request, num_refe):
         messages.error(request, 'El archivo debe tener extensión .xml')
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
 
-    # Parsear en archivo temporal antes de persistir
-    tmp_path = None
+    xml_bytes = xml_file.read()
     try:
-        with tempfile.NamedTemporaryFile(suffix='.xml', delete=False) as tmp:
-            for chunk in xml_file.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
-        datos = parsear_cfdi(tmp_path)
-    except ValueError as e:
+        root = ET.fromstring(xml_bytes)
+        datos = parsear_cfdi_root(root)
+    except (ET.ParseError, ValueError) as e:
         messages.error(request, f'Error al leer el XML: {e}')
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+
+    if datos['tipo'] == 'P':
+        if ComplementoPago.objects.filter(uuid_complemento=datos['uuid']).exists():
+            messages.error(request, 'Este complemento de pago ya fue registrado (UUID duplicado).')
+            return redirect('finanzas:referencia_estado', num_refe=num_refe)
+        try:
+            complemento = procesar_complemento(
+                root, uuid_complemento=datos['uuid'], fecha=datos['fecha'],
+                rfc_emisor=datos['rfc_emisor'], nombre_emisor=datos['nombre_emisor'],
+                nombre_archivo=xml_file.name, xml_bytes=xml_bytes,
+                pdf_bytes=pdf_file.read() if pdf_file else None,
+                referencia_sugerida=referencia,
+            )
+        except ValueError as e:
+            messages.error(request, f'Error al leer el complemento de pago: {e}')
+            return redirect('finanzas:referencia_estado', num_refe=num_refe)
+        if complemento.estado == 'IDENTIFICADO':
+            messages.success(
+                request,
+                f'Complemento de pago ligado a la factura {complemento.factura.uuid_fiscal}.'
+            )
+        else:
+            messages.warning(
+                request,
+                'Complemento de pago cargado; no se encontró la factura relacionada '
+                '(quedó pendiente de ligar).'
+            )
+        return redirect('finanzas:referencia_estado', num_refe=num_refe)
 
     # Verificar UUID único
     if XMLProveedor.objects.filter(uuid_fiscal=datos['uuid']).exists():
-        messages.error(request, f'Este XML ya fue registrado (UUID duplicado).')
+        messages.error(request, 'Este XML ya fue registrado (UUID duplicado).')
         return redirect('finanzas:referencia_estado', num_refe=num_refe)
 
-    # Guardar archivo y crear registro
-    xml_file.seek(0)
     xml_obj = XMLProveedor.objects.create(
         referencia=referencia,
         uuid_fiscal=datos['uuid'],
@@ -247,9 +268,13 @@ def subir_xml_proveedor(request, num_refe):
         moneda=datos['moneda'],
         tipo_comprobante=datos['tipo'],
         concepto_principal=datos['concepto_principal'],
-        xml_file=xml_file,
+        xml_file=ContentFile(xml_bytes, name=xml_file.name),
         estado_asignacion='ASIGNADO',
     )
+    if pdf_file:
+        xml_obj.pdf_file.save(pdf_file.name, ContentFile(pdf_file.read()), save=True)
+
+    conciliar_pendientes(xml_obj)
 
     # Crear GastoReferencia automático si el usuario lo solicitó y el XML es tipo Ingreso
     if request.POST.get('crear_gasto') == '1' and datos['tipo'] == 'I':
