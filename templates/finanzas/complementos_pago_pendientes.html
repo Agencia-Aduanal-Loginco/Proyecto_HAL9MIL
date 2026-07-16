@@ -63,6 +63,25 @@
             {% endif %}
           </td>
           <td class="px-4 py-3">
+            {% if c.candidatas %}
+            <div class="flex flex-col gap-1.5 min-w-[220px]">
+              {% for f in c.candidatas %}
+              <form method="post" class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
+                {% csrf_token %}
+                <input type="hidden" name="complemento_id" value="{{ c.pk }}">
+                <input type="hidden" name="factura_id" value="{{ f.pk }}">
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-slate-800 text-xs truncate">{{ f.nombre_emisor }}</p>
+                  <p class="text-xs text-slate-500">${{ f.total|floatformat:2 }} · {{ f.uuid_fiscal|stringformat:"s"|slice:":8" }}…</p>
+                </div>
+                <button type="submit"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer">
+                  Elegir
+                </button>
+              </form>
+              {% endfor %}
+            </div>
+            {% else %}
             <form method="post" class="flex gap-2">
               {% csrf_token %}
               <input type="hidden" name="complemento_id" value="{{ c.pk }}">
@@ -70,9 +89,10 @@
                      class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
               <button type="submit"
                       class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer">
-                Ligar
+                Buscar
               </button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

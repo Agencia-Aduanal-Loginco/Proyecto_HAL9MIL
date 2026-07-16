@@ -158,6 +158,11 @@ def _procesar_complemento_lote(item, root, datos):
             referencia=complemento.factura.referencia,
             detalle=f'liga con factura UUID {complemento.factura.uuid_fiscal}',
         )
+    if complemento.estado == 'REVISION':
+        return ResultadoArchivo(
+            nombre, 'COMPLEMENTO_PENDIENTE',
+            detalle='paga varias facturas, requiere revisión manual',
+        )
     return ResultadoArchivo(
         nombre, 'COMPLEMENTO_PENDIENTE',
         detalle=f'esperando factura UUID {complemento.uuid_factura_relacionada}',

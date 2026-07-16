@@ -245,6 +245,12 @@ def subir_xml_proveedor(request, num_refe):
                 request,
                 f'Complemento de pago ligado a la factura {complemento.factura.uuid_fiscal}.'
             )
+        elif complemento.estado == 'REVISION':
+            messages.warning(
+                request,
+                'Complemento de pago cargado; paga varias facturas y requiere '
+                'revisión manual.'
+            )
         else:
             messages.warning(
                 request,
@@ -1230,29 +1236,34 @@ def xml_pendientes(request):
 
 @modulo_required('Finanzas')
 def complementos_pago_pendientes(request):
+    candidatas_para = None
     if request.method == 'POST':
         complemento = get_object_or_404(
             ComplementoPago,
             pk=request.POST.get('complemento_id'),
             estado__in=['PENDIENTE', 'REVISION'],
         )
-        num_refe = request.POST.get('num_refe', '').strip()
-        factura = XMLProveedor.objects.filter(
-            referencia__num_refe=num_refe,
-            uuid_fiscal=complemento.uuid_factura_relacionada,
-        ).first()
-        if factura is None:
-            messages.error(
-                request,
-                f'No se encontró en "{num_refe}" ninguna factura con UUID '
-                f'{complemento.uuid_factura_relacionada}.'
-            )
-        else:
+        factura_id = request.POST.get('factura_id')
+        if factura_id:
+            factura = get_object_or_404(XMLProveedor, pk=factura_id)
             complemento.factura = factura
             complemento.estado = 'IDENTIFICADO'
             complemento.save(update_fields=['factura', 'estado'])
             messages.success(request, f'Complemento ligado a la factura {factura.uuid_fiscal}.')
-        return redirect('finanzas:complementos_pago_pendientes')
+            return redirect('finanzas:complementos_pago_pendientes')
+
+        num_refe = request.POST.get('num_refe', '').strip()
+        candidatas = list(
+            XMLProveedor.objects.filter(referencia__num_refe=num_refe)
+            .order_by('-fecha_emision')
+        )
+        if not candidatas:
+            messages.error(
+                request,
+                f'No se encontraron facturas en la referencia "{num_refe}".'
+            )
+            return redirect('finanzas:complementos_pago_pendientes')
+        candidatas_para = (complemento.pk, candidatas)
 
     pendientes = list(
         ComplementoPago.objects
@@ -1260,6 +1271,8 @@ def complementos_pago_pendientes(request):
         .select_related('referencia_sugerida')
         .order_by('-cargado_en')
     )
+    for c in pendientes:
+        c.candidatas = candidatas_para[1] if candidatas_para and candidatas_para[0] == c.pk else []
     return render(request, 'finanzas/complementos_pago_pendientes.html', {
         'pendientes': pendientes,
     })

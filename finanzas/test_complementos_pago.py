@@ -376,6 +376,21 @@ class ProcesarLoteComplementosTests(TestCase):
         pendiente.refresh_from_db()
         self.assertEqual(pendiente.estado, 'IDENTIFICADO')
 
+    def test_complemento_en_revision_detalle_distingue_de_pendiente(self):
+        """`_procesar_complemento_lote` debe reportar un detalle distinto para
+        REVISION (paga varias facturas) que para PENDIENTE (no matcheó)."""
+        xml_bytes = cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            uuids_factura_extra=['22222222-2222-2222-2222-222222222222'],
+        )
+        resultados = procesar_lote([('pago.xml', xml_bytes)], self.usuario)
+        self.assertEqual(resultados[0].estado, 'COMPLEMENTO_PENDIENTE')
+        self.assertEqual(
+            resultados[0].detalle, 'paga varias facturas, requiere revisión manual'
+        )
+        complemento = ComplementoPago.objects.get()
+        self.assertEqual(complemento.estado, 'REVISION')
+
 
 @override_settings(MEDIA_ROOT=MEDIA_TMP)
 class SubirXmlProveedorComplementoTests(TestCase):
@@ -422,6 +437,25 @@ class SubirXmlProveedorComplementoTests(TestCase):
         self.assertTrue(xml_obj.pdf_file)
         self.assertEqual(xml_obj.referencia, self.referencia)
 
+    def test_complemento_en_revision_mensaje_distingue_de_pendiente(self):
+        """Un complemento con >1 DoctoRelacionado (REVISION) no es lo mismo
+        que uno que simplemente no encontró su factura (PENDIENTE); el mensaje
+        debe distinguir ambos casos."""
+        xml_bytes = cfdi_pago(
+            uuid_factura='11111111-1111-1111-1111-111111111111',
+            uuids_factura_extra=['22222222-2222-2222-2222-222222222222'],
+        )
+        resp = self.client.post(self.url, {
+            'xml_file': SimpleUploadedFile('pago.xml', xml_bytes),
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        complemento = ComplementoPago.objects.get()
+        self.assertEqual(complemento.estado, 'REVISION')
+        self.assertContains(
+            resp, 'paga varias facturas y requiere revisión manual'
+        )
+        self.assertNotContains(resp, 'no se encontró la factura relacionada')
+
 
 @override_settings(MEDIA_ROOT=MEDIA_TMP)
 class ComplementosPagoPendientesViewTests(TestCase):
@@ -449,7 +483,52 @@ class ComplementosPagoPendientesViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'CACIPA INTERNACIONAL')
 
-    def test_ligar_manualmente_por_num_refe_y_uuid(self):
+    def test_buscar_por_num_refe_muestra_candidatas(self):
+        """Paso 1: buscar por num_refe re-renderiza la MISMA página (no redirect)
+        mostrando las facturas candidatas de esa referencia, sin filtrar por UUID."""
+        factura = XMLProveedor(
+            referencia=self.referencia,
+            # UUID que NO coincide con el buscado por el complemento — a propósito,
+            # para probar que ya no se filtra por uuid_fiscal en este paso.
+            uuid_fiscal='22222222-2222-2222-2222-222222222222',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
+        )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+
+        resp = self.client.post(self.url, {
+            'complemento_id': self.pendiente.pk,
+            'num_refe': self.referencia.num_refe,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'L C TERMINAL')
+        self.assertContains(resp, 'Elegir')
+        self.pendiente.refresh_from_db()
+        self.assertEqual(self.pendiente.estado, 'PENDIENTE')
+        self.assertIsNone(self.pendiente.factura)
+
+    def test_buscar_referencia_sin_facturas_muestra_error(self):
+        otra_ref = Referencia.objects.create(
+            num_refe='LCRR0903/26', patente='1656', prefijo='LCRR',
+        )
+        resp = self.client.post(self.url, {
+            'complemento_id': self.pendiente.pk,
+            'num_refe': otra_ref.num_refe,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp, f'No se encontraron facturas en la referencia &quot;{otra_ref.num_refe}&quot;.'
+        )
+        self.pendiente.refresh_from_db()
+        self.assertEqual(self.pendiente.estado, 'PENDIENTE')
+
+    def test_elegir_candidata_liga_complemento(self):
+        """Paso 2: al elegir una factura de la lista de candidatas, se liga
+        el complemento sin importar si su UUID coincide o no."""
         factura = XMLProveedor(
             referencia=self.referencia,
             uuid_fiscal='11111111-1111-1111-1111-111111111111',
@@ -464,24 +543,39 @@ class ComplementosPagoPendientesViewTests(TestCase):
 
         resp = self.client.post(self.url, {
             'complemento_id': self.pendiente.pk,
-            'num_refe': self.referencia.num_refe,
+            'factura_id': factura.pk,
         })
         self.assertEqual(resp.status_code, 302)
         self.pendiente.refresh_from_db()
         self.assertEqual(self.pendiente.estado, 'IDENTIFICADO')
         self.assertEqual(self.pendiente.factura, factura)
 
-    def test_ligar_con_referencia_incorrecta_no_liga(self):
-        otra_ref = Referencia.objects.create(
-            num_refe='LCRR0903/26', patente='1656', prefijo='LCRR',
+    def test_elegir_candidata_con_uuid_no_coincidente_liga_de_todos_modos(self):
+        """Prueba explícita de la capacidad nueva: el complemento busca el UUID
+        '11111111-...' pero la factura elegida tiene un UUID distinto (nunca
+        habría sido encontrada por match exacto de UUID); aun así, el ligado
+        manual por elección del operador debe funcionar."""
+        factura = XMLProveedor(
+            referencia=self.referencia,
+            uuid_fiscal='99999999-0000-0000-0000-000000000000',
+            fecha_emision=datetime(2026, 7, 8, 8, 0, 0),
+            rfc_emisor='LCT030408U39', nombre_emisor='L C TERMINAL',
+            rfc_receptor='CIN220216BS2',
+            subtotal=Decimal('100'), iva=Decimal('16'), total=Decimal('116'),
+            tipo_comprobante='I',
         )
+        factura.xml_file.save('f.xml', ContentFile(b'<x/>'), save=False)
+        factura.save()
+        self.assertNotEqual(str(factura.uuid_fiscal), str(self.pendiente.uuid_factura_relacionada))
+
         resp = self.client.post(self.url, {
             'complemento_id': self.pendiente.pk,
-            'num_refe': otra_ref.num_refe,
+            'factura_id': factura.pk,
         })
         self.assertEqual(resp.status_code, 302)
         self.pendiente.refresh_from_db()
-        self.assertEqual(self.pendiente.estado, 'PENDIENTE')
+        self.assertEqual(self.pendiente.estado, 'IDENTIFICADO')
+        self.assertEqual(self.pendiente.factura, factura)
 
     def test_requiere_modulo_finanzas(self):
         User.objects.create_user('sinmodulo', password='x')
