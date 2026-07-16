@@ -522,6 +522,25 @@ class ComplementoPagoVerPdfViewTests(TestCase):
 
 
 @override_settings(MEDIA_ROOT=MEDIA_TMP)
+class CargaMasivaResultadoComplementosTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        grupo, _ = Group.objects.get_or_create(name='Finanzas')
+        self.user = User.objects.create_user('cargacg', password='x')
+        self.user.groups.add(grupo)
+        self.client.login(username='cargacg', password='x')
+        self.url = reverse('finanzas:carga_masiva_xml')
+
+    def test_resultado_muestra_conteo_y_link_de_complementos_pendientes(self):
+        xml_bytes = cfdi_pago(uuid_factura='99999999-9999-9999-9999-999999999999')
+        resp = self.client.post(self.url, {
+            'archivos': [SimpleUploadedFile('pago.xml', xml_bytes)],
+        })
+        self.assertContains(resp, 'Complemento')
+        self.assertContains(resp, reverse('finanzas:complementos_pago_pendientes'))
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TMP)
 class ReferenciaEstadoFilaFusionadaTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group

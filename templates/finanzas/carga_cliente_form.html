@@ -14,6 +14,8 @@
       Las facturas quedarán en
       <a href="{% url 'finanzas:xml_pendientes' %}" class="text-sky-600 hover:underline">XMLs pendientes</a>,
       donde el RFC del receptor te ayudará a anexarlas a la referencia del cliente.
+      Los complementos de pago que no se puedan ligar aparecerán en
+      <a href="{% url 'finanzas:complementos_pago_pendientes' %}" class="text-sky-600 hover:underline">Complementos de pago no identificados</a>.
       {% else %}
       El equipo de Finanzas revisará e integrará tu factura a la cuenta de gastos correspondiente.
       {% endif %}

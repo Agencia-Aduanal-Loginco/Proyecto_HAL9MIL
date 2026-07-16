@@ -1151,6 +1151,8 @@ def _procesar_subida_xml(request, url_retorno):
         'pendientes': sum(1 for r in resultados if r.estado == 'PENDIENTE'),
         'duplicados': sum(1 for r in resultados if r.estado == 'DUPLICADO'),
         'errores': sum(1 for r in resultados if r.estado == 'ERROR'),
+        'complementos_ligados': sum(1 for r in resultados if r.estado == 'COMPLEMENTO_LIGADO'),
+        'complementos_pendientes': sum(1 for r in resultados if r.estado == 'COMPLEMENTO_PENDIENTE'),
     }
     return render(request, 'finanzas/carga_masiva_resultado.html', {
         'resultados': resultados,

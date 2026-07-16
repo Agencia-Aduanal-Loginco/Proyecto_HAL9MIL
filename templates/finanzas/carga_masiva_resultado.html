@@ -11,7 +11,9 @@
       {{ conteos.asignados }} asignados ·
       {{ conteos.pendientes }} pendientes ·
       {{ conteos.duplicados }} duplicados ·
-      {{ conteos.errores }} con error
+      {{ conteos.errores }} con error ·
+      {{ conteos.complementos_ligados }} complementos de pago ligados ·
+      {{ conteos.complementos_pendientes }} complementos sin identificar
     </p>
   </div>
 
@@ -35,6 +37,10 @@
               <span class="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium">Pendiente</span>
             {% elif r.estado == 'DUPLICADO' %}
               <span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs font-medium">Duplicado</span>
+            {% elif r.estado == 'COMPLEMENTO_LIGADO' %}
+              <span class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs font-medium">Complemento ligado</span>
+            {% elif r.estado == 'COMPLEMENTO_PENDIENTE' %}
+              <span class="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium">Complemento sin identificar</span>
             {% else %}
               <span class="text-red-700 bg-red-50 px-2 py-0.5 rounded text-xs font-medium">Error</span>
             {% endif %}
@@ -52,6 +58,13 @@
   <div class="mt-4">
     <a href="{% url 'finanzas:xml_pendientes' %}" class="text-sky-600 hover:underline text-sm">
       Asignar los pendientes →
+    </a>
+  </div>
+  {% endif %}
+  {% if conteos.complementos_pendientes and request.user|tiene_modulo:'Finanzas' %}
+  <div class="mt-2">
+    <a href="{% url 'finanzas:complementos_pago_pendientes' %}" class="text-sky-600 hover:underline text-sm">
+      Identificar complementos de pago →
     </a>
   </div>
   {% endif %}
