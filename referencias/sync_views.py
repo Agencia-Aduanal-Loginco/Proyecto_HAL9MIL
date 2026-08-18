@@ -89,7 +89,17 @@ def sync_endpoint(request):
             _upsert_referencias(patente, referencias, stats, error_msgs)
             _upsert_contenedores(contenedores, stats, error_msgs)
             _upsert_guias(guias, stats, error_msgs)
-            _upsert_dodas(dodas, stats, error_msgs)
+            dodas_creadas = _upsert_dodas(dodas, stats, error_msgs)
+            if dodas_creadas:
+                # Import diferido para evitar un ciclo de import a nivel de
+                # módulo (modulacion.py importa de .models, .bitacorakasu_client).
+                # Se encola con on_commit para que el correo/push corran
+                # después de confirmar el sync y no lo bloqueen ni lo dejen
+                # a medias si Firebird trae más lotes.
+                from . import modulacion
+                transaction.on_commit(
+                    lambda: modulacion.procesar_dodas_nuevas(dodas_creadas)
+                )
     except Exception as e:
         log.exception(f'Error en sync patente {patente} desde {agent_id}')
         duracion = (datetime.datetime.now() - t0).total_seconds()

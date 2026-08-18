@@ -1,12 +1,17 @@
 """Tests para referencias.bitacorakasu_client — cliente HTTP para BitacoraKasu."""
 
 import json
+from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 import requests
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
+from core.models import PerfilUsuario
+
 from .bitacorakasu_client import enviar_modulacion, BitacoraKasuError
+from .models import Contenedor, Doda, DodaReferencia, EnvioModulacion, Referencia
 
 # For testing JSON decode errors
 try:
@@ -297,3 +302,236 @@ class BitacoraKasuErrorTests(TestCase):
             raise BitacoraKasuError(msg)
         except BitacoraKasuError as e:
             self.assertEqual(str(e), msg)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# procesar_dodas_nuevas — helpers de fixture
+# ─────────────────────────────────────────────────────────────────────────────
+def _referencia(num_refe='LCRR0100/26', cliente='ACME SA', pedimento='26 1656 1234567',
+                peso=Decimal('12.500')):
+    return Referencia.objects.create(
+        num_refe=num_refe, patente='1656', prefijo='LCRR',
+        nombre_cliente=cliente, num_pedimento=pedimento, peso_bruto=peso,
+    )
+
+
+def _contenedor(referencia, num_cont, tipo='40HC'):
+    return Contenedor.objects.create(referencia=referencia, num_cont=num_cont, tipo=tipo)
+
+
+def _doda(id_doda=5001, num_doda='DODA-0001', cve_capt='CAPT01',
+         terminal_nombre='TERMINAL PORTUARIA UNO'):
+    return Doda.objects.create(
+        id_doda=id_doda, num_doda=num_doda, patente='1656', cve_caat='CAAT01',
+        cve_capt=cve_capt, terminal_nombre=terminal_nombre,
+    )
+
+
+def _doda_referencia(doda, referencia, cons_id=1):
+    return DodaReferencia.objects.create(
+        doda=doda, referencia=referencia, num_refe=referencia.num_refe, cons_id=cons_id,
+    )
+
+
+def _perfil(cve_capturista='CAPT01', username='capturista1', email='capt@example.com'):
+    user = User.objects.create_user(username, email=email, password='x')
+    return PerfilUsuario.objects.create(user=user, cve_capturista=cve_capturista)
+
+
+def _resp_sendgrid(status=202, message_id='sg-msg-mod-001'):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.headers = {'X-Message-Id': message_id}
+    return resp
+
+
+def _resp_bitacorakasu(status=200):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.json.return_value = {'status': 'ok'}
+    resp.text = '{"status": "ok"}'
+    return resp
+
+
+@override_settings(SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class ProcesarDodasNuevasTests(TestCase):
+    def setUp(self):
+        self.perfil = _perfil()
+        self.doda = _doda()
+        self.referencia = _referencia()
+        _doda_referencia(self.doda, self.referencia)
+        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+        self.cont2 = _contenedor(self.referencia, 'TCLU7654321', '20DC')
+
+    def test_caso_feliz_email_y_pushes_exitosos(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(envio.sg_message_id, 'sg-msg-mod-001')
+
+        # Un POST a BitacoraKasu por cada contenedor
+        self.assertEqual(mock_post.call_count, 2)
+        payload_envs = [c.kwargs['json'] for c in mock_post.call_args_list]
+        contenedores_enviados = {p['contenedor'] for p in payload_envs}
+        self.assertEqual(contenedores_enviados, {'HLXU1234567', 'TCLU7654321'})
+        for p in payload_envs:
+            self.assertEqual(p['agencia'], 'LOGINCO')
+            self.assertEqual(p['terminal_portuaria'], 'TERMINAL PORTUARIA UNO')
+            self.assertEqual(p['cliente'], 'ACME SA')
+            self.assertEqual(p['num_pedimento'], '26 1656 1234567')
+            self.assertEqual(p['num_doda'], 'DODA-0001')
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.notificado_en)
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+    def test_email_adjunta_pdf(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        mail_enviado = sg_cls.return_value.send.call_args[0][0]
+        cuerpo = mail_enviado.get()
+        self.assertEqual(len(cuerpo['attachments']), 1)
+        self.assertEqual(cuerpo['attachments'][0]['type'], 'application/pdf')
+
+    def test_fallo_email_no_bloquea_push(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.side_effect = Exception('boom sendgrid')
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ERROR')
+        self.assertIn('boom sendgrid', envio.error_detalle)
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(mock_post.call_count, 2)
+
+        self.doda.refresh_from_db()
+        self.assertIsNone(self.doda.notificado_en)
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+    def test_fallo_de_un_contenedor_no_bloquea_los_demas_ni_propaga(self):
+        from .bitacorakasu_client import BitacoraKasuError
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.side_effect = [
+                requests.exceptions.ConnectionError('conexión rechazada'),
+                _resp_bitacorakasu(),
+            ]
+
+            # No debe propagar ninguna excepción
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.push_estado, 'ERROR')
+        self.assertIn('conexión rechazada', envio.error_detalle)
+        self.assertEqual(mock_post.call_count, 2)
+
+        self.doda.refresh_from_db()
+        self.assertIsNone(self.doda.modulacion_enviada_en)
+
+    def test_sin_destinatario_resuelto_registra_error_y_continua_con_push(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        self.perfil.delete()
+        User.objects.all().delete()
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ERROR')
+        self.assertIn('sin destinatario resuelto', envio.error_detalle)
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_not_called()
+        self.assertEqual(mock_post.call_count, 2)
+
+        self.doda.refresh_from_db()
+        self.assertIsNone(self.doda.notificado_en)
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+    @override_settings(MODULACION_FALLBACK_EMAILS=['fallback@example.com'])
+    def test_sin_perfil_pero_con_fallback_envia_al_fallback(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        self.perfil.delete()
+        User.objects.all().delete()
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        mail_enviado = sg_cls.return_value.send.call_args[0][0]
+        cuerpo = mail_enviado.get()
+        self.assertEqual(cuerpo['personalizations'][0]['to'][0]['email'], 'fallback@example.com')
+
+    def test_multiples_dodas_una_falla_no_afecta_a_las_demas(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        otra_doda = _doda(id_doda=5002, num_doda='DODA-0002', cve_capt='CAPT01',
+                          terminal_nombre='TERMINAL DOS')
+        otra_referencia = _referencia(num_refe='LCRR0200/26')
+        _doda_referencia(otra_doda, otra_referencia)
+        _contenedor(otra_referencia, 'MSCU1112223', '20DC')
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.side_effect = [
+                Exception('boom'), _resp_sendgrid(),
+            ]
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda, otra_doda])
+
+        envio1 = EnvioModulacion.objects.get(doda=self.doda)
+        envio2 = EnvioModulacion.objects.get(doda=otra_doda)
+        self.assertEqual(envio1.email_estado, 'ERROR')
+        self.assertEqual(envio2.email_estado, 'ENVIADO')
+        self.assertEqual(envio1.push_estado, 'ENVIADO')
+        self.assertEqual(envio2.push_estado, 'ENVIADO')
+
+    def test_no_hay_llamadas_de_red_reales(self):
+        """requests.post y SendGridAPIClient.send están siempre mockeados en
+        este módulo de tests; este test documenta la intención (no realiza
+        aserciones adicionales de red real, que no debe ocurrir jamás)."""
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+            procesar_dodas_nuevas([self.doda])
+        # Si llegamos aquí sin error de red real (DNS, conexión, etc.), OK.
+        self.assertTrue(True)
