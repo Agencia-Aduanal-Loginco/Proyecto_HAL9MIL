@@ -8,6 +8,12 @@ from django.test import TestCase, override_settings
 
 from .bitacorakasu_client import enviar_modulacion, BitacoraKasuError
 
+# For testing JSON decode errors
+try:
+    from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
+except ImportError:
+    RequestsJSONDecodeError = ValueError
+
 
 class EnviarModulacionSuccessTests(TestCase):
     """Test exitosos: HTTP 200, retorna JSON."""
@@ -109,6 +115,27 @@ class EnviarModulacionSuccessTests(TestCase):
         call_args = mock_post.call_args[0]
         self.assertEqual(call_args[0], 'https://custom.bitacora.test/send')
 
+    @patch('referencias.bitacorakasu_client.requests.post')
+    def test_exitoso_con_json_decode_error_lanza_bitacorakasu_error(self, mock_post):
+        """HTTP 200 pero respuesta no es JSON válido lanza BitacoraKasuError (no JSONDecodeError)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = 'Not valid JSON: <html>error</html>'
+        # Simular que resp.json() lanza una excepción
+        mock_resp.json.side_effect = ValueError('Invalid JSON')
+        mock_post.return_value = mock_resp
+
+        with override_settings(
+            BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+            BITACORAKASU_API_TOKEN='token',
+        ):
+            with self.assertRaises(BitacoraKasuError) as context:
+                enviar_modulacion({'test': 'data'})
+
+            # El mensaje de error debe mencionar que es un JSON inválido
+            error_msg = str(context.exception)
+            self.assertIn('JSON', error_msg)
+
 
 class EnviarModulacionHTTPErrorTests(TestCase):
     """Errores HTTP (4xx/5xx) lanzan BitacoraKasuError."""
@@ -187,6 +214,28 @@ class EnviarModulacionHTTPErrorTests(TestCase):
                     'missing field' in error_msg,
                     f'Error message "{error_msg}" should include response details'
                 )
+
+    @patch('referencias.bitacorakasu_client.requests.post')
+    def test_error_respuesta_no_json_usa_resp_text(self, mock_post):
+        """Error HTTP con body no-JSON cae al fallback resp.text y lanza BitacoraKasuError."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.text = 'Plain text error response'
+        # Simular que resp.json() lanza excepción en rama de error
+        mock_resp.json.side_effect = ValueError('Invalid JSON')
+        mock_post.return_value = mock_resp
+
+        with override_settings(
+            BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+            BITACORAKASU_API_TOKEN='token',
+        ):
+            with self.assertRaises(BitacoraKasuError) as context:
+                enviar_modulacion({'test': 'data'})
+
+            # El mensaje debe contener el texto de la respuesta
+            error_msg = str(context.exception)
+            self.assertIn('Plain text error response', error_msg)
+            self.assertIn('400', error_msg)
 
 
 class EnviarModulacionTimeoutTests(TestCase):

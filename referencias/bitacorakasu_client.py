@@ -55,18 +55,29 @@ def enviar_modulacion(payload: dict) -> dict:
         # Timeout, connection error, o cualquier otra excepción de requests
         raise BitacoraKasuError(f'Error al enviar modulación a BitacoraKasu: {str(e)}')
 
-    # Verificar status code
-    if resp.status_code >= 400:
-        # Intentar extraer el body de la respuesta para mejor diagnóstico
-        try:
-            error_body = resp.json()
-            error_msg = str(error_body)
-        except Exception:
-            error_msg = resp.text
+    # Intentar extraer el body de la respuesta como JSON (tanto éxito como error)
+    try:
+        payload = resp.json()
+    except Exception:
+        # JSON inválido: usar resp.text en lugar de JSON
+        error_msg = resp.text
+        if resp.status_code >= 400:
+            # Es un error HTTP con body no-JSON
+            raise BitacoraKasuError(
+                f'BitacoraKasu retornó HTTP {resp.status_code}: {error_msg}'
+            )
+        else:
+            # Es un éxito (2xx) pero respuesta no es JSON válido
+            raise BitacoraKasuError(
+                f'Respuesta BitacoraKasu no es JSON válido (HTTP {resp.status_code}): {error_msg}'
+            )
 
+    # Verificar si hubo error HTTP
+    if resp.status_code >= 400:
+        error_msg = str(payload)
         raise BitacoraKasuError(
             f'BitacoraKasu retornó HTTP {resp.status_code}: {error_msg}'
         )
 
-    # Éxito: retornar el JSON
-    return resp.json()
+    # Éxito: retornar el payload
+    return payload
