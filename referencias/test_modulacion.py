@@ -423,6 +423,14 @@ class ProcesarDodasNuevasTests(TestCase):
             self.assertEqual(p['cliente'], 'ACME SA')
             self.assertEqual(p['num_pedimento'], '26 1656 1234567')
             self.assertEqual(p['num_doda'], 'DODA-0001')
+            # Clave de idempotencia estable "id_doda:num_cont" — el receptor
+            # de BitacoraKasu debe poder distinguir un reenvío genuino (mismo
+            # contenedor reintentado) de un duplicado, dado que el retry es
+            # a nivel de DODA completa (si 1 de 5 contenedores falla, los 5
+            # se re-postean).
+            self.assertEqual(
+                p['idempotency_key'], f'{self.doda.id_doda}:{p["contenedor"]}'
+            )
 
         self.doda.refresh_from_db()
         self.assertIsNotNone(self.doda.notificado_en)

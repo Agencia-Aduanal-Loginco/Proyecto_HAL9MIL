@@ -164,6 +164,11 @@ def _push_bitacorakasu(doda, envio):
                 'cliente': referencia.nombre_cliente,
                 'num_pedimento': referencia.num_pedimento,
                 'num_doda': doda.num_doda,
+                # Clave de idempotencia estable para que BitacoraKasu pueda
+                # distinguir un reenvío genuino de un duplicado: el retry
+                # ocurre a nivel de DODA completa (reintentar_envio), así
+                # que si 1 de 5 contenedores falla, los 5 se re-postean.
+                'idempotency_key': f'{doda.id_doda}:{contenedor.num_cont}',
             }
             try:
                 enviar_modulacion(payload)

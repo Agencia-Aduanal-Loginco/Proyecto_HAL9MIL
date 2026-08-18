@@ -242,9 +242,14 @@ Pasos:
           "contenedor": "<Contenedor.num_cont>",
           "cliente": "<Referencia.nombre_cliente>",
           "num_pedimento": "<Referencia.num_pedimento>",
-          "num_doda": "<Doda.num_doda>"
+          "num_doda": "<Doda.num_doda>",
+          "idempotency_key": "<Doda.id_doda>:<Contenedor.num_cont>"
         }
         ```
+        `idempotency_key` es una clave estable (`f"{doda.id_doda}:{contenedor.num_cont}"`) para que
+        BitacoraKasu pueda distinguir un reenvío genuino de un duplicado — el retry
+        (`reintentar_envio`/`reintentar_modulacion`) ocurre a nivel de DODA completa, así que si 1 de 5
+        contenedores falla, los 5 se re-postean en el siguiente reintento.
         Capturar `BitacoraKasuError` por cada intento sin abortar los demás contenedores; actualizar
         `EnvioModulacion.push_estado` con el resultado agregado (si algún contenedor falla, el estado
         general queda `ERROR` con el detalle de cuáles fallaron).
