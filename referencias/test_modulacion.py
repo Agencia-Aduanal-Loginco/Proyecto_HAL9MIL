@@ -722,3 +722,86 @@ class ReintentarModulacionCommandTests(TestCase):
         self.assertEqual(mock_reintentar.call_count, 2)
         # El envio1 que falló cuenta como error, envio2 como éxito
         self.assertIn('2 reintentados, 1 con éxito, 1 siguen en error', salida)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# management command: reintentar_modulacion — barrido de DODAs sin EnvioModulacion
+# ─────────────────────────────────────────────────────────────────────────────
+@override_settings(SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class ReintentarModulacionDodaSinEnvioTests(TestCase):
+    """Si transaction.on_commit nunca corrió, o EnvioModulacion.objects.create()
+    lanzó antes de crear la fila, la DODA queda con notificado_en=NULL y cero
+    EnvioModulacion — invisible para el filtro de EnvioModulacion. El comando
+    debe barrer también esas DODAs."""
+
+    def setUp(self):
+        self.perfil = _perfil()
+        self.doda = _doda()
+        self.referencia = _referencia()
+        _doda_referencia(self.doda, self.referencia)
+        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+
+    def _run_command(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        salida = StringIO()
+        call_command('reintentar_modulacion', stdout=salida)
+        return salida.getvalue()
+
+    def test_doda_sin_envio_es_procesada_y_crea_envio(self):
+        self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda).count(), 0)
+        self.assertIsNone(self.doda.notificado_en)
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_called_once()
+        mock_post.assert_called_once()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.notificado_en)
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
+    def test_doda_con_envio_existente_no_es_barrida_dos_veces(self):
+        """Una DODA que ya tiene un EnvioModulacion (aunque sea PENDIENTE) se
+        reintenta vía la query de EnvioModulacion, no vía el barrido — no debe
+        crear un segundo EnvioModulacion."""
+        EnvioModulacion.objects.create(doda=self.doda)  # PENDIENTE/PENDIENTE
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda).count(), 1)
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
+    def test_doda_dada_de_baja_sin_envio_no_es_barrida(self):
+        from django.utils import timezone
+
+        self.doda.fecha_baja = timezone.now()
+        self.doda.save(update_fields=['fecha_baja'])
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            salida = self._run_command()
+
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_not_called()
+        self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda).count(), 0)
+        self.assertIn('0 reintentados, 0 con éxito, 0 siguen en error', salida)

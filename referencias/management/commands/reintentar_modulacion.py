@@ -2,10 +2,19 @@
 Management command: reintentar_modulacion
 
 Reintenta los envíos de modulación (email a capturista y/o push a
-BitacoraKasu) que hayan quedado en estado ERROR. Reusa la misma lógica de
-envío que el flujo original (referencias/modulacion.py), reintentando sólo
-la(s) parte(s) fallida(s) de cada EnvioModulacion — no crea envíos nuevos ni
-reenvía lo que ya haya quedado ENVIADO.
+BitacoraKasu) que hayan quedado en estado ERROR o PENDIENTE (nunca
+intentados — el proceso murió entre el EnvioModulacion.objects.create() y el
+.save() que registra el resultado). Reusa la misma lógica de envío que el
+flujo original (referencias/modulacion.py), reintentando sólo la(s) parte(s)
+que falte(n) de cada EnvioModulacion — no reenvía lo que ya haya quedado
+ENVIADO.
+
+Además barre las DODAs que no tienen ni un solo EnvioModulacion (porque
+transaction.on_commit nunca corrió, o porque
+EnvioModulacion.objects.create() lanzó una excepción antes de crear la
+fila) — esas quedan con notificado_en=NULL y son invisibles para el filtro
+de arriba. Para esas se crea el EnvioModulacion que falta y se procesa
+igual que una DODA recién sincronizada.
 
 Uso:
     python manage.py reintentar_modulacion
@@ -15,8 +24,8 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from referencias.modulacion import reintentar_envio
-from referencias.models import EnvioModulacion
+from referencias.modulacion import _procesar_doda, reintentar_envio
+from referencias.models import Doda, EnvioModulacion
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +33,8 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = (
         'Reintenta los envíos de modulación (email y/o push a BitacoraKasu) '
-        'que hayan quedado en estado ERROR.'
+        'que hayan quedado en estado ERROR o PENDIENTE, y barre las DODAs '
+        'que no llegaron a tener ni un EnvioModulacion.'
     )
 
     def handle(self, *args, **options):
@@ -47,6 +57,30 @@ class Command(BaseCommand):
             except Exception as e:
                 logger.error('[Modulacion] Error inesperado reintentando envio %s: %s',
                              getattr(envio, 'id', '?'), e)
+                con_error += 1
+
+        # DODAs sin ningún EnvioModulacion: invisibles para la query de
+        # arriba porque no tienen fila que filtrar. Se procesan igual que
+        # una DODA recién creada por el sync (crea su EnvioModulacion +
+        # corre email/push) — ver referencias/modulacion.py::_procesar_doda.
+        dodas_sin_envio = Doda.objects.filter(
+            fecha_baja__isnull=True,
+            notificado_en__isnull=True,
+            envios_modulacion__isnull=True,
+        )
+
+        for doda in dodas_sin_envio:
+            total += 1
+            try:
+                _procesar_doda(doda)
+                envio = doda.envios_modulacion.first()
+                if envio is not None and envio.email_estado != 'ERROR' and envio.push_estado != 'ERROR':
+                    exitosos += 1
+                else:
+                    con_error += 1
+            except Exception as e:
+                logger.error('[Modulacion] Error inesperado procesando DODA sin envío %s: %s',
+                             getattr(doda, 'id_doda', '?'), e)
                 con_error += 1
 
         self.stdout.write(
