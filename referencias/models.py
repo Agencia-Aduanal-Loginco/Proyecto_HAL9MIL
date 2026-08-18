@@ -22,6 +22,7 @@ class Referencia(models.Model):
     cve_cliente      = models.CharField(max_length=20, blank=True)
     nombre_cliente   = models.CharField(max_length=255, blank=True, db_index=True)
     fecha_arribo     = models.DateField(null=True, blank=True)
+    peso_bruto       = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)  # CTRAO_EMBAR.PES_BRUT (toneladas)
     fecha_validacion = models.DateField(null=True, blank=True)
     fecha_pago       = models.DateField(null=True, blank=True, db_index=True)
     num_pedimento     = models.CharField(max_length=30, blank=True, db_index=True)

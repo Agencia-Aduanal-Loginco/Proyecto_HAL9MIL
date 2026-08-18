@@ -118,6 +118,12 @@ CVE_CONT_TIPO = {
     20: '40FR', 25: '40FR',
 }
 
+# CVE_CAAT que identifica a Transportes Kasu en SAAIO_DODA.CVE_CAAT.
+# Mantener sincronizado con hal9mil.settings.CVE_CAAT_KASU — este script
+# corre fuera de Django (servidores Windows con solo Firebird) y no puede
+# importar django.conf.settings.
+CVE_CAAT_KASU = '3B74'
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,6 +142,17 @@ def fb_date_str(val):
         return val.date().isoformat()
     if isinstance(val, datetime.date):
         return val.isoformat()
+    return None
+
+
+def fb_datetime_str(val):
+    """Convierte fecha/datetime de Firebird a string ISO-8601 completo o None."""
+    if val is None:
+        return None
+    if isinstance(val, datetime.datetime):
+        return val.isoformat()
+    if isinstance(val, datetime.date):
+        return datetime.datetime.combine(val, datetime.time.min).isoformat()
     return None
 
 
@@ -231,13 +248,21 @@ def fetch_capturistas(cur):
 
 
 def fetch_embar(cur, refs_filter=None):
+    """
+    Devuelve dict {num_refe: {'fecha_arribo': ..., 'peso_bruto': ...}}.
+    PES_BRUT (toneladas/kg del embarque) viene de CTRAO_EMBAR — misma tabla
+    y sin JOIN adicional, ya consultada aquí para fecha_arribo.
+    """
     rows = _fetch_rows(
         cur,
-        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
-        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
+        "SELECT NUM_REFE, FEC_ENTR, PES_BRUT FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
+        "SELECT NUM_REFE, FEC_ENTR, PES_BRUT FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
         refs_filter,
     )
-    return {clean(r[0]): fb_date_str(r[1]) for r in rows}
+    return {
+        clean(r[0]): {'fecha_arribo': fb_date_str(r[1]), 'peso_bruto': r[2]}
+        for r in rows
+    }
 
 
 def fetch_pedimentos(cur, refs_filter=None):
@@ -384,11 +409,67 @@ def fetch_partidas_count(cur, refs_filter=None):
     )
     return {clean(r[0], 50): int(r[1]) for r in rows if r[0]}
 
+
+def fetch_dodas(cur):
+    """
+    Extrae los DODA vigentes (no dados de baja) de la CVE_CAAT de Transportes
+    Kasu, con las referencias ligadas (SAAIO_DODADO) y la terminal resuelta
+    vía SAAIO_IDEPED (CVE_IDEN='CR', COM_IDEN = clave de terminal) + SAAIC_REFIS.
+
+    No usa refs_filter: SAAIO_DODA ya está acotado por CVE_CAAT + FEC_BAJA
+    IS NULL en la propia query, así que siempre se manda completo (igual
+    que los catálogos fetch_clientes/fetch_capturistas).
+
+    Retorna una lista de dicts listos para el bloque "dodas" del payload:
+        {id_doda, num_doda, patente, cve_caat, cve_capt, terminal_cve,
+         terminal_nombre, fecha_doda, fecha_baja, referencias: [{num_refe, cons_id}, ...]}
+    """
+    cur.execute("""
+        SELECT
+            d.ID_DODA, d.NUM_DODA, d.CVE_CAAT, d.CVE_CAPT,
+            d.FEC_DODAE, d.FEC_BAJA,
+            dd.NUM_REFE, dd.CONS_ID,
+            rf.CVE_REFI, rf.NOM_REFI
+        FROM SAAIO_DODA d
+        JOIN SAAIO_DODADO dd ON dd.ID_DODA = d.ID_DODA
+        LEFT JOIN SAAIO_IDEPED ip
+            ON ip.NUM_REFE = dd.NUM_REFE AND ip.CVE_IDEN = 'CR'
+        LEFT JOIN SAAIC_REFIS rf ON rf.CVE_REFI = ip.COM_IDEN
+        WHERE d.CVE_CAAT = ? AND d.FEC_BAJA IS NULL
+    """, (CVE_CAAT_KASU,))
+
+    dodas = {}
+    for row in cur.fetchall():
+        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja,
+         num_refe, cons_id, terminal_cve, terminal_nombre) = row
+        if id_doda is None:
+            continue
+        entry = dodas.setdefault(id_doda, {
+            'id_doda':         int(id_doda),
+            'num_doda':        clean(num_doda, 34),
+            'patente':         PATENTE,
+            'cve_caat':        clean(cve_caat, 6),
+            'cve_capt':        clean(cve_capt, 20).upper(),
+            'terminal_cve':    '',
+            'terminal_nombre': '',
+            'fecha_doda':      fb_datetime_str(fec_dodae),
+            'fecha_baja':      fb_datetime_str(fec_baja),
+            'referencias':     [],
+        })
+        if not entry['terminal_cve'] and terminal_cve:
+            entry['terminal_cve']    = clean(terminal_cve, 4)
+            entry['terminal_nombre'] = clean(terminal_nombre, 70)
+        ref = clean(num_refe, 15)
+        if ref and cons_id is not None:
+            entry['referencias'].append({'num_refe': ref, 'cons_id': int(cons_id)})
+    return list(dodas.values())
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, embar, pedimentos,
-                  all_refs, pedime2, contenedores, guias, partidas_count, proces, regval):
+                  all_refs, pedime2, contenedores, guias, partidas_count, proces, regval,
+                  dodas=None):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -396,13 +477,15 @@ def build_payload(clientes, capturistas, embar, pedimentos,
         ped          = pedimentos.get(ref, {})
         cve          = ped.get('cve_impo', '')
         cve_capt     = ped.get('cve_capturista', '')
-        fecha_arribo = embar.get(ref) or ped.get('fec_entr')
+        embar_ref    = embar.get(ref, {})
+        fecha_arribo = embar_ref.get('fecha_arribo') or ped.get('fec_entr')
         refs_list.append({
             'num_refe':          ref,
             'prefijo':           prefijo,
             'cve_cliente':       cve,
             'nombre_cliente':    clientes.get(cve, ''),
             'fecha_arribo':      fecha_arribo,
+            'peso_bruto':        embar_ref.get('peso_bruto'),
             'fecha_validacion':  regval.get(ref),
             'fecha_pago':        ped.get('fecha_pago'),
             'num_pedimento':     ped.get('num_pedimento', ''),
@@ -440,6 +523,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
         'referencias':  refs_list,
         'contenedores': conts_list,
         'guias':        guias_list,
+        'dodas':        dodas or [],
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -580,6 +664,7 @@ def main():
         partidas     = fetch_partidas_count(cur, refs_filter)
         proces       = fetch_proces(cur, refs_filter)
         regval       = fetch_regval(cur, refs_filter)
+        dodas        = fetch_dodas(cur)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
@@ -590,7 +675,7 @@ def main():
     n_conts    = sum(len(v) for v in contenedores.values())
     n_guias    = sum(len(v) for v in guias.values())
     n_partidas = sum(partidas.values())
-    log.info(f'Extraídos: {len(all_refs)} referencias | {n_partidas} partidas | {n_conts} contenedores | {n_guias} guías BL')
+    log.info(f'Extraídos: {len(all_refs)} referencias | {n_partidas} partidas | {n_conts} contenedores | {n_guias} guías BL | {len(dodas)} DODAs')
 
     if args.dry_run:
         log.info('[DRY-RUN] Extracción OK, no se envía payload.')
@@ -613,11 +698,16 @@ def main():
     totales = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
     try:
         for idx, chunk_refs in enumerate(chunks, 1):
-            chunk_set = set(chunk_refs)
-            payload   = build_payload(clientes, capturistas, embar, pedimentos,
-                                      chunk_set, pedime2, contenedores, guias, partidas, proces, regval)
+            chunk_set   = set(chunk_refs)
+            # Los DODAs son un catálogo completo (no filtrado por chunk de refs) —
+            # se mandan una sola vez, en el primer lote, para no repetir upserts.
+            chunk_dodas = dodas if idx == 1 else []
+            payload     = build_payload(clientes, capturistas, embar, pedimentos,
+                                        chunk_set, pedime2, contenedores, guias, partidas, proces, regval,
+                                        dodas=chunk_dodas)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
-                     f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
+                     f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías | '
+                     f'{len(payload["dodas"])} DODAs')
             resp = send_payload(payload)
             totales['creadas']      += resp.get('creadas', 0)
             totales['actualizadas'] += resp.get('actualizadas', 0)

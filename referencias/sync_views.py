@@ -29,8 +29,10 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.db import transaction
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
-from .models import Referencia, Contenedor, GuiaBL, LogSync, PATENTE_PREFIJO
+from .models import Referencia, Contenedor, GuiaBL, LogSync, Doda, DodaReferencia, PATENTE_PREFIJO
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +76,7 @@ def sync_endpoint(request):
     referencias  = body.get('referencias', [])
     contenedores = body.get('contenedores', [])
     guias        = body.get('guias', [])
+    dodas        = body.get('dodas', [])
 
     if not isinstance(referencias, list):
         return JsonResponse({'error': '"referencias" debe ser una lista'}, status=400)
@@ -86,6 +89,7 @@ def sync_endpoint(request):
             _upsert_referencias(patente, referencias, stats, error_msgs)
             _upsert_contenedores(contenedores, stats, error_msgs)
             _upsert_guias(guias, stats, error_msgs)
+            _upsert_dodas(dodas, stats, error_msgs)
     except Exception as e:
         log.exception(f'Error en sync patente {patente} desde {agent_id}')
         duracion = (datetime.datetime.now() - t0).total_seconds()
@@ -147,6 +151,7 @@ def _upsert_referencias(patente, referencias, stats, error_msgs):
                 'cve_cliente':      str(item.get('cve_cliente', ''))[:20],
                 'nombre_cliente':   str(item.get('nombre_cliente', ''))[:255],
                 'fecha_arribo':     item.get('fecha_arribo') or None,
+                'peso_bruto':       item.get('peso_bruto') or None,
                 'fecha_validacion': item.get('fecha_validacion') or None,
                 'fecha_pago':       item.get('fecha_pago') or None,
                 'num_pedimento':    str(item.get('num_pedimento', ''))[:30],
@@ -201,6 +206,72 @@ def _upsert_contenedores(contenedores, stats, error_msgs):
         except Exception as e:
             stats['errores'] += 1
             error_msgs.append(f'cont {num_cont}: {e}')
+
+
+def _parse_dt(value):
+    """Convierte un string ISO-8601 (con o sin tz) en un datetime aware, o None."""
+    if not value:
+        return None
+    dt = parse_datetime(value) if isinstance(value, str) else value
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt)
+    return dt
+
+
+def _upsert_dodas(dodas, stats, error_msgs):
+    """
+    Upsert de DODAs (SAAIO_DODA) + sus referencias ligadas (SAAIO_DODADO).
+    El filtro por CVE_CAAT (patente Transportes Kasu) ocurre en la query de
+    origen (sync_agent.py / import_firebird.py) — esta función procesa
+    tal cual lo que recibe.
+
+    Devuelve la lista de instancias Doda con created=True, para que quien
+    llame pueda encadenar el disparo de notificación en una tarea futura.
+    """
+    creadas = []
+    for item in dodas:
+        id_doda = item.get('id_doda')
+        if id_doda in (None, ''):
+            continue
+        try:
+            id_doda = int(id_doda)
+            defaults = {
+                'num_doda':        str(item.get('num_doda', ''))[:34],
+                'patente':         str(item.get('patente', ''))[:10],
+                'cve_caat':        str(item.get('cve_caat', ''))[:6],
+                'cve_capt':        str(item.get('cve_capt', ''))[:20],
+                'terminal_cve':    str(item.get('terminal_cve', ''))[:4],
+                'terminal_nombre': str(item.get('terminal_nombre', ''))[:70],
+                'fecha_doda':      _parse_dt(item.get('fecha_doda')),
+                'fecha_baja':      _parse_dt(item.get('fecha_baja')),
+            }
+            doda, created = Doda.objects.update_or_create(
+                id_doda=id_doda,
+                defaults=defaults,
+            )
+            if created:
+                creadas.append(doda)
+
+            for ref_item in item.get('referencias', []):
+                cons_id = ref_item.get('cons_id')
+                if cons_id in (None, ''):
+                    continue
+                num_refe = str(ref_item.get('num_refe', '')).strip()[:15]
+                DodaReferencia.objects.update_or_create(
+                    doda=doda,
+                    cons_id=int(cons_id),
+                    defaults={
+                        'num_refe':   num_refe,
+                        'referencia': Referencia.objects.filter(num_refe=num_refe).first(),
+                    },
+                )
+        except Exception as e:
+            stats['errores'] += 1
+            error_msgs.append(f'doda {id_doda}: {e}')
+            log.warning(f'Error upsert doda {id_doda}: {e}')
+    return creadas
 
 
 def _upsert_guias(guias, stats, error_msgs):

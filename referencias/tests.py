@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 from django.contrib.auth.models import Group, User
@@ -6,7 +7,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from decimal import Decimal
+
 from .models import CuentaGastos, Referencia, Doda, DodaReferencia
+from .sync_views import _upsert_dodas, _upsert_referencias
 
 
 class SidebarFinanzasVisibilityTests(TestCase):
@@ -307,3 +311,210 @@ class DodaReferenciaBasicCreationTests(TestCase):
         ref_id = self.referencia.id
         self.referencia.delete()
         self.assertEqual(DodaReferencia.objects.filter(referencia_id=ref_id).count(), 0)
+
+
+class UpsertDodasTests(TestCase):
+    """Tests para referencias.sync_views._upsert_dodas."""
+
+    def _stats(self):
+        return {'creadas': 0, 'actualizadas': 0, 'errores': 0}, []
+
+    def test_crea_doda_y_dodareferencias_nuevos(self):
+        stats, error_msgs = self._stats()
+        payload = [{
+            'id_doda':         5001,
+            'num_doda':        'DODA-5001',
+            'patente':         '1656',
+            'cve_caat':        '3B74',
+            'cve_capt':        'ANGELICA',
+            'terminal_cve':    '257',
+            'terminal_nombre': 'Talma servicios de carga',
+            'fecha_doda':      '2026-08-10T09:00:00',
+            'fecha_baja':      None,
+            'referencias': [
+                {'num_refe': 'LCRR0001/26', 'cons_id': 1},
+                {'num_refe': 'LCRR0002/26', 'cons_id': 2},
+            ],
+        }]
+
+        creadas = _upsert_dodas(payload, stats, error_msgs)
+
+        self.assertEqual(stats['errores'], 0)
+        self.assertEqual(error_msgs, [])
+        self.assertEqual(len(creadas), 1)
+        self.assertEqual(creadas[0].id_doda, 5001)
+
+        doda = Doda.objects.get(id_doda=5001)
+        self.assertEqual(doda.num_doda, 'DODA-5001')
+        self.assertEqual(doda.patente, '1656')
+        self.assertEqual(doda.cve_caat, '3B74')
+        self.assertEqual(doda.terminal_cve, '257')
+        self.assertEqual(doda.terminal_nombre, 'Talma servicios de carga')
+        self.assertIsNotNone(doda.fecha_doda)
+        self.assertIsNone(doda.fecha_baja)
+        self.assertEqual(DodaReferencia.objects.filter(doda=doda).count(), 2)
+
+    def test_actualiza_doda_existente_sin_duplicar(self):
+        Doda.objects.create(id_doda=6001, patente='1656', num_doda='OLD', cve_caat='3B74')
+        stats, error_msgs = self._stats()
+
+        creadas = _upsert_dodas([{
+            'id_doda':  6001,
+            'num_doda': 'NUEVO-FOLIO',
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'referencias': [],
+        }], stats, error_msgs)
+
+        self.assertEqual(creadas, [])
+        self.assertEqual(Doda.objects.count(), 1)
+        doda = Doda.objects.get(id_doda=6001)
+        self.assertEqual(doda.num_doda, 'NUEVO-FOLIO')
+
+    def test_no_filtra_por_cve_caat_el_filtro_real_ocurre_en_el_origen(self):
+        """_upsert_dodas procesa lo que recibe; el filtro CVE_CAAT ocurre en la query SQL, no aquí."""
+        stats, error_msgs = self._stats()
+
+        _upsert_dodas([{
+            'id_doda':  7001,
+            'patente':  '1656',
+            'cve_caat': 'OTRA01',
+            'referencias': [],
+        }], stats, error_msgs)
+
+        self.assertTrue(Doda.objects.filter(id_doda=7001, cve_caat='OTRA01').exists())
+
+    def test_dodareferencia_se_liga_a_referencia_local_existente(self):
+        ref = Referencia.objects.create(num_refe='LCRR0099/26', patente='1656', prefijo='LCRR')
+        stats, error_msgs = self._stats()
+
+        _upsert_dodas([{
+            'id_doda':  8001,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'referencias': [{'num_refe': 'LCRR0099/26', 'cons_id': 1}],
+        }], stats, error_msgs)
+
+        doda_ref = DodaReferencia.objects.get(doda__id_doda=8001, cons_id=1)
+        self.assertEqual(doda_ref.referencia_id, ref.id)
+        self.assertEqual(doda_ref.num_refe, 'LCRR0099/26')
+
+    def test_dodareferencia_sin_referencia_local_queda_null(self):
+        stats, error_msgs = self._stats()
+
+        _upsert_dodas([{
+            'id_doda':  9001,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'referencias': [{'num_refe': 'LCRR9999/26', 'cons_id': 1}],
+        }], stats, error_msgs)
+
+        doda_ref = DodaReferencia.objects.get(doda__id_doda=9001, cons_id=1)
+        self.assertIsNone(doda_ref.referencia)
+
+    def test_actualiza_dodareferencia_existente_por_cons_id(self):
+        doda = Doda.objects.create(id_doda=10001, patente='1656', cve_caat='3B74')
+        DodaReferencia.objects.create(doda=doda, num_refe='LCRR0001/26', cons_id=1)
+        stats, error_msgs = self._stats()
+
+        _upsert_dodas([{
+            'id_doda':  10001,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'referencias': [{'num_refe': 'LCRR0002/26', 'cons_id': 1}],
+        }], stats, error_msgs)
+
+        self.assertEqual(DodaReferencia.objects.filter(doda=doda).count(), 1)
+        doda_ref = DodaReferencia.objects.get(doda=doda, cons_id=1)
+        self.assertEqual(doda_ref.num_refe, 'LCRR0002/26')
+
+    def test_item_sin_id_doda_se_omite_sin_error(self):
+        stats, error_msgs = self._stats()
+
+        creadas = _upsert_dodas([{'patente': '1656', 'cve_caat': '3B74', 'referencias': []}],
+                                 stats, error_msgs)
+
+        self.assertEqual(creadas, [])
+        self.assertEqual(stats['errores'], 0)
+        self.assertEqual(Doda.objects.count(), 0)
+
+
+class SyncEndpointDodasTests(TestCase):
+    """Tests de integración: el bloque 'dodas' del payload de /api/sync/."""
+
+    def setUp(self):
+        from django.test import override_settings
+        self._override = override_settings(SYNC_SECRET_KEY='test-secret')
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+    def _post(self, payload):
+        return self.client.post(
+            reverse('api_sync'),
+            data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_AUTHORIZATION='Token test-secret',
+        )
+
+    def test_sync_endpoint_crea_doda_desde_bloque_dodas(self):
+        resp = self._post({
+            'patente':  '1656',
+            'agent_id': 'test-agent',
+            'dodas': [{
+                'id_doda':  11001,
+                'num_doda': 'DODA-11001',
+                'patente':  '1656',
+                'cve_caat': '3B74',
+                'referencias': [{'num_refe': 'LCRR0001/26', 'cons_id': 1}],
+            }],
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(Doda.objects.filter(id_doda=11001).exists())
+
+    def test_sync_endpoint_sin_bloque_dodas_no_rompe(self):
+        """Compatibilidad con agentes viejos que aún no mandan 'dodas'."""
+        resp = self._post({
+            'patente':  '1656',
+            'agent_id': 'test-agent',
+        })
+        self.assertEqual(resp.status_code, 200)
+
+
+class UpsertReferenciasPesoBrutoTests(TestCase):
+    """Tests para referencias.sync_views._upsert_referencias — campo peso_bruto."""
+
+    def _stats(self):
+        return {'creadas': 0, 'actualizadas': 0, 'errores': 0}, []
+
+    def test_crea_referencia_con_peso_bruto(self):
+        stats, error_msgs = self._stats()
+        _upsert_referencias('1656', [{
+            'num_refe':   'LCRR0001/26',
+            'peso_bruto': '12345.678',
+        }], stats, error_msgs)
+
+        self.assertEqual(stats['errores'], 0)
+        ref = Referencia.objects.get(num_refe='LCRR0001/26')
+        self.assertEqual(ref.peso_bruto, Decimal('12345.678'))
+
+    def test_actualiza_peso_bruto_de_referencia_existente(self):
+        Referencia.objects.create(
+            num_refe='LCRR0002/26', patente='1656', prefijo='LCRR',
+            peso_bruto=Decimal('100.000'),
+        )
+        stats, error_msgs = self._stats()
+
+        _upsert_referencias('1656', [{
+            'num_refe':   'LCRR0002/26',
+            'peso_bruto': '250.500',
+        }], stats, error_msgs)
+
+        ref = Referencia.objects.get(num_refe='LCRR0002/26')
+        self.assertEqual(ref.peso_bruto, Decimal('250.500'))
+
+    def test_peso_bruto_ausente_queda_null(self):
+        stats, error_msgs = self._stats()
+        _upsert_referencias('1656', [{'num_refe': 'LCRR0003/26'}], stats, error_msgs)
+
+        ref = Referencia.objects.get(num_refe='LCRR0003/26')
+        self.assertIsNone(ref.peso_bruto)

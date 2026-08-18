@@ -160,6 +160,10 @@ MODULACION_FALLBACK_EMAILS = [
     if email.strip()
 ]
 
+# CVE_CAAT (clave de agente aduanal/terminal) que identifica a Transportes
+# Kasu en SAAIO_DODA.CVE_CAAT — filtra qué DODAs se sincronizan.
+CVE_CAAT_KASU = '3B74'
+
 # ── Seguridad HTTPS (solo en producción) ──────────────────────────────────────
 # App Platform termina SSL en el load balancer y pasa HTTP internamente.
 if not DEBUG:

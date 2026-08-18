@@ -1,9 +1,9 @@
 """
 Management command: import_firebird
 
-Extrae referencias, pedimentos, contenedores y guías BL de las tres bases
-de datos Firebird CASA.GDB (patentes 1627, 1656, 1927) e importa todo al
-modelo Django de HAL9MIL.
+Extrae referencias, pedimentos, contenedores, guías BL y DODAs de las tres
+bases de datos Firebird CASA.GDB (patentes 1627, 1656, 1927) e importa todo
+al modelo Django de HAL9MIL.
 
 Uso:
     python manage.py import_firebird
@@ -17,6 +17,7 @@ Uso:
 import datetime
 
 import fdb
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -24,6 +25,7 @@ from referencias.models import (
     CVE_CONT_TIPO, PATENTE_PREFIJO,
     Contenedor, GuiaBL, Referencia,
 )
+from referencias.sync_views import _upsert_dodas
 
 # ---------------------------------------------------------------------------
 # Firebird connection params
@@ -56,6 +58,17 @@ def fb_date(val):
         return val.date()
     if isinstance(val, datetime.date):
         return val
+    return None
+
+
+def fb_datetime_str(val):
+    """Convierte fecha/datetime de Firebird a string ISO-8601 completo o None."""
+    if val is None:
+        return None
+    if isinstance(val, datetime.datetime):
+        return val.isoformat()
+    if isinstance(val, datetime.date):
+        return datetime.datetime.combine(val, datetime.time.min).isoformat()
     return None
 
 
@@ -93,13 +106,20 @@ def fetch_capturistas(cur):
 
 
 def fetch_embar(cur):
-    """Devuelve dict {num_refe: fecha_arribo} desde CTRAO_EMBAR."""
+    """
+    Devuelve dict {num_refe: {'fecha_arribo': ..., 'peso_bruto': ...}} desde
+    CTRAO_EMBAR. PES_BRUT (toneladas del embarque) viene de la misma tabla,
+    sin JOIN adicional.
+    """
     cur.execute("""
-        SELECT NUM_REFE, FEC_ENTR
+        SELECT NUM_REFE, FEC_ENTR, PES_BRUT
         FROM CTRAO_EMBAR
         WHERE NUM_REFE IS NOT NULL
     """)
-    return {clean(r[0]): fb_date(r[1]) for r in cur.fetchall()}
+    return {
+        clean(r[0]): {'fecha_arribo': fb_date(r[1]), 'peso_bruto': r[2]}
+        for r in cur.fetchall()
+    }
 
 
 def fetch_pedimentos(cur):
@@ -234,6 +254,59 @@ def fetch_partidas_count(cur):
     return {clean(r[0], 50): int(r[1]) for r in cur.fetchall() if r[0]}
 
 
+def fetch_dodas(cur, patente):
+    """
+    Extrae los DODA vigentes (no dados de baja) de la CVE_CAAT de Transportes
+    Kasu, con las referencias ligadas (SAAIO_DODADO) y la terminal resuelta
+    vía SAAIO_IDEPED (CVE_IDEN='CR', COM_IDEN = clave de terminal) +
+    SAAIC_REFIS. Misma query que sync_agent.fetch_dodas — mantener en
+    paridad.
+
+    Retorna una lista de dicts listos para _upsert_dodas:
+        {id_doda, num_doda, patente, cve_caat, cve_capt, terminal_cve,
+         terminal_nombre, fecha_doda, fecha_baja, referencias: [{num_refe, cons_id}, ...]}
+    """
+    cur.execute("""
+        SELECT
+            d.ID_DODA, d.NUM_DODA, d.CVE_CAAT, d.CVE_CAPT,
+            d.FEC_DODAE, d.FEC_BAJA,
+            dd.NUM_REFE, dd.CONS_ID,
+            rf.CVE_REFI, rf.NOM_REFI
+        FROM SAAIO_DODA d
+        JOIN SAAIO_DODADO dd ON dd.ID_DODA = d.ID_DODA
+        LEFT JOIN SAAIO_IDEPED ip
+            ON ip.NUM_REFE = dd.NUM_REFE AND ip.CVE_IDEN = 'CR'
+        LEFT JOIN SAAIC_REFIS rf ON rf.CVE_REFI = ip.COM_IDEN
+        WHERE d.CVE_CAAT = ? AND d.FEC_BAJA IS NULL
+    """, (settings.CVE_CAAT_KASU,))
+
+    dodas = {}
+    for row in cur.fetchall():
+        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja,
+         num_refe, cons_id, terminal_cve, terminal_nombre) = row
+        if id_doda is None:
+            continue
+        entry = dodas.setdefault(id_doda, {
+            'id_doda':         int(id_doda),
+            'num_doda':        clean(num_doda, 34),
+            'patente':         patente,
+            'cve_caat':        clean(cve_caat, 6),
+            'cve_capt':        clean(cve_capt, 20).upper(),
+            'terminal_cve':    '',
+            'terminal_nombre': '',
+            'fecha_doda':      fb_datetime_str(fec_dodae),
+            'fecha_baja':      fb_datetime_str(fec_baja),
+            'referencias':     [],
+        })
+        if not entry['terminal_cve'] and terminal_cve:
+            entry['terminal_cve']    = clean(terminal_cve, 4)
+            entry['terminal_nombre'] = clean(terminal_nombre, 70)
+        ref = clean(num_refe, 15)
+        if ref and cons_id is not None:
+            entry['referencias'].append({'num_refe': ref, 'cons_id': int(cons_id)})
+    return list(dodas.values())
+
+
 # ---------------------------------------------------------------------------
 # Import helpers
 # ---------------------------------------------------------------------------
@@ -248,7 +321,8 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
         ped = pedimentos.get(ref, {})
         cve = ped.get('cve_impo', '')
         nombre = clientes.get(cve, '')
-        fecha_arribo = embar.get(ref) or ped.get('fec_entr')
+        embar_ref = embar.get(ref, {})
+        fecha_arribo = embar_ref.get('fecha_arribo') or ped.get('fec_entr')
 
         es_rect = ref.startswith('R') and len(ref) > 5
         cve_capt = ped.get('cve_capturista', '')
@@ -261,6 +335,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             cve_cliente=cve,
             nombre_cliente=nombre,
             fecha_arribo=fecha_arribo,
+            peso_bruto=embar_ref.get('peso_bruto'),
             fecha_validacion=regval.get(ref),
             fecha_pago=ped.get('fecha_pago'),
             num_pedimento=ped.get('num_pedimento', ''),
@@ -351,6 +426,24 @@ def import_guias(patente, guias_map, dry_run, stdout):
     stdout.write(f'  {patente}: {created} guías BL, {skipped} refs no encontradas')
 
 
+def import_dodas(patente, dodas_list, dry_run, stdout):
+    """Upsert de DODAs + DodaReferencia, reutilizando referencias.sync_views._upsert_dodas."""
+    if dry_run:
+        stdout.write(f'  {patente}: {len(dodas_list)} DODAs (dry-run, no se escriben)')
+        return
+
+    stats = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
+    error_msgs = []
+    creadas = _upsert_dodas(dodas_list, stats, error_msgs)
+    actualizadas = len(dodas_list) - len(creadas) - stats['errores']
+    stdout.write(
+        f'  {patente}: {len(creadas)} DODAs nuevos, {actualizadas} actualizados, '
+        f'{stats["errores"]} errores'
+    )
+    for msg in error_msgs:
+        stdout.write(f'    ! {msg}')
+
+
 # ---------------------------------------------------------------------------
 # Command
 # ---------------------------------------------------------------------------
@@ -377,7 +470,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('MODO DRY-RUN — no se escribe en BD'))
 
         # ── Paso 1: extracción ────────────────────────────────────────────────
-        self.stdout.write(self.style.MIGRATE_HEADING('\n[1/4] Conectando a Firebird...'))
+        self.stdout.write(self.style.MIGRATE_HEADING('\n[1/5] Conectando a Firebird...'))
         data = {}
         for patente in patentes:
             self.stdout.write(f'  Patente {patente}...')
@@ -397,6 +490,7 @@ class Command(BaseCommand):
                 partidas    = fetch_partidas_count(cur) if (import_all or solo_ref) else {}
                 proces      = fetch_proces(cur)         if (import_all or solo_ref) else {}
                 regval      = fetch_regval(cur)         if (import_all or solo_ref) else {}
+                dodas       = fetch_dodas(cur, patente) if (import_all or solo_ref) else []
                 conts       = fetch_contenedores(cur) if (import_all or solo_cont) else {}
                 guias       = fetch_guias(cur)       if (import_all or solo_bl) else {}
                 data[patente] = dict(
@@ -404,20 +498,22 @@ class Command(BaseCommand):
                     pedime2=pedime2, embar=embar,
                     peds=peds, all_refs=all_refs,
                     partidas=partidas, proces=proces, regval=regval,
+                    dodas=dodas,
                     conts=conts, guias=guias,
                 )
                 self.stdout.write(
                     f'    {len(all_refs)} referencias | '
                     f'{sum(partidas.values())} partidas | '
                     f'{sum(len(v) for v in conts.values())} contenedores | '
-                    f'{sum(len(v) for v in guias.values())} guías BL'
+                    f'{sum(len(v) for v in guias.values())} guías BL | '
+                    f'{len(dodas)} DODAs'
                 )
             finally:
                 con.close()
 
         # ── Paso 2: referencias ───────────────────────────────────────────────
         if import_all or solo_ref:
-            self.stdout.write(self.style.MIGRATE_HEADING('\n[2/4] Importando referencias...'))
+            self.stdout.write(self.style.MIGRATE_HEADING('\n[2/5] Importando referencias...'))
             for patente, d in data.items():
                 import_referencias(
                     patente, d['clientes'], d['capturistas'],
@@ -426,15 +522,23 @@ class Command(BaseCommand):
                     dry_run, self.stdout,
                 )
 
-        # ── Paso 3: contenedores ──────────────────────────────────────────────
+        # ── Paso 3: DODAs ──────────────────────────────────────────────────────
+        # Después de Paso 2: DodaReferencia liga contra las Referencia locales
+        # recién creadas/actualizadas.
+        if import_all or solo_ref:
+            self.stdout.write(self.style.MIGRATE_HEADING('\n[3/5] Importando DODAs...'))
+            for patente, d in data.items():
+                import_dodas(patente, d['dodas'], dry_run, self.stdout)
+
+        # ── Paso 4: contenedores ──────────────────────────────────────────────
         if import_all or solo_cont:
-            self.stdout.write(self.style.MIGRATE_HEADING('\n[3/4] Importando contenedores...'))
+            self.stdout.write(self.style.MIGRATE_HEADING('\n[4/5] Importando contenedores...'))
             for patente, d in data.items():
                 import_contenedores(patente, d['conts'], dry_run, self.stdout)
 
-        # ── Paso 4: guías BL ──────────────────────────────────────────────────
+        # ── Paso 5: guías BL ──────────────────────────────────────────────────
         if import_all or solo_bl:
-            self.stdout.write(self.style.MIGRATE_HEADING('\n[4/4] Importando guías BL...'))
+            self.stdout.write(self.style.MIGRATE_HEADING('\n[5/5] Importando guías BL...'))
             for patente, d in data.items():
                 import_guias(patente, d['guias'], dry_run, self.stdout)
 
