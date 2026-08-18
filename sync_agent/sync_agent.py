@@ -471,6 +471,26 @@ def fetch_dodas(cur):
             entry['referencias'].append({'num_refe': ref, 'cons_id': int(cons_id)})
     return list(dodas.values())
 
+def dodas_para_lote(idx, n_chunks, dodas):
+    """
+    Decide en qué lote van las DODAs del sync chunked.
+
+    Las DODAs deben ir en el ÚLTIMO lote (idx == n_chunks), no en el primero:
+    build_payload() sólo incluye una referencia/contenedor si su NUM_REFE cae
+    en el subconjunto de refs del lote actual (los lotes se arman de un
+    conjunto ordenado/chunked de NUM_REFE). Si el NUM_REFE nuevo de una DODA
+    ordena en un lote posterior, mandar la DODA en el primer lote hace que
+    Django la reciba (y la cree) sin su Referencia/Contenedor todavía en la
+    BD — el correo automático de modulación sale con un PDF vacío (sin
+    pedimento, sin contenedores) y notificado_en queda marcado, así que
+    nunca se reintenta aunque la referencia llegue después en un lote
+    posterior. Mandarlas en el último lote garantiza que todas las
+    referencias/contenedores de este run ya están comprometidos en la BD
+    para cuando la DODA (y su email) se procesan.
+    """
+    return dodas if idx == n_chunks else []
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
@@ -733,8 +753,11 @@ def main():
         for idx, chunk_refs in enumerate(chunks, 1):
             chunk_set   = set(chunk_refs)
             # Los DODAs son un catálogo completo (no filtrado por chunk de refs) —
-            # se mandan una sola vez, en el primer lote, para no repetir upserts.
-            chunk_dodas = dodas if idx == 1 else []
+            # se mandan una sola vez, en el ÚLTIMO lote, para no repetir upserts y
+            # para que todas las referencias/contenedores de este run ya estén
+            # comprometidos en la BD antes de que Django procese la DODA (ver
+            # dodas_para_lote()).
+            chunk_dodas = dodas_para_lote(idx, n_chunks, dodas)
             payload     = build_payload(clientes, capturistas, embar, pedimentos,
                                         chunk_set, pedime2, contenedores, guias, partidas, proces, regval,
                                         dodas=chunk_dodas)
