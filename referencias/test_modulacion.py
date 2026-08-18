@@ -665,3 +665,33 @@ class ReintentarModulacionCommandTests(TestCase):
 
         self.assertEqual(sg_cls.return_value.send.call_count, 2)
         self.assertIn('2 reintentados, 2 con éxito, 0 siguen en error', salida)
+
+    def test_excepcion_inesperada_no_aborta_comando_y_aisle_items(self):
+        """Una excepción inesperada en reintentar_envio(envio1) no debe abortar
+        la iteración ni impedir procesar envio2. El item que falló debe contar
+        como error, no como éxito."""
+        otra_doda = _doda(id_doda=5002, num_doda='DODA-0002', cve_capt='CAPT01',
+                          terminal_nombre='TERMINAL DOS')
+        otra_referencia = _referencia(num_refe='LCRR0200/26')
+        _doda_referencia(otra_doda, otra_referencia)
+        _contenedor(otra_referencia, 'MSCU1112223', '20DC')
+
+        envio1 = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+        )
+        envio2 = EnvioModulacion.objects.create(
+            doda=otra_doda, email_estado='ERROR', push_estado='ENVIADO',
+        )
+
+        with patch('referencias.modulacion.reintentar_envio') as mock_reintentar:
+            with patch('referencias.modulacion.SendGridAPIClient'):
+                # El primer llamado lanza TypeError inesperado; el segundo retorna True
+                mock_reintentar.side_effect = [TypeError('unexpected error'), True]
+
+                # El comando no debe propagar la excepción
+                salida = self._run_command()
+
+        # Ambos envios fueron alcanzados (reintentar_envio fue llamado 2 veces)
+        self.assertEqual(mock_reintentar.call_count, 2)
+        # El envio1 que falló cuenta como error, envio2 como éxito
+        self.assertIn('2 reintentados, 1 con éxito, 1 siguen en error', salida)
