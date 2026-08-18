@@ -160,6 +160,10 @@ MODULACION_FALLBACK_EMAILS = [
     if email.strip()
 ]
 
+# URL y token para envíos de modulación a BitacoraKasu
+BITACORAKASU_MODULACION_URL = os.getenv('BITACORAKASU_MODULACION_URL', '')
+BITACORAKASU_API_TOKEN      = os.getenv('BITACORAKASU_API_TOKEN', '')
+
 # CVE_CAAT (clave de agente aduanal/terminal) que identifica a Transportes
 # Kasu en SAAIO_DODA.CVE_CAAT — filtra qué DODAs se sincronizan.
 CVE_CAAT_KASU = '3B74'
