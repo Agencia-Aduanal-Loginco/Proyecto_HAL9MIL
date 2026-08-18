@@ -105,3 +105,79 @@ class TieneModuloTemplateTagTests(TestCase):
 
     def test_filtro_devuelve_no_para_usuario_fuera_del_grupo(self):
         self.assertEqual(self._renderizar(self.usuario_sin_grupo), 'NO')
+
+
+from unittest.mock import patch
+from core.models import PerfilUsuario
+from core.capturistas import resolver_destinatario
+
+
+class ResolverDestinatarioTests(TestCase):
+    def setUp(self):
+        """Set up test users and profiles for resolver_destinatario tests."""
+        self.user1 = User.objects.create_user(
+            username='capturista1',
+            email='capturista1@example.com',
+            first_name='Juan',
+            last_name='Pérez'
+        )
+        self.user2 = User.objects.create_user(
+            username='capturista2',
+            email='capturista2@example.com',
+        )
+        # User without first/last name
+        self.user3 = User.objects.create_user(
+            username='capturista3',
+            email='capturista3@example.com',
+        )
+
+    def test_resolver_existente_con_email_alterno(self):
+        """Test resolver_destinatario returns email_alterno when set."""
+        perfil = PerfilUsuario.objects.create(
+            user=self.user1,
+            cve_capturista='CAPT001',
+            email_alterno='alterno@example.com'
+        )
+        email, nombre = resolver_destinatario('CAPT001')
+        self.assertEqual(email, 'alterno@example.com')
+        self.assertEqual(nombre, 'Juan Pérez')
+
+    def test_resolver_existente_sin_email_alterno(self):
+        """Test resolver_destinatario uses user.email when email_alterno is empty."""
+        perfil = PerfilUsuario.objects.create(
+            user=self.user1,
+            cve_capturista='CAPT002',
+            email_alterno=''
+        )
+        email, nombre = resolver_destinatario('CAPT002')
+        self.assertEqual(email, 'capturista1@example.com')
+        self.assertEqual(nombre, 'Juan Pérez')
+
+    def test_resolver_existente_sin_nombre_completo(self):
+        """Test resolver_destinatario falls back to username when get_full_name is empty."""
+        perfil = PerfilUsuario.objects.create(
+            user=self.user3,
+            cve_capturista='CAPT003',
+        )
+        email, nombre = resolver_destinatario('CAPT003')
+        self.assertEqual(email, 'capturista3@example.com')
+        self.assertEqual(nombre, 'capturista3')
+
+    def test_resolver_no_existe_sin_fallback(self):
+        """Test resolver_destinatario returns None when PerfilUsuario doesn't exist and no fallback."""
+        with patch('core.capturistas.settings') as mock_settings:
+            mock_settings.MODULACION_FALLBACK_EMAILS = []
+            with self.assertLogs('core.capturistas', level='WARNING') as log:
+                result = resolver_destinatario('CAPT_INEXISTENTE')
+                self.assertIsNone(result)
+                # Check that a warning was logged
+                self.assertTrue(any('CAPT_INEXISTENTE' in message for message in log.output))
+
+    def test_resolver_no_existe_con_fallback(self):
+        """Test resolver_destinatario returns fallback when PerfilUsuario doesn't exist."""
+        with patch('core.capturistas.settings') as mock_settings:
+            mock_settings.MODULACION_FALLBACK_EMAILS = ['fallback@example.com', 'fallback2@example.com']
+            with self.assertLogs('core.capturistas', level='WARNING'):
+                email, nombre = resolver_destinatario('CAPT_INEXISTENTE')
+                self.assertEqual(email, 'fallback@example.com')
+                self.assertEqual(nombre, 'CAPT_INEXISTENTE')
