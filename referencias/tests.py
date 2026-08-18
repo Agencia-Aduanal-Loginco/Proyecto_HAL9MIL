@@ -1,11 +1,12 @@
 from datetime import date
 
 from django.contrib.auth.models import Group, User
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import CuentaGastos, Referencia
+from .models import CuentaGastos, Referencia, Doda, DodaReferencia
 
 
 class SidebarFinanzasVisibilityTests(TestCase):
@@ -140,3 +141,169 @@ class CuentaGastosPaginarPorClienteTests(TestCase):
     def test_pie_de_pagina_muestra_clientes(self):
         resp = self.client.get(reverse('cuenta_gastos'))
         self.assertContains(resp, '51 clientes')
+
+
+class DodaBasicCreationTests(TestCase):
+    def test_crear_doda_basica(self):
+        """Test basic creation of a Doda instance."""
+        doda = Doda.objects.create(
+            id_doda=123,
+            num_doda='DODA-001',
+            patente='1656',
+            cve_caat='101010',
+            cve_capt='CAPT001',
+            terminal_cve='TER1',
+            terminal_nombre='Terminal 1',
+            fecha_doda=timezone.now(),
+            fecha_baja=None,
+            notificado_en=None,
+            modulacion_enviada_en=None,
+        )
+        self.assertEqual(doda.id_doda, 123)
+        self.assertEqual(doda.num_doda, 'DODA-001')
+        self.assertEqual(doda.patente, '1656')
+        self.assertEqual(str(doda), 'DODA-001')
+
+    def test_doda_str_fallback_a_id(self):
+        """Test __str__ fallback to id_doda when num_doda is empty."""
+        doda = Doda.objects.create(
+            id_doda=456,
+            patente='1656',
+        )
+        self.assertEqual(str(doda), '456')
+
+    def test_id_doda_unico(self):
+        """Test that id_doda is unique."""
+        Doda.objects.create(id_doda=789, patente='1656')
+        with self.assertRaises(IntegrityError):
+            Doda.objects.create(id_doda=789, patente='1656')
+
+    def test_doda_null_fields_permitidos(self):
+        """Test that nullable fields work correctly."""
+        doda = Doda.objects.create(
+            id_doda=999,
+            patente='1656',
+            fecha_doda=None,
+            fecha_baja=None,
+            notificado_en=None,
+            modulacion_enviada_en=None,
+        )
+        self.assertIsNone(doda.fecha_doda)
+        self.assertIsNone(doda.fecha_baja)
+        self.assertIsNone(doda.notificado_en)
+        self.assertIsNone(doda.modulacion_enviada_en)
+
+
+class DodaReferenciaBasicCreationTests(TestCase):
+    def setUp(self):
+        self.doda = Doda.objects.create(
+            id_doda=1000,
+            num_doda='DODA-100',
+            patente='1656',
+        )
+        self.referencia = Referencia.objects.create(
+            num_refe='LCRR0001/26',
+            patente='1656',
+            prefijo='LCRR',
+        )
+
+    def test_crear_doda_referencia_basica(self):
+        """Test basic creation of a DodaReferencia instance."""
+        doda_ref = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=1,
+        )
+        self.assertEqual(doda_ref.doda, self.doda)
+        self.assertEqual(doda_ref.referencia, self.referencia)
+        self.assertEqual(doda_ref.num_refe, 'LCRR0001/26')
+        self.assertEqual(doda_ref.cons_id, 1)
+
+    def test_doda_referencia_sin_referencia(self):
+        """Test that DodaReferencia can be created without a Referencia (null=True)."""
+        doda_ref = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=None,
+            num_refe='LCRR0001/26',
+            cons_id=2,
+        )
+        self.assertEqual(doda_ref.doda, self.doda)
+        self.assertIsNone(doda_ref.referencia)
+        self.assertEqual(doda_ref.num_refe, 'LCRR0001/26')
+
+    def test_unique_together_doda_cons_id(self):
+        """Test that (doda, cons_id) unique_together constraint works."""
+        DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=5,
+        )
+        with self.assertRaises(IntegrityError):
+            DodaReferencia.objects.create(
+                doda=self.doda,
+                referencia=None,
+                num_refe='LCRR0002/26',
+                cons_id=5,
+            )
+
+    def test_related_name_referencia_dodas(self):
+        """Test that related_name='dodas' works on Referencia."""
+        doda_ref1 = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=1,
+        )
+        doda_ref2 = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=2,
+        )
+        self.assertEqual(self.referencia.dodas.count(), 2)
+        self.assertIn(doda_ref1, self.referencia.dodas.all())
+        self.assertIn(doda_ref2, self.referencia.dodas.all())
+
+    def test_related_name_doda_referencias_doda(self):
+        """Test that related_name='referencias_doda' works on Doda."""
+        doda_ref1 = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=1,
+        )
+        doda_ref2 = DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=None,
+            num_refe='LCRR0002/26',
+            cons_id=2,
+        )
+        self.assertEqual(self.doda.referencias_doda.count(), 2)
+        self.assertIn(doda_ref1, self.doda.referencias_doda.all())
+        self.assertIn(doda_ref2, self.doda.referencias_doda.all())
+
+    def test_cascade_delete_doda_deletes_doda_referencia(self):
+        """Test that deleting a Doda cascades to DodaReferencia."""
+        DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=1,
+        )
+        doda_id = self.doda.id
+        self.doda.delete()
+        self.assertEqual(DodaReferencia.objects.filter(doda_id=doda_id).count(), 0)
+
+    def test_cascade_delete_referencia_deletes_doda_referencia(self):
+        """Test that deleting a Referencia cascades to DodaReferencia."""
+        DodaReferencia.objects.create(
+            doda=self.doda,
+            referencia=self.referencia,
+            num_refe='LCRR0001/26',
+            cons_id=1,
+        )
+        ref_id = self.referencia.id
+        self.referencia.delete()
+        self.assertEqual(DodaReferencia.objects.filter(referencia_id=ref_id).count(), 0)

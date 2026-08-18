@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync
+from .models import CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync, Doda, DodaReferencia
 
 
 class ContenedorInline(admin.TabularInline):
@@ -154,3 +154,22 @@ class LogSyncAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Doda)
+class DodaAdmin(admin.ModelAdmin):
+    list_display = ('id_doda', 'num_doda', 'cve_caat', 'patente', 'terminal_nombre',
+                    'fecha_doda', 'fecha_baja', 'notificado_en', 'modulacion_enviada_en')
+    list_filter = ('cve_caat', 'fecha_baja')
+    search_fields = ('num_doda', 'id_doda', 'patente', 'cve_caat')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-created_at',)
+    date_hierarchy = 'fecha_doda'
+
+
+@admin.register(DodaReferencia)
+class DodaReferenciaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doda', 'referencia', 'num_refe', 'cons_id')
+    list_filter = ('doda__patente', 'doda__cve_caat')
+    search_fields = ('num_refe', 'referencia__num_refe', 'doda__num_doda')
+    raw_id_fields = ('doda', 'referencia')

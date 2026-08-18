@@ -150,3 +150,36 @@ class LogSync(models.Model):
     def __str__(self):
         estado = '✔' if self.exitoso else '✘'
         return f'{self.timestamp:%Y-%m-%d %H:%M} | {self.patente} | {estado}'
+
+
+class Doda(models.Model):
+    id_doda        = models.IntegerField(unique=True, db_index=True)   # SAAIO_DODA.ID_DODA
+    num_doda       = models.CharField(max_length=34, blank=True)
+    patente        = models.CharField(max_length=10, db_index=True)
+    cve_caat       = models.CharField(max_length=6, blank=True, db_index=True)
+    cve_capt       = models.CharField(max_length=20, blank=True)
+    terminal_cve   = models.CharField(max_length=4, blank=True)   # SAAIC_REFIS.CVE_REFI
+    terminal_nombre = models.CharField(max_length=70, blank=True) # SAAIC_REFIS.NOM_REFI
+    fecha_doda     = models.DateTimeField(null=True, blank=True)  # FEC_DODAE
+    fecha_baja     = models.DateTimeField(null=True, blank=True)  # FEC_BAJA
+    notificado_en  = models.DateTimeField(null=True, blank=True)
+    modulacion_enviada_en = models.DateTimeField(null=True, blank=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['cve_caat', 'fecha_baja'])]
+
+    def __str__(self):
+        return self.num_doda or str(self.id_doda)
+
+
+class DodaReferencia(models.Model):
+    doda       = models.ForeignKey(Doda, on_delete=models.CASCADE, related_name='referencias_doda')
+    referencia = models.ForeignKey(Referencia, on_delete=models.CASCADE, null=True, blank=True,
+                                    related_name='dodas')
+    num_refe   = models.CharField(max_length=15)   # por si aún no existe la Referencia localmente
+    cons_id    = models.IntegerField()
+
+    class Meta:
+        unique_together = [('doda', 'cons_id')]
