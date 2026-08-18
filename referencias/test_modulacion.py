@@ -142,6 +142,38 @@ class EnviarModulacionSuccessTests(TestCase):
             self.assertIn('JSON', error_msg)
 
 
+class EnviarModulacionConfigGuardTests(TestCase):
+    """Modelado sobre finanzas/pac_client.py::_get_pac_settings /
+    PACConfigError: si BITACORAKASU_MODULACION_URL (o el token) no están
+    configurados, enviar_modulacion() debe fallar ANTES de intentar
+    requests.post — hoy mismo BITACORAKASU_MODULACION_URL siempre está
+    vacío en producción (el endpoint de BitacoraKasu no existe todavía), así
+    que sin este guard cada push intenta una llamada de red real a
+    requests.post('', ...)."""
+
+    @patch('referencias.bitacorakasu_client.requests.post')
+    def test_url_vacia_lanza_bitacorakasu_error_sin_llamar_requests(self, mock_post):
+        with override_settings(
+            BITACORAKASU_MODULACION_URL='',
+            BITACORAKASU_API_TOKEN='token',
+        ):
+            with self.assertRaises(BitacoraKasuError):
+                enviar_modulacion({'test': 'data'})
+
+        mock_post.assert_not_called()
+
+    @patch('referencias.bitacorakasu_client.requests.post')
+    def test_token_vacio_lanza_bitacorakasu_error_sin_llamar_requests(self, mock_post):
+        with override_settings(
+            BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+            BITACORAKASU_API_TOKEN='',
+        ):
+            with self.assertRaises(BitacoraKasuError):
+                enviar_modulacion({'test': 'data'})
+
+        mock_post.assert_not_called()
+
+
 class EnviarModulacionHTTPErrorTests(TestCase):
     """Errores HTTP (4xx/5xx) lanzan BitacoraKasuError."""
 

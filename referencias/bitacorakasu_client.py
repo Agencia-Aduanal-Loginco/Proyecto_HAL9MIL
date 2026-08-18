@@ -40,6 +40,12 @@ def enviar_modulacion(payload: dict) -> dict:
     url = getattr(settings, 'BITACORAKASU_MODULACION_URL', '')
     token = getattr(settings, 'BITACORAKASU_API_TOKEN', '')
 
+    if not url or not token:
+        raise BitacoraKasuError(
+            'BITACORAKASU_MODULACION_URL y BITACORAKASU_API_TOKEN deben '
+            'estar definidos en .env — ver plan_modulacion.md.'
+        )
+
     headers = {
         'Authorization': f'Token {token}',
     }
