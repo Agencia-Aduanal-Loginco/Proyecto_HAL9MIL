@@ -29,7 +29,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         envios = EnvioModulacion.objects.filter(
-            Q(email_estado='ERROR') | Q(push_estado='ERROR')
+            Q(email_estado__in=['ERROR', 'PENDIENTE'])
+            | Q(push_estado__in=['ERROR', 'PENDIENTE'])
         ).select_related('doda')
 
         total = 0

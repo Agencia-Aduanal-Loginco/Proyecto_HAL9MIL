@@ -230,8 +230,10 @@ def _procesar_doda(doda):
 
 def reintentar_envio(envio):
     """Reintenta, sobre un `EnvioModulacion` ya existente, sólo las partes
-    (email y/o push) que estén en estado ERROR — sin duplicar envíos ya
-    exitosos ni crear un nuevo EnvioModulacion.
+    (email y/o push) que no hayan quedado ENVIADO — es decir, ERROR o
+    PENDIENTE (nunca intentadas, p.ej. el proceso murió entre el create() y
+    el save() del resultado) — sin duplicar envíos ya exitosos ni crear un
+    nuevo EnvioModulacion.
 
     Usado por el management command `reintentar_modulacion`. Retorna True si,
     al terminar, ni email_estado ni push_estado quedan en ERROR.
@@ -239,12 +241,12 @@ def reintentar_envio(envio):
     doda = envio.doda
     update_fields = []
 
-    if envio.email_estado == 'ERROR':
+    if envio.email_estado != 'ENVIADO':
         if _procesar_email(doda, envio):
             doda.notificado_en = timezone.now()
             update_fields.append('notificado_en')
 
-    if envio.push_estado == 'ERROR':
+    if envio.push_estado != 'ENVIADO':
         if _procesar_push(doda, envio):
             doda.modulacion_enviada_en = timezone.now()
             update_fields.append('modulacion_enviada_en')

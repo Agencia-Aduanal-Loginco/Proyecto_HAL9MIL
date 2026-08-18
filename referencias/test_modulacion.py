@@ -626,6 +626,33 @@ class ReintentarModulacionCommandTests(TestCase):
 
         self.assertIn('1 reintentados, 0 con éxito, 1 siguen en error', salida)
 
+    def test_envio_pendiente_ambas_piernas_es_reintentado(self):
+        """PENDIENTE (nunca intentado, ej. proceso murió entre el create() y el
+        save() del resultado) debe ser recogido por el comando igual que ERROR —
+        no debe quedar huérfano para siempre."""
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='PENDIENTE', push_estado='PENDIENTE',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_called_once()
+        mock_post.assert_called_once()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.notificado_en)
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
     def test_no_toca_envios_que_no_estan_en_error(self):
         envio_ok = EnvioModulacion.objects.create(
             doda=self.doda, email_estado='ENVIADO', push_estado='ENVIADO',
