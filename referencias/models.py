@@ -184,3 +184,32 @@ class DodaReferencia(models.Model):
 
     class Meta:
         unique_together = [('doda', 'cons_id')]
+
+
+class EnvioModulacion(models.Model):
+    """Registro de un intento de notificación de modulación para una DODA.
+
+    email_estado y push_estado se llevan por separado porque el correo (al
+    capturista) y el push a BitacoraKasu (por contenedor) pueden fallar y
+    reintentarse de forma independiente.
+    """
+    ESTADOS = [
+        ('PENDIENTE', 'Pendiente'),
+        ('ENVIADO', 'Enviado'),
+        ('ERROR', 'Error'),
+    ]
+    doda           = models.ForeignKey(Doda, on_delete=models.CASCADE, related_name='envios_modulacion')
+    email_estado   = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
+    push_estado    = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
+    sg_message_id  = models.CharField(max_length=100, blank=True)
+    error_detalle  = models.TextField(blank=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering            = ['-created_at']
+        verbose_name        = 'Envío de modulación'
+        verbose_name_plural = 'Envíos de modulación'
+
+    def __str__(self):
+        return f'{self.doda} | email={self.email_estado} push={self.push_estado}'

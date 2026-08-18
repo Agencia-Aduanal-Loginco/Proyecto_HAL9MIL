@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync, Doda, DodaReferencia
+from .models import (
+    CuentaGastos, GlosaRegistro, Referencia, Contenedor, GuiaBL, LogSync,
+    Doda, DodaReferencia, EnvioModulacion,
+)
 
 
 class ContenedorInline(admin.TabularInline):
@@ -173,3 +176,19 @@ class DodaReferenciaAdmin(admin.ModelAdmin):
     list_filter = ('doda__patente', 'doda__cve_caat')
     search_fields = ('num_refe', 'referencia__num_refe', 'doda__num_doda')
     raw_id_fields = ('doda', 'referencia')
+
+
+@admin.register(EnvioModulacion)
+class EnvioModulacionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doda', 'email_estado', 'push_estado',
+                    'sg_message_id', 'created_at', 'updated_at')
+    list_filter = ('email_estado', 'push_estado')
+    search_fields = ('doda__num_doda', 'doda__id_doda', 'sg_message_id')
+    readonly_fields = ('doda', 'email_estado', 'push_estado', 'sg_message_id',
+                       'error_detalle', 'created_at', 'updated_at')
+    raw_id_fields = ('doda',)
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request):
+        return False
