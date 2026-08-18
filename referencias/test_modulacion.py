@@ -683,7 +683,7 @@ class ReintentarModulacionCommandTests(TestCase):
             doda=otra_doda, email_estado='ERROR', push_estado='ENVIADO',
         )
 
-        with patch('referencias.modulacion.reintentar_envio') as mock_reintentar:
+        with patch('referencias.management.commands.reintentar_modulacion.reintentar_envio') as mock_reintentar:
             with patch('referencias.modulacion.SendGridAPIClient'):
                 # El primer llamado lanza TypeError inesperado; el segundo retorna True
                 mock_reintentar.side_effect = [TypeError('unexpected error'), True]
