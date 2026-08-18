@@ -188,9 +188,9 @@ def _push_bitacorakasu(doda, envio):
     return True
 
 
-def _procesar_doda(doda):
-    envio = EnvioModulacion.objects.create(doda=doda)
-
+def _procesar_email(doda, envio):
+    """Intenta enviar el email de modulación para `doda`, registrando el
+    resultado en `envio`. Retorna True si quedó ENVIADO."""
     destinatario = resolver_destinatario(doda.cve_capt)
     if destinatario is None:
         _registrar_error(envio, 'email_estado', 'sin destinatario resuelto')
@@ -198,12 +198,24 @@ def _procesar_doda(doda):
             '[Modulacion] Sin destinatario resuelto para DODA %s (cve_capt=%s)',
             doda.num_doda, doda.cve_capt,
         )
-    else:
-        if _enviar_email_modulacion(doda, destinatario, envio):
-            doda.notificado_en = timezone.now()
+        return False
+    return _enviar_email_modulacion(doda, destinatario, envio)
+
+
+def _procesar_push(doda, envio):
+    """Intenta el push por contenedor a BitacoraKasu, registrando el
+    resultado en `envio`. Retorna True si quedó ENVIADO."""
+    return _push_bitacorakasu(doda, envio)
+
+
+def _procesar_doda(doda):
+    envio = EnvioModulacion.objects.create(doda=doda)
+
+    if _procesar_email(doda, envio):
+        doda.notificado_en = timezone.now()
 
     # El push no depende del resultado del email.
-    if _push_bitacorakasu(doda, envio):
+    if _procesar_push(doda, envio):
         doda.modulacion_enviada_en = timezone.now()
 
     envio.save()
@@ -214,6 +226,34 @@ def _procesar_doda(doda):
     ]
     if update_fields:
         doda.save(update_fields=update_fields)
+
+
+def reintentar_envio(envio):
+    """Reintenta, sobre un `EnvioModulacion` ya existente, sólo las partes
+    (email y/o push) que estén en estado ERROR — sin duplicar envíos ya
+    exitosos ni crear un nuevo EnvioModulacion.
+
+    Usado por el management command `reintentar_modulacion`. Retorna True si,
+    al terminar, ni email_estado ni push_estado quedan en ERROR.
+    """
+    doda = envio.doda
+    update_fields = []
+
+    if envio.email_estado == 'ERROR':
+        if _procesar_email(doda, envio):
+            doda.notificado_en = timezone.now()
+            update_fields.append('notificado_en')
+
+    if envio.push_estado == 'ERROR':
+        if _procesar_push(doda, envio):
+            doda.modulacion_enviada_en = timezone.now()
+            update_fields.append('modulacion_enviada_en')
+
+    envio.save()
+    if update_fields:
+        doda.save(update_fields=update_fields)
+
+    return envio.email_estado != 'ERROR' and envio.push_estado != 'ERROR'
 
 
 def procesar_dodas_nuevas(dodas_creadas):

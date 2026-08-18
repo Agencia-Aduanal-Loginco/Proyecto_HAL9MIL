@@ -535,3 +535,133 @@ class ProcesarDodasNuevasTests(TestCase):
             procesar_dodas_nuevas([self.doda])
         # Si llegamos aquí sin error de red real (DNS, conexión, etc.), OK.
         self.assertTrue(True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# management command: reintentar_modulacion
+# ─────────────────────────────────────────────────────────────────────────────
+@override_settings(SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class ReintentarModulacionCommandTests(TestCase):
+    def setUp(self):
+        self.perfil = _perfil()
+        self.doda = _doda()
+        self.referencia = _referencia()
+        _doda_referencia(self.doda, self.referencia)
+        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+
+    def _run_command(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        salida = StringIO()
+        call_command('reintentar_modulacion', stdout=salida)
+        return salida.getvalue()
+
+    def test_reintenta_email_en_error_y_lo_deja_enviado(self):
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+            error_detalle='email: boom sendgrid',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            salida = self._run_command()
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_called_once()
+        mock_post.assert_not_called()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.notificado_en)
+
+        self.assertIn('1 reintentados', salida)
+        self.assertIn('1 con éxito', salida)
+        self.assertIn('0 siguen en error', salida)
+
+    def test_reintenta_push_en_error_y_lo_deja_enviado(self):
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ENVIADO', push_estado='ERROR',
+            error_detalle='push: HLXU1234567: conexión rechazada',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_called_once()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
+    def test_sigue_en_error_si_el_reintento_vuelve_a_fallar(self):
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+            error_detalle='email: boom sendgrid',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.side_effect = Exception('boom otra vez')
+
+            salida = self._run_command()
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.email_estado, 'ERROR')
+        self.assertIn('boom otra vez', envio.error_detalle)
+
+        self.assertIn('1 reintentados, 0 con éxito, 1 siguen en error', salida)
+
+    def test_no_toca_envios_que_no_estan_en_error(self):
+        envio_ok = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ENVIADO', push_estado='ENVIADO',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            salida = self._run_command()
+
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_not_called()
+        self.assertIn('0 reintentados, 0 con éxito, 0 siguen en error', salida)
+
+        envio_ok.refresh_from_db()
+        self.assertEqual(envio_ok.email_estado, 'ENVIADO')
+        self.assertEqual(envio_ok.push_estado, 'ENVIADO')
+
+    def test_multiples_envios_en_error_se_procesan_todos(self):
+        otra_doda = _doda(id_doda=5002, num_doda='DODA-0002', cve_capt='CAPT01',
+                          terminal_nombre='TERMINAL DOS')
+        otra_referencia = _referencia(num_refe='LCRR0200/26')
+        _doda_referencia(otra_doda, otra_referencia)
+        _contenedor(otra_referencia, 'MSCU1112223', '20DC')
+
+        EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+        )
+        EnvioModulacion.objects.create(
+            doda=otra_doda, email_estado='ERROR', push_estado='ENVIADO',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            salida = self._run_command()
+
+        self.assertEqual(sg_cls.return_value.send.call_count, 2)
+        self.assertIn('2 reintentados, 2 con éxito, 0 siguen en error', salida)
