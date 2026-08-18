@@ -260,7 +260,14 @@ def fetch_embar(cur, refs_filter=None):
         refs_filter,
     )
     return {
-        clean(r[0]): {'fecha_arribo': fb_date_str(r[1]), 'peso_bruto': r[2]}
+        clean(r[0]): {
+            'fecha_arribo': fb_date_str(r[1]),
+            # fdb devuelve decimal.Decimal para columnas NUMERIC/DECIMAL con escala
+            # (como PES_BRUT) — decimal.Decimal no es serializable por json.dumps(),
+            # así que se castea a float antes de que build_payload()/send_payload()
+            # lo metan al payload JSON.
+            'peso_bruto': float(r[2]) if r[2] is not None else None,
+        }
         for r in rows
     }
 
@@ -683,6 +690,32 @@ def main():
         return 0
 
     if not all_refs:
+        if dodas:
+            # No hay referencias con pedimentos en el filtro, pero sí hay DODAs
+            # pendientes (fetch_dodas() no depende de all_refs — ver su docstring).
+            # Enviar un payload solo con DODAs en vez de descartarlos silenciosamente.
+            log.info('Sin referencias con pedimentos en el filtro, pero hay '
+                     f'{len(dodas)} DODA(s) pendiente(s) — enviando solo DODAs.')
+            payload = build_payload(clientes, capturistas, embar, pedimentos,
+                                    set(), pedime2, contenedores, guias, partidas, proces, regval,
+                                    dodas=dodas)
+            try:
+                resp = send_payload(payload)
+                errores = resp.get('errores', 0)
+                for detalle in resp.get('error_detalle', []):
+                    log.warning(f'  ERROR DETALLE: {detalle}')
+                if errores == 0:
+                    state[PATENTE] = datetime.datetime.now().isoformat()
+                    save_last_sync(state)
+                else:
+                    log.warning(
+                        f'{errores} error(es) al enviar DODAs — last_sync.json NO actualizado.'
+                    )
+            except Exception as e:
+                log.error(f'Error al enviar DODAs a Django: {e}')
+                return 1
+            log.info('══════════════════════════════════════════════════════════')
+            return 0
         log.info('No hay referencias con pedimentos en el filtro — nada que enviar.')
         log.info('══════════════════════════════════════════════════════════')
         state[PATENTE] = datetime.datetime.now().isoformat()
