@@ -12,6 +12,7 @@ Uso:
     python manage.py import_firebird --solo-referencias
     python manage.py import_firebird --solo-contenedores
     python manage.py import_firebird --solo-bls
+    python manage.py import_firebird --no-notificar  # primer import de bootstrap
 """
 
 import datetime
@@ -20,10 +21,11 @@ import fdb
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from referencias.models import (
     CVE_CONT_TIPO, PATENTE_PREFIJO,
-    Contenedor, GuiaBL, Referencia,
+    Contenedor, Doda, GuiaBL, Referencia,
 )
 from referencias.sync_views import _upsert_dodas
 
@@ -427,10 +429,14 @@ def import_guias(patente, guias_map, dry_run, stdout):
 
 
 def import_dodas(patente, dodas_list, dry_run, stdout):
-    """Upsert de DODAs + DodaReferencia, reutilizando referencias.sync_views._upsert_dodas."""
+    """Upsert de DODAs + DodaReferencia, reutilizando referencias.sync_views._upsert_dodas.
+
+    Devuelve la lista de instancias Doda con created=True (posiblemente
+    vacía, o [] en dry-run), para que el caller decida si las marca como
+    "ya atendidas" vía --no-notificar."""
     if dry_run:
         stdout.write(f'  {patente}: {len(dodas_list)} DODAs (dry-run, no se escriben)')
-        return
+        return []
 
     stats = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
     error_msgs = []
@@ -442,6 +448,7 @@ def import_dodas(patente, dodas_list, dry_run, stdout):
     )
     for msg in error_msgs:
         stdout.write(f'    ! {msg}')
+    return creadas
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +456,15 @@ def import_dodas(patente, dodas_list, dry_run, stdout):
 # ---------------------------------------------------------------------------
 
 class Command(BaseCommand):
-    help = 'Importa referencias, pedimentos, contenedores y BLs desde CASA.GDB Firebird'
+    help = (
+        'Importa referencias, pedimentos, contenedores, BLs y DODAs desde '
+        'CASA.GDB Firebird. Usa --no-notificar en el primer import de '
+        'bootstrap (post-deploy) para marcar las DODAs recién creadas como '
+        'ya atendidas sin enviar correo/push ni crear EnvioModulacion — '
+        'evita notificar de golpe a todos los capturistas por cada DODA '
+        'abierta que ya existía en CASA antes de que este feature '
+        'existiera.'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true', default=False)
@@ -457,6 +472,18 @@ class Command(BaseCommand):
         parser.add_argument('--solo-referencias', action='store_true', default=False)
         parser.add_argument('--solo-contenedores', action='store_true', default=False)
         parser.add_argument('--solo-bls', action='store_true', default=False)
+        parser.add_argument(
+            '--no-notificar', action='store_true', default=False,
+            help=(
+                'Bootstrap de primer deploy: las DODAs recién creadas por '
+                'este import quedan marcadas como ya notificadas '
+                '(notificado_en y modulacion_enviada_en = ahora) SIN enviar '
+                'correo ni push a BitacoraKasu y SIN crear EnvioModulacion. '
+                'Evita que el primer sync dispare notificaciones masivas '
+                'para DODAs que ya estaban abiertas en CASA antes del '
+                'deploy. No usar en imports posteriores al bootstrap.'
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run  = options['dry_run']
@@ -464,6 +491,7 @@ class Command(BaseCommand):
         solo_ref  = options['solo_referencias']
         solo_cont = options['solo_contenedores']
         solo_bl   = options['solo_bls']
+        no_notificar = options['no_notificar']
         import_all = not (solo_ref or solo_cont or solo_bl)
 
         if dry_run:
@@ -527,8 +555,22 @@ class Command(BaseCommand):
         # recién creadas/actualizadas.
         if import_all or solo_ref:
             self.stdout.write(self.style.MIGRATE_HEADING('\n[3/5] Importando DODAs...'))
+            dodas_creadas = []
             for patente, d in data.items():
-                import_dodas(patente, d['dodas'], dry_run, self.stdout)
+                dodas_creadas += import_dodas(patente, d['dodas'], dry_run, self.stdout)
+
+            if no_notificar and dodas_creadas:
+                ahora = timezone.now()
+                for doda in dodas_creadas:
+                    doda.notificado_en = ahora
+                    doda.modulacion_enviada_en = ahora
+                Doda.objects.bulk_update(
+                    dodas_creadas, ['notificado_en', 'modulacion_enviada_en'],
+                )
+                self.stdout.write(
+                    f'  --no-notificar: {len(dodas_creadas)} DODAs nuevas marcadas '
+                    f'como ya atendidas (sin correo/push, sin EnvioModulacion)'
+                )
 
         # ── Paso 4: contenedores ──────────────────────────────────────────────
         if import_all or solo_cont:
