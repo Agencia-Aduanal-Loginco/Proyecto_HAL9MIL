@@ -232,11 +232,21 @@ def _upsert_contenedores(contenedores, stats, error_msgs):
             ref_obj = _refs[num_refe]
             if ref_obj is None:
                 continue
-            Contenedor.objects.get_or_create(
+            tipo = str(item.get('tipo', ''))[:10]
+            contenedor, created = Contenedor.objects.get_or_create(
                 referencia=ref_obj,
                 num_cont=num_cont,
-                defaults={'tipo': str(item.get('tipo', ''))[:10]},
+                defaults={'tipo': tipo},
             )
+            # get_or_create() sólo aplica 'defaults' al crear — un Contenedor
+            # ya existente (p.ej. sincronizado antes del fix de
+            # CVE_CONT_TIPO, con tipo='') nunca se corregía en syncs
+            # posteriores. Sólo se actualiza cuando el tipo entrante viene
+            # resuelto (no vacío) y cambió, para no pisar un tipo bueno con
+            # uno vacío si el CVE_CONT sigue sin mapeo.
+            if not created and tipo and contenedor.tipo != tipo:
+                contenedor.tipo = tipo
+                contenedor.save(update_fields=['tipo'])
         except Exception as e:
             stats['errores'] += 1
             error_msgs.append(f'cont {num_cont}: {e}')

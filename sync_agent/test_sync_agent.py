@@ -37,6 +37,36 @@ class _FakeCursor:
         return self._rows
 
 
+class FetchContenedoresTipoMapeoTests(unittest.TestCase):
+    """Bug real reproducido en producción: SAAIO_CONTEN.CVE_CONT es VARCHAR(2)
+    en CASA.GDB (Firebird) — fdb siempre lo entrega como str. CVE_CONT_TIPO
+    tenía claves int, así que CVE_CONT_TIPO.get(cve_cont, '') nunca
+    matcheaba: el 100% de los contenedores en producción (28,772/28,772)
+    quedaban con tipo=''. Este test fija el contrato: fetch_contenedores()
+    debe mapear correctamente cuando CVE_CONT llega como string (el caso
+    real), y debe seguir siendo tolerante a un valor no mapeado."""
+
+    def test_cve_cont_como_string_mapea_tipo_correcto(self):
+        cur = _FakeCursor([
+            ('REF001', 'CONT001', '3'),   # 40HC
+            ('REF001', 'CONT002', '1'),   # 20DC
+        ])
+        result = sa.fetch_contenedores(cur)
+        tipos = {c['num_cont']: c['tipo'] for c in result['REF001']}
+        self.assertEqual(tipos['CONT001'], '40HC')
+        self.assertEqual(tipos['CONT002'], '20DC')
+
+    def test_cve_cont_no_mapeado_cae_a_vacio_sin_reventar(self):
+        cur = _FakeCursor([('REF001', 'CONT099', '77')])
+        result = sa.fetch_contenedores(cur)
+        self.assertEqual(result['REF001'][0]['tipo'], '')
+
+    def test_cve_cont_none_cae_a_vacio(self):
+        cur = _FakeCursor([('REF001', 'CONT099', None)])
+        result = sa.fetch_contenedores(cur)
+        self.assertEqual(result['REF001'][0]['tipo'], '')
+
+
 class FetchEmbarDecimalTests(unittest.TestCase):
     """El driver fdb instalado devuelve decimal.Decimal para columnas NUMERIC/DECIMAL
     con escala (como PES_BRUT). fetch_embar() debe castear a float, no pasar el

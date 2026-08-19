@@ -9,8 +9,8 @@ from django.utils import timezone
 
 from decimal import Decimal
 
-from .models import CuentaGastos, Referencia, Doda, DodaReferencia
-from .sync_views import _upsert_dodas, _upsert_referencias
+from .models import Contenedor, CuentaGastos, Referencia, Doda, DodaReferencia
+from .sync_views import _upsert_contenedores, _upsert_dodas, _upsert_referencias
 
 
 class SidebarFinanzasVisibilityTests(TestCase):
@@ -518,3 +518,70 @@ class UpsertReferenciasPesoBrutoTests(TestCase):
 
         ref = Referencia.objects.get(num_refe='LCRR0003/26')
         self.assertIsNone(ref.peso_bruto)
+
+
+class UpsertContenedoresTipoActualizaTests(TestCase):
+    """Bug real de producción: SAAIO_CONTEN.CVE_CONT es VARCHAR(2), pero
+    CVE_CONT_TIPO tenía claves int, así que el mapeo nunca matcheaba y el
+    100% de los contenedores quedaban con tipo=''. _upsert_contenedores()
+    usaba get_or_create(defaults=...), que sólo aplica 'defaults' al CREAR —
+    una vez arreglado el mapeo en el agente, los contenedores ya existentes
+    (con tipo='' guardado de antes) nunca se corregían en syncs posteriores.
+    Estos tests fijan el contrato correcto: crear con tipo, y actualizar el
+    tipo de un contenedor ya existente cuando el sync trae un valor resuelto
+    distinto, sin pisar un tipo bueno con uno vacío."""
+
+    def _stats(self):
+        return {'creadas': 0, 'actualizadas': 0, 'errores': 0}, []
+
+    def setUp(self):
+        self.ref = Referencia.objects.create(
+            num_refe='LCRR0100/26', patente='1656', prefijo='LCRR',
+        )
+
+    def test_crea_contenedor_con_tipo(self):
+        stats, error_msgs = self._stats()
+        _upsert_contenedores([{
+            'num_refe': 'LCRR0100/26', 'num_cont': 'GAOU7393934', 'tipo': '40HC',
+        }], stats, error_msgs)
+
+        cont = Contenedor.objects.get(referencia=self.ref, num_cont='GAOU7393934')
+        self.assertEqual(cont.tipo, '40HC')
+
+    def test_actualiza_tipo_vacio_de_contenedor_existente(self):
+        Contenedor.objects.create(referencia=self.ref, num_cont='GAOU7393934', tipo='')
+        stats, error_msgs = self._stats()
+
+        _upsert_contenedores([{
+            'num_refe': 'LCRR0100/26', 'num_cont': 'GAOU7393934', 'tipo': '40HC',
+        }], stats, error_msgs)
+
+        cont = Contenedor.objects.get(referencia=self.ref, num_cont='GAOU7393934')
+        self.assertEqual(cont.tipo, '40HC')
+        self.assertEqual(stats['errores'], 0)
+
+    def test_no_pisa_tipo_bueno_con_vacio(self):
+        """Si el sync trae tipo='' (CVE_CONT todavía sin mapeo) no debe borrar
+        un tipo ya resuelto correctamente en una corrida anterior."""
+        Contenedor.objects.create(referencia=self.ref, num_cont='GAOU7393934', tipo='40HC')
+        stats, error_msgs = self._stats()
+
+        _upsert_contenedores([{
+            'num_refe': 'LCRR0100/26', 'num_cont': 'GAOU7393934', 'tipo': '',
+        }], stats, error_msgs)
+
+        cont = Contenedor.objects.get(referencia=self.ref, num_cont='GAOU7393934')
+        self.assertEqual(cont.tipo, '40HC')
+
+    def test_no_reescribe_si_tipo_no_cambio(self):
+        cont_original = Contenedor.objects.create(
+            referencia=self.ref, num_cont='GAOU7393934', tipo='40HC',
+        )
+        stats, error_msgs = self._stats()
+
+        _upsert_contenedores([{
+            'num_refe': 'LCRR0100/26', 'num_cont': 'GAOU7393934', 'tipo': '40HC',
+        }], stats, error_msgs)
+
+        cont_original.refresh_from_db()
+        self.assertEqual(cont_original.tipo, '40HC')

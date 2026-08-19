@@ -8,10 +8,14 @@ PATENTE_PREFIJO = {
     '1927': 'LCMJ',
 }
 
+# Claves como str: SAAIO_CONTEN.CVE_CONT es VARCHAR(2) en CASA.GDB (Firebird)
+# — fdb siempre lo devuelve como string, nunca como int. Usar claves int aquí
+# hacía que CVE_CONT_TIPO.get(cve_cont, '') jamás matcheara (100% de los
+# contenedores en producción quedaban con tipo='').
 CVE_CONT_TIPO = {
-    1: '20DC', 2: '20RF', 3: '40HC', 4: '40RF',
-    9: '20TK', 11: '45HC', 16: '40OT', 17: '40OT',
-    20: '40FR', 25: '40FR',
+    '1': '20DC', '2': '20RF', '3': '40HC', '4': '40RF',
+    '9': '20TK', '11': '45HC', '16': '40OT', '17': '40OT',
+    '20': '40FR', '25': '40FR',
 }
 
 

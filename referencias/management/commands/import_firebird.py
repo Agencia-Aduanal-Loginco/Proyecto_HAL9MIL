@@ -191,7 +191,7 @@ def fetch_contenedores(cur):
     for num_refe, num_cont, cve_cont in cur.fetchall():
         ref   = clean(num_refe, 50)
         cont  = clean(num_cont, 20)
-        tipo  = CVE_CONT_TIPO.get(cve_cont, '')
+        tipo  = CVE_CONT_TIPO.get(clean(cve_cont), '')
         if ref and cont:
             result.setdefault(ref, []).append((cont, tipo))
     return result
