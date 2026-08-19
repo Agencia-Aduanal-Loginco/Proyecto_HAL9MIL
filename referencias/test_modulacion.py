@@ -949,3 +949,123 @@ class ReintentarModulacionDodaSinEnvioTests(TestCase):
         mock_post.assert_not_called()
         self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda).count(), 0)
         self.assertIn('0 reintentados, 0 con éxito, 0 siguen en error', salida)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# management command: reintentar_modulacion --solo-push
+# ─────────────────────────────────────────────────────────────────────────────
+@override_settings(SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class ReintentarModulacionSoloPushTests(TestCase):
+    """--solo-push: reintenta únicamente el push a BitacoraKasu, sin tocar
+    email_estado — para corregir el push (p.ej. tras arreglar tipo_contenedor)
+    sin disparar de golpe una tanda de correos atrasados por otra causa
+    (p.ej. faltaba PerfilUsuario) que ahora sí resolvería si se tocara."""
+
+    def setUp(self):
+        self.perfil = _perfil()
+        self.doda = _doda()
+        self.referencia = _referencia()
+        _doda_referencia(self.doda, self.referencia)
+        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+
+    def _run_command(self, *extra_args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        salida = StringIO()
+        call_command('reintentar_modulacion', *extra_args, stdout=salida)
+        return salida.getvalue()
+
+    def test_solo_push_reintenta_push_sin_tocar_email_en_error(self):
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ERROR',
+            error_detalle='email: sin destinatario resuelto\npush: HLXU1234567: Faltan campos requeridos: tipo_contenedor',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command('--solo-push')
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(envio.email_estado, 'ERROR')  # intacto, no reintentado
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_called_once()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+        self.assertIsNone(self.doda.notificado_en)
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+        self.assertIn('--solo-push', salida)
+
+    def test_solo_push_omite_envios_cuyo_unico_pendiente_es_el_email(self):
+        """Un envío con push ya ENVIADO y sólo el email en ERROR no debe
+        entrar al conteo de --solo-push (no hay nada que reintentar ahí)."""
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            salida = self._run_command('--solo-push')
+
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_not_called()
+        envio.refresh_from_db()
+        self.assertEqual(envio.email_estado, 'ERROR')
+        self.assertIn('0 reintentados, 0 con éxito, 0 siguen en error', salida)
+
+    def test_solo_push_en_doda_sin_envio_no_manda_correo(self):
+        """DODA sin ningún EnvioModulacion (barrido): con --solo-push se crea
+        el EnvioModulacion y se intenta el push, pero el email se deja
+        PENDIENTE (nunca se llama a SendGrid)."""
+        self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda).count(), 0)
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command('--solo-push')
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(envio.email_estado, 'PENDIENTE')
+        sg_cls.return_value.send.assert_not_called()
+        mock_post.assert_called_once()
+
+        self.doda.refresh_from_db()
+        self.assertIsNotNone(self.doda.modulacion_enviada_en)
+        self.assertIsNone(self.doda.notificado_en)
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
+    def test_email_pendiente_se_reintenta_despues_sin_la_bandera(self):
+        """El correo que --solo-push dejó pendiente sí se manda en una
+        corrida posterior normal (sin --solo-push), una vez que se decide
+        destaparlo."""
+        EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ERROR',
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()
+            self._run_command('--solo-push')
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        sg_cls.return_value.send.assert_called_once()
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)

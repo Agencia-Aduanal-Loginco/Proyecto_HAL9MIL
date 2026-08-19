@@ -18,6 +18,7 @@ igual que una DODA recién sincronizada.
 
 Uso:
     python manage.py reintentar_modulacion
+    python manage.py reintentar_modulacion --solo-push
 """
 import logging
 
@@ -37,11 +38,33 @@ class Command(BaseCommand):
         'que no llegaron a tener ni un EnvioModulacion.'
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--solo-push', action='store_true', default=False,
+            help=(
+                'Reintenta únicamente el push a BitacoraKasu, sin tocar '
+                'email_estado. Los envíos cuyo único pendiente es el email '
+                'se omiten por completo (no cuentan ni como éxito ni como '
+                'error) y quedan disponibles para un reintento posterior '
+                'sin esta bandera. Útil cuando se corrigió la causa raíz '
+                'del push (p.ej. tipo_contenedor) pero no se quiere '
+                'disparar de golpe una tanda grande de correos atrasados '
+                'por otra causa (p.ej. faltaba PerfilUsuario).'
+            ),
+        )
+
     def handle(self, *args, **options):
+        solo_push = options['solo_push']
+
         envios = EnvioModulacion.objects.filter(
             Q(email_estado__in=['ERROR', 'PENDIENTE'])
             | Q(push_estado__in=['ERROR', 'PENDIENTE'])
         ).select_related('doda')
+        if solo_push:
+            # Sin esto, un envío cuyo único pendiente es el email entraría
+            # al loop y reintentar_envio(solo_push=True) no tendría nada que
+            # hacer con él (ni error ni éxito real) — se filtra de una vez.
+            envios = envios.filter(push_estado__in=['ERROR', 'PENDIENTE'])
 
         total = 0
         exitosos = 0
@@ -50,7 +73,7 @@ class Command(BaseCommand):
         for envio in envios:
             total += 1
             try:
-                if reintentar_envio(envio):
+                if reintentar_envio(envio, solo_push=solo_push):
                     exitosos += 1
                 else:
                     con_error += 1
@@ -72,9 +95,17 @@ class Command(BaseCommand):
         for doda in dodas_sin_envio:
             total += 1
             try:
-                _procesar_doda(doda)
+                _procesar_doda(doda, solo_push=solo_push)
                 envio = doda.envios_modulacion.first()
-                if envio is not None and envio.email_estado != 'ERROR' and envio.push_estado != 'ERROR':
+                if solo_push:
+                    ok = envio is not None and envio.push_estado != 'ERROR'
+                else:
+                    ok = (
+                        envio is not None
+                        and envio.email_estado != 'ERROR'
+                        and envio.push_estado != 'ERROR'
+                    )
+                if ok:
                     exitosos += 1
                 else:
                     con_error += 1
@@ -83,6 +114,7 @@ class Command(BaseCommand):
                              getattr(doda, 'id_doda', '?'), e)
                 con_error += 1
 
+        extra = ' (--solo-push: email_estado pendiente no se tocó)' if solo_push else ''
         self.stdout.write(
-            f'{total} reintentados, {exitosos} con éxito, {con_error} siguen en error'
+            f'{total} reintentados, {exitosos} con éxito, {con_error} siguen en error{extra}'
         )

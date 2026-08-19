@@ -213,10 +213,10 @@ def _procesar_push(doda, envio):
     return _push_bitacorakasu(doda, envio)
 
 
-def _procesar_doda(doda):
+def _procesar_doda(doda, solo_push=False):
     envio = EnvioModulacion.objects.create(doda=doda)
 
-    if _procesar_email(doda, envio):
+    if not solo_push and _procesar_email(doda, envio):
         doda.notificado_en = timezone.now()
 
     # El push no depende del resultado del email.
@@ -233,20 +233,28 @@ def _procesar_doda(doda):
         doda.save(update_fields=update_fields)
 
 
-def reintentar_envio(envio):
+def reintentar_envio(envio, solo_push=False):
     """Reintenta, sobre un `EnvioModulacion` ya existente, sólo las partes
     (email y/o push) que no hayan quedado ENVIADO — es decir, ERROR o
     PENDIENTE (nunca intentadas, p.ej. el proceso murió entre el create() y
     el save() del resultado) — sin duplicar envíos ya exitosos ni crear un
     nuevo EnvioModulacion.
 
+    solo_push=True omite por completo el reintento de email — email_estado
+    se deja tal cual (sigue en ERROR/PENDIENTE, disponible para un reintento
+    posterior sin esta bandera). Útil cuando la causa raíz que se corrigió
+    fue del lado del push (p.ej. tipo_contenedor) y no se quiere disparar de
+    golpe una tanda grande de correos acumulados por otra causa (p.ej. faltaba
+    PerfilUsuario) al mismo tiempo.
+
     Usado por el management command `reintentar_modulacion`. Retorna True si,
-    al terminar, ni email_estado ni push_estado quedan en ERROR.
+    al terminar, push_estado no quedó en ERROR (y, cuando no es solo_push,
+    tampoco email_estado).
     """
     doda = envio.doda
     update_fields = []
 
-    if envio.email_estado != 'ENVIADO':
+    if not solo_push and envio.email_estado != 'ENVIADO':
         if _procesar_email(doda, envio):
             doda.notificado_en = timezone.now()
             update_fields.append('notificado_en')
@@ -260,6 +268,8 @@ def reintentar_envio(envio):
     if update_fields:
         doda.save(update_fields=update_fields)
 
+    if solo_push:
+        return envio.push_estado != 'ERROR'
     return envio.email_estado != 'ERROR' and envio.push_estado != 'ERROR'
 
 
