@@ -1,6 +1,7 @@
 """Tests para referencias.bitacorakasu_client — cliente HTTP para BitacoraKasu."""
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
@@ -8,6 +9,7 @@ import requests
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import PerfilUsuario
 
@@ -353,10 +355,12 @@ def _contenedor(referencia, num_cont, tipo='40HC'):
 
 
 def _doda(id_doda=5001, num_doda='DODA-0001', cve_capt='CAPT01',
-         terminal_nombre='TERMINAL PORTUARIA UNO'):
+         terminal_nombre='TERMINAL PORTUARIA UNO', fecha_doda=None):
+    if fecha_doda is None:
+        fecha_doda = timezone.make_aware(datetime(2026, 3, 15))
     return Doda.objects.create(
         id_doda=id_doda, num_doda=num_doda, patente='1656', cve_caat='CAAT01',
-        cve_capt=cve_capt, terminal_nombre=terminal_nombre,
+        cve_capt=cve_capt, terminal_nombre=terminal_nombre, fecha_doda=fecha_doda,
     )
 
 
@@ -424,6 +428,7 @@ class ProcesarDodasNuevasTests(TestCase):
             self.assertEqual(p['cliente'], 'ACME SA')
             self.assertEqual(p['num_pedimento'], '26 1656 1234567')
             self.assertEqual(p['num_doda'], 'DODA-0001')
+            self.assertEqual(p['fecha_doda'], '2026-03-15')
             # Clave de idempotencia estable "id_doda:num_cont" — el receptor
             # de BitacoraKasu debe poder distinguir un reenvío genuino (mismo
             # contenedor reintentado) de un duplicado, dado que el retry es
@@ -1069,3 +1074,85 @@ class ReintentarModulacionSoloPushTests(TestCase):
         self.assertEqual(envio.email_estado, 'ENVIADO')
         sg_cls.return_value.send.assert_called_once()
         self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# management command: reintentar_modulacion — filtro por año (--anio / --todos)
+# ─────────────────────────────────────────────────────────────────────────────
+@override_settings(SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class ReintentarModulacionFiltroAnioTests(TestCase):
+    """Sin filtro, un reintento manual barre de golpe todo el historial
+    acumulado — cientos de DODAs viejas terminan agrupadas bajo el día del
+    reintento en BitacoraKasu. Por default el comando sólo procesa DODAs de
+    2026; --anio elige otro año y --todos quita el filtro."""
+
+    def setUp(self):
+        self.perfil = _perfil()
+        self.referencia = _referencia()
+        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+
+        self.doda_2026 = _doda(
+            id_doda=6001, num_doda='DODA-2026',
+            fecha_doda=timezone.make_aware(datetime(2026, 1, 10)),
+        )
+        _doda_referencia(self.doda_2026, self.referencia, cons_id=1)
+
+        self.doda_2025 = _doda(
+            id_doda=6002, num_doda='DODA-2025',
+            fecha_doda=timezone.make_aware(datetime(2025, 11, 20)),
+        )
+        _doda_referencia(self.doda_2025, self.referencia, cons_id=2)
+
+    def _run_command(self, *extra_args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        salida = StringIO()
+        call_command('reintentar_modulacion', *extra_args, stdout=salida)
+        return salida.getvalue()
+
+    def test_default_solo_procesa_dodas_del_2026(self):
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command()
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+        self.doda_2026.refresh_from_db()
+        self.doda_2025.refresh_from_db()
+        self.assertIsNotNone(self.doda_2026.modulacion_enviada_en)
+        self.assertIsNone(self.doda_2025.modulacion_enviada_en)
+        self.assertEqual(EnvioModulacion.objects.filter(doda=self.doda_2025).count(), 0)
+
+    def test_anio_explicito_procesa_solo_ese_anio(self):
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command('--anio', '2025')
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
+        self.doda_2025.refresh_from_db()
+        self.doda_2026.refresh_from_db()
+        self.assertIsNotNone(self.doda_2025.modulacion_enviada_en)
+        self.assertIsNone(self.doda_2026.modulacion_enviada_en)
+
+    def test_todos_ignora_el_filtro_por_anio(self):
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            salida = self._run_command('--todos')
+
+        self.assertIn('2 reintentados, 2 con éxito, 0 siguen en error', salida)
+        self.doda_2025.refresh_from_db()
+        self.doda_2026.refresh_from_db()
+        self.assertIsNotNone(self.doda_2025.modulacion_enviada_en)
+        self.assertIsNotNone(self.doda_2026.modulacion_enviada_en)

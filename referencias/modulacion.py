@@ -164,6 +164,7 @@ def _push_bitacorakasu(doda, envio):
                 'cliente': referencia.nombre_cliente,
                 'num_pedimento': referencia.num_pedimento,
                 'num_doda': doda.num_doda,
+                'fecha_doda': doda.fecha_doda.strftime('%Y-%m-%d') if doda.fecha_doda else '',
                 # Clave de idempotencia estable para que BitacoraKasu pueda
                 # distinguir un reenvío genuino de un duplicado: el retry
                 # ocurre a nivel de DODA completa (reintentar_envio), así

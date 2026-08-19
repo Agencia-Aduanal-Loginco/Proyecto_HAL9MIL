@@ -16,9 +16,18 @@ fila) — esas quedan con notificado_en=NULL y son invisibles para el filtro
 de arriba. Para esas se crea el EnvioModulacion que falta y se procesa
 igual que una DODA recién sincronizada.
 
+También filtra por Doda.fecha_doda para no mandar de golpe todo el historial
+acumulado a BitacoraKasu: un envío masivo con fechas viejas satura la vista
+mensual de BitacoraKasu y (antes del fix del lado de BitacoraKasu) agrupaba
+los folios bajo el día del reintento en vez del día real del DODA. Por
+default sólo procesa DODAs de 2026; usar --anio para otro año o --todos para
+quitar el filtro por completo.
+
 Uso:
     python manage.py reintentar_modulacion
     python manage.py reintentar_modulacion --solo-push
+    python manage.py reintentar_modulacion --anio 2025
+    python manage.py reintentar_modulacion --todos
 """
 import logging
 
@@ -52,9 +61,23 @@ class Command(BaseCommand):
                 'por otra causa (p.ej. faltaba PerfilUsuario).'
             ),
         )
+        parser.add_argument(
+            '--anio', type=int, default=2026,
+            help=(
+                'Sólo procesa DODAs cuyo fecha_doda sea de este año '
+                '(default: 2026). Evita saturar la vista mensual de '
+                'BitacoraKasu con un envío masivo de historial acumulado.'
+            ),
+        )
+        parser.add_argument(
+            '--todos', action='store_true', default=False,
+            help='Ignora el filtro por año y procesa todas las DODAs pendientes.',
+        )
 
     def handle(self, *args, **options):
         solo_push = options['solo_push']
+        anio = options['anio']
+        todos = options['todos']
 
         envios = EnvioModulacion.objects.filter(
             Q(email_estado__in=['ERROR', 'PENDIENTE'])
@@ -65,6 +88,8 @@ class Command(BaseCommand):
             # al loop y reintentar_envio(solo_push=True) no tendría nada que
             # hacer con él (ni error ni éxito real) — se filtra de una vez.
             envios = envios.filter(push_estado__in=['ERROR', 'PENDIENTE'])
+        if not todos:
+            envios = envios.filter(doda__fecha_doda__year=anio)
 
         total = 0
         exitosos = 0
@@ -91,6 +116,8 @@ class Command(BaseCommand):
             notificado_en__isnull=True,
             envios_modulacion__isnull=True,
         )
+        if not todos:
+            dodas_sin_envio = dodas_sin_envio.filter(fecha_doda__year=anio)
 
         for doda in dodas_sin_envio:
             total += 1
