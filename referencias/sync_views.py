@@ -12,8 +12,16 @@ Payload esperado:
   "timestamp": "2026-05-14T06:00:00",
   "referencias":  [ { "num_refe": "LCLF0001/26", ... } ],
   "contenedores": [ { "num_refe": "LCLF0001/26", "num_cont": "HLXU1234567", "tipo": "40HC" } ],
-  "guias":        [ { "num_refe": "LCLF0001/26", "numero_guia": "HLCUXM...", "tipo_guia": "M" } ]
+  "guias":        [ { "num_refe": "LCLF0001/26", "numero_guia": "HLCUXM...", "tipo_guia": "M" } ],
+  "dodas":        [ { "id_doda": 123, "num_doda": "...", "referencias": [...] } ],
+  "no_notificar": false
 }
+
+no_notificar=true: las DODAs nuevas de este payload quedan marcadas como ya
+atendidas (notificado_en/modulacion_enviada_en = ahora) SIN correo, SIN PDF,
+SIN push a BitacoraKasu y SIN crear EnvioModulacion. Lo manda sync_agent.py
+en la primera sincronización de una patente (bootstrap), mismo
+comportamiento que --no-notificar en el management command import_firebird.
 
 Respuesta:
 { "patente": "1627", "creadas": 5, "actualizadas": 120, "procesados": 125,
@@ -77,6 +85,7 @@ def sync_endpoint(request):
     contenedores = body.get('contenedores', [])
     guias        = body.get('guias', [])
     dodas        = body.get('dodas', [])
+    no_notificar = bool(body.get('no_notificar', False))
 
     if not isinstance(referencias, list):
         return JsonResponse({'error': '"referencias" debe ser una lista'}, status=400)
@@ -90,7 +99,22 @@ def sync_endpoint(request):
             _upsert_contenedores(contenedores, stats, error_msgs)
             _upsert_guias(guias, stats, error_msgs)
             dodas_creadas = _upsert_dodas(dodas, stats, error_msgs)
-            if dodas_creadas:
+            if dodas_creadas and no_notificar:
+                # Bootstrap: mismo comportamiento que --no-notificar en el
+                # management command import_firebird — marca las DODAs nuevas
+                # como ya atendidas SIN mandar correo/PDF ni push a
+                # BitacoraKasu y SIN crear EnvioModulacion. Usado por
+                # sync_agent.py en la primera sincronización de una patente,
+                # para no disparar miles de notificaciones por DODAs que ya
+                # estaban abiertas en CASA antes de esta integración.
+                ahora = timezone.now()
+                for doda in dodas_creadas:
+                    doda.notificado_en = ahora
+                    doda.modulacion_enviada_en = ahora
+                Doda.objects.bulk_update(
+                    dodas_creadas, ['notificado_en', 'modulacion_enviada_en'],
+                )
+            elif dodas_creadas:
                 # Import diferido para evitar un ciclo de import a nivel de
                 # módulo (modulacion.py importa de .models, .bitacorakasu_client).
                 # Se encola con on_commit para que el correo/push corran

@@ -124,77 +124,102 @@ class DodasSurviveEmptyAllRefsTests(unittest.TestCase):
         json.dumps(payload)
 
 
-class ChunkDodasGoInLastChunkTests(unittest.TestCase):
-    """Hallazgo crítico: las DODAs se mandaban en el PRIMER lote
-    (`chunk_dodas = dodas if idx == 1 else []`), pero build_payload() sólo
-    incluye una referencia/contenedor si su NUM_REFE cae en el subconjunto de
-    refs del lote actual. Si el NUM_REFE nuevo de una DODA ordena en un lote
-    posterior, Django recibe la DODA (created=True) en el lote 1 sin su
-    Referencia/Contenedor todavía en la BD — el correo automático sale con
-    un PDF vacío y notificado_en queda seteado, así que nunca se reintenta
-    aunque la referencia llegue después en un lote posterior.
+class ChunkListTests(unittest.TestCase):
+    """sa._chunk_list() es el helper genérico que usa enviar_dodas_en_lotes()
+    para trocear la lista completa de DODAs en tandas propias."""
 
-    Este test reproduce el loop de chunking de main() para probar que ahora
-    las DODAs van en el ÚLTIMO lote, no en el primero — así todas las
-    referencias/contenedores del run ya están comprometidos en la BD para
-    cuando la DODA (y su email) se procesan."""
+    def test_chunk_list_exact_multiple(self):
+        items = list(range(6))
+        self.assertEqual(sa._chunk_list(items, 2), [[0, 1], [2, 3], [4, 5]])
 
-    def _payloads_por_lote(self, all_refs, dodas, chunk_size):
-        """Reproduce el loop de chunking de sync_agent.main() usando el
-        código real: sa.dodas_para_lote() (la misma función que llama
-        main()) decide en qué lote van las DODAs, y sa.build_payload() arma
-        cada payload. No se puede llamar a main() directo (requiere
-        Firebird), así que se ejercita el loop con las mismas funciones de
-        producción que usa main()."""
+    def test_chunk_list_remainder(self):
+        items = list(range(5))
+        self.assertEqual(sa._chunk_list(items, 2), [[0, 1], [2, 3], [4]])
+
+    def test_chunk_list_size_larger_than_list(self):
+        items = [1, 2, 3]
+        self.assertEqual(sa._chunk_list(items, 100), [[1, 2, 3]])
+
+    def test_chunk_list_empty(self):
+        self.assertEqual(sa._chunk_list([], 10), [])
+
+
+class DodasEnviadasAparteDeLosLotesDeRefsTests(unittest.TestCase):
+    """Hallazgo crítico (real, reproducido en producción): las DODAs se
+    mandaban TODAS juntas en un solo payload dentro del último lote de refs
+    (`chunk_dodas = dodas if idx == n_chunks else []`). En la primera
+    sincronización de una patente esto significa miles de DODAs (7032 en el
+    caso observado) en un solo POST — Django procesa cada DODA nueva de
+    forma síncrona dentro de la misma petición HTTP (PDF + correo SendGrid +
+    push por contenedor a BitacoraKasu), lo que agota el timeout (120s) y
+    hace fallar el sync completo después de MAX_RETRIES.
+
+    La arquitectura correcta es: los lotes de refs/contenedores/guías NO
+    llevan 'dodas' (build_payload() sin el argumento dodas → lista vacía), y
+    las DODAs se mandan en tandas propias, separadas, DESPUÉS de que todos
+    los lotes de refs ya se enviaron — para que Django siempre tenga la
+    Referencia/Contenedor de la DODA ya comprometida en la BD.
+
+    Este test reproduce ese mismo orden con las funciones reales de
+    producción (build_payload + _chunk_list), sin llamar a main() (requiere
+    Firebird)."""
+
+    def _payloads_de_refs(self, all_refs, chunk_size):
         refs_sorted = sorted(all_refs)
         chunks = [refs_sorted[i:i + chunk_size] for i in range(0, len(refs_sorted), chunk_size)]
-        n_chunks = len(chunks)
-        payloads = []
-        for idx, chunk_refs in enumerate(chunks, 1):
-            chunk_set = set(chunk_refs)
-            chunk_dodas = sa.dodas_para_lote(idx, n_chunks, dodas)
-            payload = sa.build_payload(
+        return [
+            sa.build_payload(
                 clientes={}, capturistas={}, embar={}, pedimentos={},
-                all_refs=chunk_set, pedime2={}, contenedores={}, guias={},
-                partidas_count={}, proces={}, regval={}, dodas=chunk_dodas,
+                all_refs=set(chunk), pedime2={}, contenedores={}, guias={},
+                partidas_count={}, proces={}, regval={},
             )
-            payloads.append(payload)
-        return payloads
+            for chunk in chunks
+        ]
 
-    def test_dodas_van_en_el_ultimo_lote_no_en_el_primero(self):
+    def _payloads_de_dodas(self, dodas, doda_chunk_size, no_notificar=False):
+        lotes = sa._chunk_list(dodas, doda_chunk_size)
+        return [
+            sa.build_payload(
+                {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+                dodas=lote, no_notificar=no_notificar,
+            )
+            for lote in lotes
+        ]
+
+    def test_lotes_de_refs_nunca_llevan_dodas(self):
         all_refs = {f'REF{i:04d}' for i in range(5)}
-        dodas = [{'id_doda': 1, 'num_doda': 'D-1', 'referencias': []}]
-
-        payloads = self._payloads_por_lote(all_refs, dodas, chunk_size=2)
+        payloads = self._payloads_de_refs(all_refs, chunk_size=2)
 
         self.assertEqual(len(payloads), 3)
-        self.assertEqual(payloads[0]['dodas'], [])
-        self.assertEqual(payloads[1]['dodas'], [])
-        self.assertEqual(payloads[-1]['dodas'], dodas)
+        for payload in payloads:
+            self.assertEqual(payload['dodas'], [])
 
-    def test_un_solo_lote_las_dodas_van_ahi(self):
-        all_refs = {'REF0001', 'REF0002'}
+    def test_dodas_se_troceen_en_tandas_propias(self):
+        dodas = [{'id_doda': i, 'num_doda': f'D-{i}', 'referencias': []} for i in range(7)]
+        payloads = self._payloads_de_dodas(dodas, doda_chunk_size=3)
+
+        self.assertEqual(len(payloads), 3)
+        self.assertEqual(len(payloads[0]['dodas']), 3)
+        self.assertEqual(len(payloads[1]['dodas']), 3)
+        self.assertEqual(len(payloads[2]['dodas']), 1)
+        # ningún payload de DODAs debería mandar 7032 de golpe otra vez
+        for payload in payloads:
+            self.assertLessEqual(len(payload['dodas']), 3)
+
+    def test_no_notificar_viaja_en_cada_payload_de_dodas(self):
         dodas = [{'id_doda': 1, 'num_doda': 'D-1', 'referencias': []}]
-
-        payloads = self._payloads_por_lote(all_refs, dodas, chunk_size=500)
+        payloads = self._payloads_de_dodas(dodas, doda_chunk_size=1, no_notificar=True)
 
         self.assertEqual(len(payloads), 1)
-        self.assertEqual(payloads[0]['dodas'], dodas)
+        self.assertTrue(payloads[0]['no_notificar'])
 
-    def test_dodas_para_lote_devuelve_vacio_salvo_en_el_ultimo(self):
-        """Unit test directo de la función que usa main() para decidir el
-        lote — sa.dodas_para_lote(idx, n_chunks, dodas)."""
-        dodas = [{'id_doda': 1}]
-
-        self.assertEqual(sa.dodas_para_lote(1, 3, dodas), [])
-        self.assertEqual(sa.dodas_para_lote(2, 3, dodas), [])
-        self.assertEqual(sa.dodas_para_lote(3, 3, dodas), dodas)
-
-    def test_dodas_para_lote_no_va_en_el_primero_cuando_hay_varios_lotes(self):
-        """Regresión directa del hallazgo: antes del fix, idx == 1 mandaba
-        las DODAs en el primer lote."""
-        dodas = [{'id_doda': 1}]
-        self.assertEqual(sa.dodas_para_lote(1, 5, dodas), [])
+    def test_no_notificar_default_false(self):
+        payload = sa.build_payload(
+            clientes={}, capturistas={}, embar={}, pedimentos={},
+            all_refs=set(), pedime2={}, contenedores={}, guias={},
+            partidas_count={}, proces={}, regval={},
+        )
+        self.assertFalse(payload['no_notificar'])
 
 
 if __name__ == '__main__':

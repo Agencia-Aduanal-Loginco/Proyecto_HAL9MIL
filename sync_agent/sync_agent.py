@@ -71,6 +71,7 @@ AGENT_ID        = _get('servidor', 'agent_id') or f'servidor-{PATENTE}'
 REQUEST_TIMEOUT = _getint('opciones', 'request_timeout', 120)
 MAX_RETRIES     = _getint('opciones', 'max_retries',     2)
 CHUNK_SIZE      = _getint('opciones', 'chunk_size',      500)
+DODA_CHUNK_SIZE = _getint('opciones', 'doda_chunk_size', 100)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -471,24 +472,9 @@ def fetch_dodas(cur):
             entry['referencias'].append({'num_refe': ref, 'cons_id': int(cons_id)})
     return list(dodas.values())
 
-def dodas_para_lote(idx, n_chunks, dodas):
-    """
-    Decide en qué lote van las DODAs del sync chunked.
-
-    Las DODAs deben ir en el ÚLTIMO lote (idx == n_chunks), no en el primero:
-    build_payload() sólo incluye una referencia/contenedor si su NUM_REFE cae
-    en el subconjunto de refs del lote actual (los lotes se arman de un
-    conjunto ordenado/chunked de NUM_REFE). Si el NUM_REFE nuevo de una DODA
-    ordena en un lote posterior, mandar la DODA en el primer lote hace que
-    Django la reciba (y la cree) sin su Referencia/Contenedor todavía en la
-    BD — el correo automático de modulación sale con un PDF vacío (sin
-    pedimento, sin contenedores) y notificado_en queda marcado, así que
-    nunca se reintenta aunque la referencia llegue después en un lote
-    posterior. Mandarlas en el último lote garantiza que todas las
-    referencias/contenedores de este run ya están comprometidos en la BD
-    para cuando la DODA (y su email) se procesan.
-    """
-    return dodas if idx == n_chunks else []
+def _chunk_list(items, size):
+    """Trocea items en sublistas de a lo más `size` elementos, preservando orden."""
+    return [items[i:i + size] for i in range(0, len(items), size)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -496,7 +482,7 @@ def dodas_para_lote(idx, n_chunks, dodas):
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, embar, pedimentos,
                   all_refs, pedime2, contenedores, guias, partidas_count, proces, regval,
-                  dodas=None):
+                  dodas=None, no_notificar=False):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -551,6 +537,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
         'contenedores': conts_list,
         'guias':        guias_list,
         'dodas':        dodas or [],
+        'no_notificar': no_notificar,
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -585,6 +572,47 @@ def send_payload(payload):
         if attempt < MAX_RETRIES:
             time.sleep(15)
     raise RuntimeError(f'Falló después de {MAX_RETRIES} intentos') from last_exc
+
+
+def enviar_dodas_en_lotes(dodas, no_notificar, totales):
+    """
+    Envía los DODAs en tandas propias, en payloads separados de los de
+    referencias/contenedores/guías.
+
+    IMPORTANTE — orden de envío: esta función sólo debe llamarse después de
+    que TODAS las referencias/contenedores/guías del run ya fueron enviados
+    y confirmados en Django (ver el loop de lotes en main()). Si un DODA
+    referencia un NUM_REFE que Django todavía no tiene, el correo automático
+    de modulación sale con un PDF vacío (sin pedimento, sin contenedores) y
+    notificado_en queda marcado, así que nunca se reintenta aunque la
+    referencia llegue después. Mandar los DODAs solo al final, ya con todas
+    las refs del run comprometidas en la BD, evita ese caso.
+
+    no_notificar=True le indica a Django que marque los DODAs nuevos como ya
+    atendidos (notificado_en/modulacion_enviada_en = ahora) SIN mandar
+    correo/PDF ni hacer push a BitacoraKasu — se usa en la primera
+    sincronización de una patente (ver es_primera_vez en main()), para no
+    disparar miles de correos por DODAs que ya estaban abiertos en CASA
+    antes de existir esta integración. Mismo comportamiento que
+    `--no-notificar` en el management command import_firebird.
+    """
+    if not dodas:
+        return
+    lotes = _chunk_list(dodas, DODA_CHUNK_SIZE)
+    log.info(f'Enviando {len(dodas)} DODA(s) en {len(lotes)} tanda(s) de hasta '
+             f'{DODA_CHUNK_SIZE} (no_notificar={no_notificar})...')
+    for idx, lote in enumerate(lotes, 1):
+        payload = build_payload(
+            {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+            dodas=lote, no_notificar=no_notificar,
+        )
+        log.info(f'  Tanda DODA {idx}/{len(lotes)}: {len(lote)} DODAs')
+        resp = send_payload(payload)
+        totales['creadas']      += resp.get('creadas', 0)
+        totales['actualizadas'] += resp.get('actualizadas', 0)
+        totales['errores']      += resp.get('errores', 0)
+        for detalle in resp.get('error_detalle', []):
+            log.warning(f'  ERROR DETALLE: {detalle}')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Validación de configuración
@@ -642,6 +670,15 @@ def main():
     state         = load_last_sync()
     last_sync_dt  = None
     refs_filter   = None   # None = sin filtro = sync completo
+
+    # Primera vez que esta patente sincroniza (nunca hay estado guardado para
+    # ella) — independiente de si se pasó --full-sync. Se usa para mandar
+    # no_notificar=True a Django y así sembrar los DODAs históricos vigentes
+    # sin disparar correo/PDF/webhook por cada uno (ver enviar_dodas_en_lotes).
+    es_primera_vez = PATENTE not in state
+    if es_primera_vez:
+        log.info('Primera sincronización de esta patente — los DODAs se '
+                 'mandarán con no_notificar=True (sin correo/PDF/webhook).')
 
     if not args.full_sync:
         ts = state.get(PATENTE)
@@ -713,17 +750,13 @@ def main():
         if dodas:
             # No hay referencias con pedimentos en el filtro, pero sí hay DODAs
             # pendientes (fetch_dodas() no depende de all_refs — ver su docstring).
-            # Enviar un payload solo con DODAs en vez de descartarlos silenciosamente.
+            # Enviarlos en tandas en vez de descartarlos silenciosamente.
             log.info('Sin referencias con pedimentos en el filtro, pero hay '
                      f'{len(dodas)} DODA(s) pendiente(s) — enviando solo DODAs.')
-            payload = build_payload(clientes, capturistas, embar, pedimentos,
-                                    set(), pedime2, contenedores, guias, partidas, proces, regval,
-                                    dodas=dodas)
+            totales_dodas = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
             try:
-                resp = send_payload(payload)
-                errores = resp.get('errores', 0)
-                for detalle in resp.get('error_detalle', []):
-                    log.warning(f'  ERROR DETALLE: {detalle}')
+                enviar_dodas_en_lotes(dodas, es_primera_vez, totales_dodas)
+                errores = totales_dodas['errores']
                 if errores == 0:
                     state[PATENTE] = datetime.datetime.now().isoformat()
                     save_last_sync(state)
@@ -751,25 +784,25 @@ def main():
     totales = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
     try:
         for idx, chunk_refs in enumerate(chunks, 1):
-            chunk_set   = set(chunk_refs)
-            # Los DODAs son un catálogo completo (no filtrado por chunk de refs) —
-            # se mandan una sola vez, en el ÚLTIMO lote, para no repetir upserts y
-            # para que todas las referencias/contenedores de este run ya estén
-            # comprometidos en la BD antes de que Django procese la DODA (ver
-            # dodas_para_lote()).
-            chunk_dodas = dodas_para_lote(idx, n_chunks, dodas)
-            payload     = build_payload(clientes, capturistas, embar, pedimentos,
-                                        chunk_set, pedime2, contenedores, guias, partidas, proces, regval,
-                                        dodas=chunk_dodas)
+            chunk_set = set(chunk_refs)
+            # Los DODAs NO van pegados a estos lotes de refs — se mandan aparte,
+            # en sus propias tandas, una vez que todos los lotes de refs de este
+            # run ya se enviaron y confirmaron (ver enviar_dodas_en_lotes()).
+            payload   = build_payload(clientes, capturistas, embar, pedimentos,
+                                      chunk_set, pedime2, contenedores, guias, partidas, proces, regval)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
-                     f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías | '
-                     f'{len(payload["dodas"])} DODAs')
+                     f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
             resp = send_payload(payload)
             totales['creadas']      += resp.get('creadas', 0)
             totales['actualizadas'] += resp.get('actualizadas', 0)
             totales['errores']      += resp.get('errores', 0)
             for detalle in resp.get('error_detalle', []):
                 log.warning(f'  ERROR DETALLE: {detalle}')
+
+        # Todas las refs/contenedores/guías de este run ya están comprometidos
+        # en la BD — recién ahora es seguro mandar los DODAs (ver docstring de
+        # enviar_dodas_en_lotes()).
+        enviar_dodas_en_lotes(dodas, es_primera_vez, totales)
 
         elapsed = time.time() - t0
         log.info(

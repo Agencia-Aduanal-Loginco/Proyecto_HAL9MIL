@@ -649,6 +649,37 @@ class SyncEndpointEndToEndModulacionTests(TestCase):
         mock_post.assert_called_once()
         sg_cls.return_value.send.assert_called_once()
 
+    def test_post_sync_con_no_notificar_no_manda_correo_ni_push_ni_crea_envio(self):
+        """sync_agent.py manda no_notificar=True en la primera sincronización
+        de una patente (bootstrap) — mismo contrato que --no-notificar en el
+        management command import_firebird: la DODA se crea marcada como ya
+        atendida, sin disparar el pipeline de correo/PDF/push ni crear
+        EnvioModulacion."""
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            payload = self._payload()
+            payload['no_notificar'] = True
+
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('api_sync'),
+                    data=json.dumps(payload),
+                    content_type='application/json',
+                    HTTP_AUTHORIZATION='Token test-secret',
+                )
+
+        self.assertEqual(response.status_code, 200)
+
+        doda = Doda.objects.get(id_doda=99001)
+        self.assertIsNotNone(doda.notificado_en)
+        self.assertIsNotNone(doda.modulacion_enviada_en)
+        self.assertEqual(EnvioModulacion.objects.filter(doda=doda).count(), 0)
+        mock_post.assert_not_called()
+        sg_cls.return_value.send.assert_not_called()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # management command: reintentar_modulacion

@@ -41,3 +41,10 @@ request_timeout = 120
 max_retries     = 2
 # Máximo de referencias por lote enviado a Django
 chunk_size      = 500
+# Máximo de DODAs por lote enviado a Django. Los DODAs se mandan en tandas
+# separadas de las de referencias (después de que todas las referencias del
+# run ya fueron confirmadas). En la primera sincronización de una patente
+# puede haber miles de DODAs vigentes — un valor chico evita que Django
+# tarde demasiado por lote (genera PDF + correo + webhook por cada DODA
+# nuevo, salvo que sea la primera sync — ver no_notificar en sync_agent.py).
+doda_chunk_size = 100
