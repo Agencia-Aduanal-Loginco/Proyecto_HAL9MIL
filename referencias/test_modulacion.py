@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import requests
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from core.models import PerfilUsuario
 
@@ -575,6 +576,78 @@ class ProcesarDodasNuevasTests(TestCase):
             procesar_dodas_nuevas([self.doda])
         # Si llegamos aquí sin error de red real (DNS, conexión, etc.), OK.
         self.assertTrue(True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prueba end-to-end: POST /api/sync/ -> on_commit real -> EnvioModulacion
+# ─────────────────────────────────────────────────────────────────────────────
+@override_settings(SYNC_SECRET_KEY='test-secret',
+                   SENDGRID_API_KEY='SG.test',
+                   BITACORAKASU_MODULACION_URL='https://bitacora.test/api/modulacion',
+                   BITACORAKASU_API_TOKEN='token', MODULACION_FALLBACK_EMAILS=[])
+class SyncEndpointEndToEndModulacionTests(TestCase):
+    """Prueba de integración completa del flujo real (no simulado):
+
+    POST /api/sync/ (bloque 'dodas') -> _upsert_dodas crea una Doda nueva
+    -> sync_views.sync_endpoint encola transaction.on_commit(...) ->
+    modulacion.procesar_dodas_nuevas -> EnvioModulacion.objects.create.
+
+    django.test.TestCase envuelve cada test en una transacción que hace
+    rollback al final, así que los callbacks de on_commit NUNCA se
+    ejecutan por defecto — todos los demás tests de este archivo llaman a
+    procesar_dodas_nuevas(...) directamente y por lo tanto no prueban el
+    wiring de on_commit en sí. Aquí se usa
+    self.captureOnCommitCallbacks(execute=True) para forzar la ejecución
+    real de esos callbacks dentro del test, igual que ocurriría en
+    producción tras un commit real."""
+
+    def setUp(self):
+        self.referencia = _referencia(num_refe='LCRR0200/26')
+        self.cont = _contenedor(self.referencia, 'HLXU9998887', '40HC')
+        self.perfil = _perfil(cve_capturista='CAPT99')
+
+    def _payload(self):
+        return {
+            'patente':  '1656',
+            'agent_id': 'test-agent',
+            'dodas': [{
+                'id_doda':         99001,
+                'num_doda':        'DODA-99001',
+                'patente':         '1656',
+                'cve_caat':        '3B74',
+                'cve_capt':        'CAPT99',
+                'terminal_nombre': 'TERMINAL E2E',
+                'referencias': [
+                    {'num_refe': self.referencia.num_refe, 'cons_id': 1},
+                ],
+            }],
+        }
+
+    def test_post_sync_con_dodas_crea_envio_modulacion_via_on_commit_real(self):
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('api_sync'),
+                    data=json.dumps(self._payload()),
+                    content_type='application/json',
+                    HTTP_AUTHORIZATION='Token test-secret',
+                )
+
+        self.assertEqual(response.status_code, 200)
+
+        doda = Doda.objects.get(id_doda=99001)
+        envio = EnvioModulacion.objects.get(doda=doda)
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+
+        # Un solo contenedor ligado a la referencia -> un solo push real
+        # (mockeado) a BitacoraKasu.
+        mock_post.assert_called_once()
+        sg_cls.return_value.send.assert_called_once()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
