@@ -477,6 +477,32 @@ class ProcesarDodasNuevasTests(TestCase):
         self.assertIsNone(self.doda.notificado_en)
         self.assertIsNotNone(self.doda.modulacion_enviada_en)
 
+    def test_peso_bruto_nulo_manda_cero_en_vez_de_bloquear_el_push(self):
+        """peso_toneladas es requerido por BitacoraKasu (ver REQUIRED_FIELDS
+        en su views_api.py): mandar '' cuando Firebird no trae peso_bruto
+        dejaba la DODA en ERROR para siempre. Se manda '0' para que el
+        registro sí entre y el personal de Kasu lo detecte y verifique el
+        dato manualmente."""
+        from .modulacion import procesar_dodas_nuevas
+
+        referencia_sin_peso = _referencia(num_refe='LCRR0200/26', peso=None)
+        _doda_referencia(self.doda, referencia_sin_peso, cons_id=2)
+        _contenedor(referencia_sin_peso, 'ZZZU9999999', '40HC')
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+
+        payload_envs = [c.kwargs['json'] for c in mock_post.call_args_list]
+        payload_sin_peso = next(p for p in payload_envs if p['contenedor'] == 'ZZZU9999999')
+        self.assertEqual(payload_sin_peso['peso_toneladas'], '0')
+
     def test_fallo_de_un_contenedor_no_bloquea_los_demas_ni_propaga(self):
         from .bitacorakasu_client import BitacoraKasuError
         from .modulacion import procesar_dodas_nuevas

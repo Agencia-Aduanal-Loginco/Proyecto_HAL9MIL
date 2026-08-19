@@ -157,8 +157,14 @@ def _push_bitacorakasu(doda, envio):
                 'agencia': AGENCIA,
                 'terminal_portuaria': doda.terminal_nombre,
                 'tipo_contenedor': contenedor.tipo,
+                # peso_toneladas es requerido por BitacoraKasu (ver
+                # REQUIRED_FIELDS en su views_api.py) — si Firebird no trae
+                # peso_bruto, mandar '' hace que el push falle y la DODA
+                # quede en ERROR para siempre. Se manda '0' para que el
+                # registro sí entre y el personal de Kasu lo detecte y
+                # verifique el dato manualmente.
                 'peso_toneladas': (
-                    str(referencia.peso_bruto) if referencia.peso_bruto is not None else ''
+                    str(referencia.peso_bruto) if referencia.peso_bruto is not None else '0'
                 ),
                 'contenedor': contenedor.num_cont,
                 'cliente': referencia.nombre_cliente,
