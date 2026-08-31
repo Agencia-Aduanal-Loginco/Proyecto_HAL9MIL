@@ -261,17 +261,19 @@ def fetch_dodas(cur, patente):
     Extrae los DODA vigentes (no dados de baja) de la CVE_CAAT de Transportes
     Kasu, con las referencias ligadas (SAAIO_DODADO) y la terminal resuelta
     vía SAAIO_IDEPED (CVE_IDEN='CR', COM_IDEN = clave de terminal) +
-    SAAIC_REFIS. Misma query que sync_agent.fetch_dodas — mantener en
-    paridad.
+    SAAIC_REFIS. Comando de bootstrap / import completo: trae solo DODAs
+    activos (FEC_BAJA IS NULL), sin filtro incremental. El SELECT y la forma
+    del dict se mantienen en paridad con sync_agent.fetch_dodas.
 
     Retorna una lista de dicts listos para _upsert_dodas:
         {id_doda, num_doda, patente, cve_caat, cve_capt, terminal_cve,
-         terminal_nombre, fecha_doda, fecha_baja, referencias: [{num_refe, cons_id}, ...]}
+         terminal_nombre, fecha_doda, fecha_baja, baj_doda,
+         referencias: [{num_refe, cons_id}, ...]}
     """
     cur.execute("""
         SELECT
             d.ID_DODA, d.NUM_DODA, d.CVE_CAAT, d.CVE_CAPT,
-            d.FEC_DODAE, d.FEC_BAJA,
+            d.FEC_DODAE, d.FEC_BAJA, d.BAJ_DODA,
             dd.NUM_REFE, dd.CONS_ID,
             rf.CVE_REFI, rf.NOM_REFI
         FROM SAAIO_DODA d
@@ -284,7 +286,7 @@ def fetch_dodas(cur, patente):
 
     dodas = {}
     for row in cur.fetchall():
-        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja,
+        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja, baj_doda,
          num_refe, cons_id, terminal_cve, terminal_nombre) = row
         if id_doda is None:
             continue
@@ -298,6 +300,7 @@ def fetch_dodas(cur, patente):
             'terminal_nombre': '',
             'fecha_doda':      fb_datetime_str(fec_dodae),
             'fecha_baja':      fb_datetime_str(fec_baja),
+            'baj_doda':        clean(baj_doda, 34),
             'referencias':     [],
         })
         if not entry['terminal_cve'] and terminal_cve:

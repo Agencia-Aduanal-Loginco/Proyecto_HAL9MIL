@@ -61,9 +61,9 @@ def _doda_row(id_doda, num_doda):
     ligadas — num_refe/cons_id en NULL — y sin terminal resuelta)."""
     return (
         id_doda, num_doda, '3B74', 'CAPT01',
-        None, None,   # FEC_DODAE, FEC_BAJA
-        None, None,   # NUM_REFE, CONS_ID (SAAIO_DODADO)
-        None, None,   # CVE_REFI, NOM_REFI (terminal)
+        None, None, None,   # FEC_DODAE, FEC_BAJA, BAJ_DODA
+        None, None,         # NUM_REFE, CONS_ID (SAAIO_DODADO)
+        None, None,         # CVE_REFI, NOM_REFI (terminal)
     )
 
 
