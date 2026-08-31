@@ -167,6 +167,9 @@ class Doda(models.Model):
     terminal_nombre = models.CharField(max_length=70, blank=True) # SAAIC_REFIS.NOM_REFI
     fecha_doda     = models.DateTimeField(null=True, blank=True)  # FEC_DODAE
     fecha_baja     = models.DateTimeField(null=True, blank=True)  # FEC_BAJA
+    baj_doda       = models.CharField(max_length=34, blank=True, db_index=True)
+    # NUM_DODA (folio) del DODA que este reemplaza — SAAIO_DODA.BAJ_DODA.
+    # Vacío = DODA original, no es reemplazo de ninguno.
     notificado_en  = models.DateTimeField(null=True, blank=True)
     modulacion_enviada_en = models.DateTimeField(null=True, blank=True)
     created_at     = models.DateTimeField(auto_now_add=True)
