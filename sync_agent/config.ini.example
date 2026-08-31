@@ -43,8 +43,11 @@ max_retries     = 2
 chunk_size      = 500
 # Máximo de DODAs por lote enviado a Django. Los DODAs se mandan en tandas
 # separadas de las de referencias (después de que todas las referencias del
-# run ya fueron confirmadas). En la primera sincronización de una patente
-# puede haber miles de DODAs vigentes — un valor chico evita que Django
-# tarde demasiado por lote (genera PDF + correo + webhook por cada DODA
-# nuevo, salvo que sea la primera sync — ver no_notificar en sync_agent.py).
+# run ya fueron confirmadas). El agente solo envía DODAs nuevos o
+# modificados desde el último sync (nuevos, recién dados de baja, o
+# reemplazados vía BAJ_DODA); en la PRIMERA sincronización de una patente
+# o con --full-sync se envían todos los DODAs activos vigentes y ahí sí
+# puede haber miles — un valor chico evita que Django tarde demasiado por
+# lote (genera PDF + correo + webhook por cada DODA nuevo, salvo que sea
+# la primera sync — ver no_notificar en sync_agent.py).
 doda_chunk_size = 100
