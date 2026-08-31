@@ -31,7 +31,8 @@ class _FakeCursor:
         self._rows = rows
 
     def execute(self, sql, params=None):
-        pass
+        self.last_sql = sql
+        self.last_params = params
 
     def fetchall(self):
         return self._rows
@@ -250,6 +251,53 @@ class DodasEnviadasAparteDeLosLotesDeRefsTests(unittest.TestCase):
             partidas_count={}, proces={}, regval={},
         )
         self.assertFalse(payload['no_notificar'])
+
+
+import datetime as _dt
+
+
+class FetchDodasIncrementalTests(unittest.TestCase):
+    """fetch_dodas(cur, since_dt) — filtro incremental por FEC_DODAE/FEC_BAJA/BAJ_DODA."""
+
+    def _row(self, id_doda=5001, num_doda='DODA-5001', baj_doda=None,
+             fec_dodae=None, fec_baja=None):
+        # Orden de columnas del SELECT de fetch_dodas (11):
+        # ID_DODA, NUM_DODA, CVE_CAAT, CVE_CAPT, FEC_DODAE, FEC_BAJA, BAJ_DODA,
+        # NUM_REFE, CONS_ID, CVE_REFI, NOM_REFI
+        return (id_doda, num_doda, '3B74', 'ANGELICA', fec_dodae, fec_baja,
+                baj_doda, 'LCLF0001/26', 1, '257', 'Talma')
+
+    def test_full_sync_usa_where_fec_baja_is_null_y_no_pasa_since(self):
+        cur = _FakeCursor([self._row()])
+        sa.fetch_dodas(cur, since_dt=None)
+        self.assertIn('FEC_BAJA IS NULL', cur.last_sql)
+        self.assertNotIn('FEC_DODAE >=', cur.last_sql)
+        self.assertEqual(cur.last_params, (sa.CVE_CAAT_KASU,))
+
+    def test_incremental_arma_where_con_tres_condiciones_or_y_cinco_params(self):
+        cur = _FakeCursor([self._row()])
+        since = _dt.datetime(2026, 8, 31, 16, 33, 46)
+        sa.fetch_dodas(cur, since_dt=since)
+        self.assertIn('FEC_DODAE >=', cur.last_sql)
+        self.assertIn('FEC_BAJA  >=', cur.last_sql)
+        self.assertIn('BAJ_DODA', cur.last_sql)
+        self.assertNotIn('FEC_BAJA IS NULL', cur.last_sql)
+        self.assertEqual(
+            cur.last_params,
+            (sa.CVE_CAAT_KASU, '2026-08-31 16:33:46', '2026-08-31 16:33:46',
+             sa.CVE_CAAT_KASU, '2026-08-31 16:33:46'),
+        )
+
+    def test_dict_resultante_incluye_baj_doda(self):
+        cur = _FakeCursor([self._row(baj_doda='DODA-ORIG-1')])
+        out = sa.fetch_dodas(cur, since_dt=_dt.datetime(2026, 8, 31))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['baj_doda'], 'DODA-ORIG-1')
+
+    def test_baj_doda_none_queda_string_vacio(self):
+        cur = _FakeCursor([self._row(baj_doda=None)])
+        out = sa.fetch_dodas(cur, since_dt=_dt.datetime(2026, 8, 31))
+        self.assertEqual(out[0]['baj_doda'], '')
 
 
 if __name__ == '__main__':

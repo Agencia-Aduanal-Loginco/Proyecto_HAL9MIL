@@ -422,24 +422,32 @@ def fetch_partidas_count(cur, refs_filter=None):
     return {clean(r[0], 50): int(r[1]) for r in rows if r[0]}
 
 
-def fetch_dodas(cur):
+def fetch_dodas(cur, since_dt=None):
     """
-    Extrae los DODA vigentes (no dados de baja) de la CVE_CAAT de Transportes
-    Kasu, con las referencias ligadas (SAAIO_DODADO) y la terminal resuelta
-    vía SAAIO_IDEPED (CVE_IDEN='CR', COM_IDEN = clave de terminal) + SAAIC_REFIS.
+    Extrae DODA de la CVE_CAAT de Transportes Kasu, con las referencias
+    ligadas (SAAIO_DODADO) y la terminal resuelta vía SAAIO_IDEPED
+    (CVE_IDEN='CR', COM_IDEN = clave de terminal) + SAAIC_REFIS.
 
-    No usa refs_filter: SAAIO_DODA ya está acotado por CVE_CAAT + FEC_BAJA
-    IS NULL en la propia query, así que siempre se manda completo (igual
-    que los catálogos fetch_clientes/fetch_capturistas).
+    since_dt=None  → sync completo: solo DODAs activos (FEC_BAJA IS NULL).
+                     Se usa en la primera sync de una patente y con --full-sync.
+    since_dt=<dt>  → sync incremental: solo DODAs con cambios desde esa marca:
+                       - FEC_DODAE >= since_dt  (nuevos)
+                       - FEC_BAJA  >= since_dt  (recién dados de baja)
+                       - NUM_DODA que aparece en el BAJ_DODA de un DODA nuevo
+                         (el DODA reemplazado — puede ser viejo — para que
+                         Django lo marque como baja).
+                     En incremental NO se filtra FEC_BAJA IS NULL: los DODAs
+                     de baja fluyen con su fecha_baja poblada.
 
     Retorna una lista de dicts listos para el bloque "dodas" del payload:
         {id_doda, num_doda, patente, cve_caat, cve_capt, terminal_cve,
-         terminal_nombre, fecha_doda, fecha_baja, referencias: [{num_refe, cons_id}, ...]}
+         terminal_nombre, fecha_doda, fecha_baja, baj_doda,
+         referencias: [{num_refe, cons_id}, ...]}
     """
-    cur.execute("""
+    select = """
         SELECT
             d.ID_DODA, d.NUM_DODA, d.CVE_CAAT, d.CVE_CAPT,
-            d.FEC_DODAE, d.FEC_BAJA,
+            d.FEC_DODAE, d.FEC_BAJA, d.BAJ_DODA,
             dd.NUM_REFE, dd.CONS_ID,
             rf.CVE_REFI, rf.NOM_REFI
         FROM SAAIO_DODA d
@@ -447,12 +455,29 @@ def fetch_dodas(cur):
         LEFT JOIN SAAIO_IDEPED ip
             ON ip.NUM_REFE = dd.NUM_REFE AND ip.CVE_IDEN = 'CR'
         LEFT JOIN SAAIC_REFIS rf ON rf.CVE_REFI = ip.COM_IDEN
-        WHERE d.CVE_CAAT = ? AND d.FEC_BAJA IS NULL
-    """, (CVE_CAAT_KASU,))
+    """
+
+    if since_dt is None:
+        cur.execute(select + " WHERE d.CVE_CAAT = ? AND d.FEC_BAJA IS NULL",
+                    (CVE_CAAT_KASU,))
+    else:
+        since_str = since_dt.strftime('%Y-%m-%d %H:%M:%S')
+        cur.execute(select + """
+            WHERE d.CVE_CAAT = ?
+              AND (
+                    d.FEC_DODAE >= ?
+                 OR d.FEC_BAJA  >= ?
+                 OR TRIM(d.NUM_DODA) IN (
+                      SELECT TRIM(n.BAJ_DODA) FROM SAAIO_DODA n
+                      WHERE n.CVE_CAAT = ? AND n.BAJ_DODA IS NOT NULL
+                        AND n.FEC_DODAE >= ?
+                    )
+              )
+        """, (CVE_CAAT_KASU, since_str, since_str, CVE_CAAT_KASU, since_str))
 
     dodas = {}
     for row in cur.fetchall():
-        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja,
+        (id_doda, num_doda, cve_caat, cve_capt, fec_dodae, fec_baja, baj_doda,
          num_refe, cons_id, terminal_cve, terminal_nombre) = row
         if id_doda is None:
             continue
@@ -466,6 +491,7 @@ def fetch_dodas(cur):
             'terminal_nombre': '',
             'fecha_doda':      fb_datetime_str(fec_dodae),
             'fecha_baja':      fb_datetime_str(fec_baja),
+            'baj_doda':        clean(baj_doda, 34),
             'referencias':     [],
         })
         if not entry['terminal_cve'] and terminal_cve:
