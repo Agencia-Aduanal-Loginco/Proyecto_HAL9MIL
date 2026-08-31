@@ -60,7 +60,7 @@ def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
     if not texto:
         return
     try:
-        from whatsapp.client import send_template
+        from whatsapp.client import send_template, clean_wa_var
         campo = f'recibe_wa_ia_{modulo}'
         numeros = list(set(
             Destinatario.objects
@@ -74,10 +74,15 @@ def _wa_ia_modulo(texto: str, modulo: str, semana_str: str):
         if not content_sid:
             logger.warning("TWILIO_CONTENT_SID_IA_HAL9MIL no configurado — IA %s no enviado.", modulo)
             return
-        # Twilio limita cada variable a 400 chars; reservamos espacio para el pie de mensaje
-        _PIE = '\n\nPara más detalle consulta tu correo.'  # 40 chars
+        # El texto viene de Claude con párrafos y viñetas separados por '\n'.
+        # WhatsApp NO admite saltos de línea / tabs / 4+ espacios en el valor de
+        # una variable de plantilla (Twilio error 21656), así que lo aplanamos
+        # ANTES de truncar para que _MAX refleje los caracteres visibles reales.
+        texto_plano = clean_wa_var(texto)
+        # Twilio limita cada variable a 400 chars; reservamos espacio para el pie.
+        _PIE = ' Para más detalle consulta tu correo.'
         _MAX = 400 - len(_PIE) - 1  # 1 para el '…'
-        resumen = texto[:_MAX].strip() + ('…' if len(texto) > _MAX else '')
+        resumen = texto_plano[:_MAX].strip() + ('…' if len(texto_plano) > _MAX else '')
         texto_enviado = resumen + _PIE
         variables = {'1': texto_enviado}
         for numero in numeros:

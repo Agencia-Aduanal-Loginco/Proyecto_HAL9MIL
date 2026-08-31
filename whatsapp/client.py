@@ -1,8 +1,23 @@
 import json
 import logging
+import re
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+_WS_RE = re.compile(r'\s+')
+
+
+def clean_wa_var(value) -> str:
+    """
+    Normaliza el valor de una variable de plantilla de WhatsApp.
+
+    WhatsApp rechaza los valores de variable que contengan saltos de línea,
+    tabuladores o más de 4 espacios consecutivos; Twilio devuelve el error
+    21656 ("The Content Variables parameter is invalid") en `messages.create()`.
+    Colapsamos cualquier secuencia de espacios en blanco a un solo espacio.
+    """
+    return _WS_RE.sub(' ', str(value)).strip()
 
 
 def _twilio_client():
@@ -56,6 +71,9 @@ def send_template(to: str, content_sid: str, variables: dict) -> dict:
         logger.warning("Twilio no configurado — mensaje no enviado.")
         return {}
     try:
+        # Sanea TODAS las variables: '\n', tabs y espacios múltiples rompen el
+        # envío de plantillas de WhatsApp (Twilio error 21656).
+        variables = {k: clean_wa_var(v) for k, v in variables.items()}
         message = _twilio_client().messages.create(
             from_=_wa_from(),
             to=_wa_to(to),
