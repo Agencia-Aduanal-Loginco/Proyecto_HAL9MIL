@@ -290,13 +290,25 @@ def _upsert_dodas(dodas, stats, error_msgs):
                 'terminal_nombre': str(item.get('terminal_nombre', ''))[:70],
                 'fecha_doda':      _parse_dt(item.get('fecha_doda')),
                 'fecha_baja':      _parse_dt(item.get('fecha_baja')),
+                'baj_doda':        str(item.get('baj_doda', ''))[:34],
             }
             doda, created = Doda.objects.update_or_create(
                 id_doda=id_doda,
                 defaults=defaults,
             )
             if created:
-                creadas.append(doda)
+                if defaults['baj_doda'] or defaults['fecha_baja']:
+                    # DODA de reemplazo (trae BAJ_DODA) o de baja (trae
+                    # FEC_BAJA): nunca dispara correo/PDF/webhook de
+                    # modulación. Se marca como ya atendido para que ni
+                    # procesar_dodas_nuevas ni reintentar_modulacion lo
+                    # levanten después.
+                    ahora = timezone.now()
+                    doda.notificado_en = ahora
+                    doda.modulacion_enviada_en = ahora
+                    doda.save(update_fields=['notificado_en', 'modulacion_enviada_en'])
+                else:
+                    creadas.append(doda)
 
             for ref_item in item.get('referencias', []):
                 cons_id = ref_item.get('cons_id')

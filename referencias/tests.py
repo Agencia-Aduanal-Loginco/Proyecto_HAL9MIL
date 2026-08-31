@@ -438,6 +438,58 @@ class UpsertDodasTests(TestCase):
         self.assertEqual(stats['errores'], 0)
         self.assertEqual(Doda.objects.count(), 0)
 
+    def test_baj_doda_se_persiste(self):
+        stats, error_msgs = self._stats()
+        _upsert_dodas([{
+            'id_doda':  12001,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'baj_doda': 'DODA-ORIGINAL-9',
+            'referencias': [],
+        }], stats, error_msgs)
+        self.assertEqual(Doda.objects.get(id_doda=12001).baj_doda, 'DODA-ORIGINAL-9')
+
+    def test_doda_de_reemplazo_no_entra_en_creadas_y_queda_notificado(self):
+        stats, error_msgs = self._stats()
+        creadas = _upsert_dodas([{
+            'id_doda':  12002,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'baj_doda': 'DODA-ORIGINAL-9',
+            'referencias': [],
+        }], stats, error_msgs)
+        self.assertEqual(creadas, [])
+        doda = Doda.objects.get(id_doda=12002)
+        self.assertIsNotNone(doda.notificado_en)
+        self.assertIsNotNone(doda.modulacion_enviada_en)
+
+    def test_doda_de_baja_no_entra_en_creadas_y_queda_notificado(self):
+        stats, error_msgs = self._stats()
+        creadas = _upsert_dodas([{
+            'id_doda':    12003,
+            'patente':    '1656',
+            'cve_caat':   '3B74',
+            'fecha_baja': '2026-08-20T10:00:00',
+            'referencias': [],
+        }], stats, error_msgs)
+        self.assertEqual(creadas, [])
+        doda = Doda.objects.get(id_doda=12003)
+        self.assertIsNotNone(doda.fecha_baja)
+        self.assertIsNotNone(doda.notificado_en)
+
+    def test_doda_normal_sin_baja_ni_reemplazo_si_entra_en_creadas(self):
+        stats, error_msgs = self._stats()
+        creadas = _upsert_dodas([{
+            'id_doda':  12004,
+            'patente':  '1656',
+            'cve_caat': '3B74',
+            'referencias': [],
+        }], stats, error_msgs)
+        self.assertEqual(len(creadas), 1)
+        self.assertEqual(creadas[0].id_doda, 12004)
+        self.assertEqual(Doda.objects.get(id_doda=12004).baj_doda, '')
+        self.assertIsNone(Doda.objects.get(id_doda=12004).notificado_en)
+
 
 class SyncEndpointDodasTests(TestCase):
     """Tests de integración: el bloque 'dodas' del payload de /api/sync/."""
