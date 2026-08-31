@@ -736,13 +736,13 @@ def main():
         if last_sync_dt:
             log.info(f'Sync incremental desde {last_sync_dt.strftime("%Y-%m-%d %H:%M:%S")}')
             refs_filter = fetch_changed_refs_since(cur, last_sync_dt)
-            if not refs_filter:
-                log.info('Sin cambios detectados desde el último sync.')
-                log.info('══════════════════════════════════════════════════════════')
-                state[PATENTE] = datetime.datetime.now().isoformat()
-                save_last_sync(state)
-                return 0
             log.info(f'Referencias con cambios: {len(refs_filter)}')
+            # No se corta aquí aunque refs_filter esté vacío: un DODA nuevo
+            # puede emitirse contra una referencia vieja sin cambios. Con
+            # refs_filter = set() todos los fetch_* de referencias devuelven
+            # vacío (lo maneja _fetch_rows) y fetch_dodas sigue corriendo.
+            # El caso "sin refs y sin DODAs" lo resuelve el bloque
+            # `if not all_refs:` más abajo, que actualiza last_sync y sale.
         else:
             log.info('Sync completo (primera ejecución o --full-sync)')
 
@@ -758,7 +758,7 @@ def main():
         partidas     = fetch_partidas_count(cur, refs_filter)
         proces       = fetch_proces(cur, refs_filter)
         regval       = fetch_regval(cur, refs_filter)
-        dodas        = fetch_dodas(cur)
+        dodas        = fetch_dodas(cur, since_dt=last_sync_dt)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
