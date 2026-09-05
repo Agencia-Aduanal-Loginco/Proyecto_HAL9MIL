@@ -496,6 +496,33 @@ class ProcesarDodasNuevasTests(TestCase):
         envio = EnvioModulacion.objects.get(doda=self.doda)
         self.assertEqual(envio.links_completar, {})
 
+    def test_respuesta_no_dict_no_propaga_y_no_bloquea_el_email(self):
+        """Si BitacoraKasu regresa HTTP 2xx con un body JSON válido pero
+        no-dict (p.ej. `true` o una lista), respuesta.get('completar_datos_url')
+        no debe propagar un AttributeError sin capturar. El push ya fue
+        exitoso a nivel HTTP (enviados debe contar), sólo se omite la
+        captura del link — y, dado el reorden push-antes-que-email, el
+        email de la DODA no debe quedar bloqueado por esto."""
+        from .modulacion import procesar_dodas_nuevas
+
+        def _post_side_effect(url, json=None, headers=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = True  # body JSON válido, no-dict
+            return resp
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post',
+                   side_effect=_post_side_effect):
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        self.assertEqual(envio.links_completar, {})
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+
     def test_links_completar_se_conserva_entre_llamadas_de_push(self):
         from .modulacion import _push_bitacorakasu
 
@@ -929,6 +956,44 @@ class ReintentarModulacionCommandTests(TestCase):
         self.assertIn('1 reintentados', salida)
         self.assertIn('1 con éxito', salida)
         self.assertIn('0 siguen en error', salida)
+
+    def test_reintenta_solo_email_incluye_links_persistidos_del_push_anterior(self):
+        """Si el push ya quedó ENVIADO en una corrida anterior (y por lo
+        tanto se omite en este reintento — sólo el email está en ERROR), el
+        correo que se reenvía debe incluir de todos modos los links que ese
+        push anterior ya había persistido en envio.links_completar — no algo
+        recalculado en esta corrida, que estaría vacío porque el push no se
+        vuelve a ejecutar."""
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, email_estado='ERROR', push_estado='ENVIADO',
+            error_detalle='email: boom sendgrid',
+            links_completar={'HLXU1234567': 'https://bitacora.test/modulacion/completar/tok1/'},
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            salida = self._run_command()
+
+        envio.refresh_from_db()
+        self.assertEqual(envio.email_estado, 'ENVIADO')
+        self.assertEqual(envio.push_estado, 'ENVIADO')
+        # El push no se reintenta (ya estaba ENVIADO) — cero llamadas de red.
+        mock_post.assert_not_called()
+        sg_cls.return_value.send.assert_called_once()
+
+        html = sg_cls.return_value.send.call_args[0][0].get()['content'][0]['value']
+        self.assertIn('https://bitacora.test/modulacion/completar/tok1/', html)
+        self.assertIn('HLXU1234567', html)
+
+        # El dict persistido no se pierde ni se recalcula vacío.
+        self.assertEqual(
+            envio.links_completar,
+            {'HLXU1234567': 'https://bitacora.test/modulacion/completar/tok1/'},
+        )
+
+        self.assertIn('1 reintentados, 1 con éxito, 0 siguen en error', salida)
 
     def test_reintenta_push_en_error_y_lo_deja_enviado(self):
         envio = EnvioModulacion.objects.create(

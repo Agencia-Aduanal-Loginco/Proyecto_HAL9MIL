@@ -193,7 +193,12 @@ def _push_bitacorakasu(doda, envio):
             try:
                 respuesta = enviar_modulacion(payload)
                 enviados += 1
-                url = respuesta.get('completar_datos_url')
+                # enviar_modulacion sólo lanza BitacoraKasuError por errores
+                # HTTP/transporte/JSON-inválido — un 2xx con body JSON válido
+                # pero no-dict (p.ej. `true` o una lista) no cae ahí. El push
+                # ya fue exitoso; si el body no tiene forma de dict, sólo se
+                # omite la captura del link (no hay completar_datos_url que leer).
+                url = respuesta.get('completar_datos_url') if isinstance(respuesta, dict) else None
                 if url:
                     links[contenedor.num_cont] = url
             except BitacoraKasuError as e:
