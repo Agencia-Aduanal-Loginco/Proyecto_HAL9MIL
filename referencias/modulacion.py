@@ -235,12 +235,14 @@ def _procesar_push(doda, envio):
 def _procesar_doda(doda, solo_push=False):
     envio = EnvioModulacion.objects.create(doda=doda)
 
-    if not solo_push and _procesar_email(doda, envio):
-        doda.notificado_en = timezone.now()
-
-    # El push no depende del resultado del email.
     if _procesar_push(doda, envio):
         doda.modulacion_enviada_en = timezone.now()
+
+    # El email se procesa después del push para poder incluir, en su
+    # contenido, los links de envio.links_completar que el push acaba de
+    # recolectar (ver _enviar_email_modulacion).
+    if not solo_push and _procesar_email(doda, envio):
+        doda.notificado_en = timezone.now()
 
     envio.save()
 
@@ -273,15 +275,16 @@ def reintentar_envio(envio, solo_push=False):
     doda = envio.doda
     update_fields = []
 
-    if not solo_push and envio.email_estado != 'ENVIADO':
-        if _procesar_email(doda, envio):
-            doda.notificado_en = timezone.now()
-            update_fields.append('notificado_en')
-
     if envio.push_estado != 'ENVIADO':
         if _procesar_push(doda, envio):
             doda.modulacion_enviada_en = timezone.now()
             update_fields.append('modulacion_enviada_en')
+
+    # El email se procesa después del push — ver nota en _procesar_doda.
+    if not solo_push and envio.email_estado != 'ENVIADO':
+        if _procesar_email(doda, envio):
+            doda.notificado_en = timezone.now()
+            update_fields.append('notificado_en')
 
     envio.save()
     if update_fields:

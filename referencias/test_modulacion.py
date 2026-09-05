@@ -677,6 +677,47 @@ class ProcesarDodasNuevasTests(TestCase):
         self.assertTrue(True)
 
 
+class OrdenPushAntesQueEmailTests(TestCase):
+    def test_procesar_doda_llama_push_antes_que_email(self):
+        from .modulacion import _procesar_doda
+        doda = _doda()
+        orden = []
+
+        def _push(d, e):
+            orden.append('push')
+            return True
+
+        def _email(d, e):
+            orden.append('email')
+            return True
+
+        with patch('referencias.modulacion._procesar_push', side_effect=_push), \
+             patch('referencias.modulacion._procesar_email', side_effect=_email):
+            _procesar_doda(doda)
+
+        self.assertEqual(orden, ['push', 'email'])
+
+    def test_reintentar_envio_llama_push_antes_que_email(self):
+        from .modulacion import reintentar_envio
+        doda = _doda()
+        envio = EnvioModulacion.objects.create(doda=doda)
+        orden = []
+
+        def _push(d, e):
+            orden.append('push')
+            return True
+
+        def _email(d, e):
+            orden.append('email')
+            return True
+
+        with patch('referencias.modulacion._procesar_push', side_effect=_push), \
+             patch('referencias.modulacion._procesar_email', side_effect=_email):
+            reintentar_envio(envio)
+
+        self.assertEqual(orden, ['push', 'email'])
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Prueba end-to-end: POST /api/sync/ -> on_commit real -> EnvioModulacion
 # ─────────────────────────────────────────────────────────────────────────────
