@@ -510,6 +510,67 @@ class ProcesarDodasNuevasTests(TestCase):
 
         self.assertEqual(envio.links_completar, {'YA': 'https://existente.test/'})
 
+    def test_email_incluye_boton_por_cada_link_completar(self):
+        from .modulacion import _enviar_email_modulacion
+
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda,
+            links_completar={
+                'HLXU1234567': 'https://bitacora.test/modulacion/completar/tok1/',
+                'TCLU7654321': 'https://bitacora.test/modulacion/completar/tok2/',
+            },
+        )
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            _enviar_email_modulacion(self.doda, ('capt@example.com', 'Capturista'), envio)
+
+        html = sg_cls.return_value.send.call_args[0][0].get()['content'][0]['value']
+        self.assertIn('https://bitacora.test/modulacion/completar/tok1/', html)
+        self.assertIn('https://bitacora.test/modulacion/completar/tok2/', html)
+        self.assertIn('HLXU1234567', html)
+        self.assertIn('TCLU7654321', html)
+
+    def test_email_sin_links_completar_no_incluye_botones(self):
+        from .modulacion import _enviar_email_modulacion
+
+        envio = EnvioModulacion.objects.create(doda=self.doda)  # links_completar={} por default
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            _enviar_email_modulacion(self.doda, ('capt@example.com', 'Capturista'), envio)
+
+        html = sg_cls.return_value.send.call_args[0][0].get()['content'][0]['value']
+        self.assertNotIn('Completar carril', html)
+
+    def test_flujo_completo_email_incluye_link_del_contenedor_con_url(self):
+        """Integra Task 2 + 3 + 4: procesar_dodas_nuevas de punta a punta deja,
+        en el correo real que se manda, el link del contenedor cuya terminal
+        lo requería (y ninguno para el que no)."""
+        from .modulacion import procesar_dodas_nuevas
+
+        def _post_side_effect(url, json=None, headers=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            if json['contenedor'] == 'HLXU1234567':
+                data = {'status': 'ok', 'completar_datos_url':
+                        'https://bitacora.test/modulacion/completar/tok1/'}
+            else:
+                data = {'status': 'ok'}
+            resp.json.return_value = data
+            return resp
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post',
+                   side_effect=_post_side_effect):
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            procesar_dodas_nuevas([self.doda])
+
+        html = sg_cls.return_value.send.call_args[0][0].get()['content'][0]['value']
+        self.assertIn('https://bitacora.test/modulacion/completar/tok1/', html)
+        self.assertNotIn('TCLU7654321', html)  # ese contenedor no trajo link
+
     def test_email_adjunta_pdf(self):
         from .modulacion import procesar_dodas_nuevas
 

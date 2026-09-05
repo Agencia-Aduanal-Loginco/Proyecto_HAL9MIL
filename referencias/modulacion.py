@@ -95,6 +95,12 @@ def _enviar_email_modulacion(doda, destinatario, envio):
         pdf_bytes = _generar_pdf_doda(doda)
         nombre_pdf = f"DODA_{(doda.num_doda or str(doda.id_doda)).replace('/', '-')}.pdf"
 
+        botones = ''.join(
+            f'<p><a href="{url}">Completar carril y horarios de terminal — '
+            f'contenedor {num_cont}</a></p>'
+            for num_cont, url in sorted(envio.links_completar.items())
+        )
+
         mensaje = Mail(
             from_email=settings.DEFAULT_FROM_EMAIL,
             to_emails=email,
@@ -105,6 +111,7 @@ def _enviar_email_modulacion(doda, destinatario, envio):
                 f'<strong>{doda.terminal_nombre}</strong>. Favor de iniciar la solicitud '
                 f'de extracción del contenedor.</p>'
                 f'<p>Se adjunta el pedimento + DODA para imprimir.</p>'
+                f'{botones}'
                 f'<p>{settings.NOMBRE_AGENCIA}</p>'
             ),
         )
