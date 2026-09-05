@@ -457,6 +457,59 @@ class ProcesarDodasNuevasTests(TestCase):
         self.assertIsNotNone(self.doda.notificado_en)
         self.assertIsNotNone(self.doda.modulacion_enviada_en)
 
+    def test_links_completar_se_guarda_solo_para_contenedores_con_url(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        def _post_side_effect(url, json=None, headers=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            if json['contenedor'] == 'HLXU1234567':
+                data = {'status': 'ok', 'completar_datos_url':
+                        'https://bitacora.test/modulacion/completar/tok1/'}
+            else:
+                data = {'status': 'ok'}
+            resp.json.return_value = data
+            return resp
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post',
+                   side_effect=_post_side_effect):
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.links_completar, {
+            'HLXU1234567': 'https://bitacora.test/modulacion/completar/tok1/',
+        })
+
+    def test_sin_completar_datos_url_no_agrega_nada_a_links(self):
+        from .modulacion import procesar_dodas_nuevas
+
+        with patch('referencias.modulacion.SendGridAPIClient') as sg_cls, \
+             patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            sg_cls.return_value.send.return_value = _resp_sendgrid()
+            mock_post.return_value = _resp_bitacorakasu()  # sin completar_datos_url
+
+            procesar_dodas_nuevas([self.doda])
+
+        envio = EnvioModulacion.objects.get(doda=self.doda)
+        self.assertEqual(envio.links_completar, {})
+
+    def test_links_completar_se_conserva_entre_llamadas_de_push(self):
+        from .modulacion import _push_bitacorakasu
+
+        envio = EnvioModulacion.objects.create(
+            doda=self.doda, links_completar={'YA': 'https://existente.test/'},
+        )
+
+        with patch('referencias.bitacorakasu_client.requests.post') as mock_post:
+            mock_post.return_value = _resp_bitacorakasu()  # sin link nuevo esta vez
+
+            _push_bitacorakasu(self.doda, envio)
+
+        self.assertEqual(envio.links_completar, {'YA': 'https://existente.test/'})
+
     def test_email_adjunta_pdf(self):
         from .modulacion import procesar_dodas_nuevas
 

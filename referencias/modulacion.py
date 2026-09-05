@@ -139,9 +139,15 @@ def _push_bitacorakasu(doda, envio):
     push_estado general queda en ERROR con el detalle de los que fallaron;
     si no había contenedores que enviar, también queda en ERROR (nada que
     confirmar). Nunca propaga BitacoraKasuError.
+
+    Además recolecta, en envio.links_completar, el `completar_datos_url` que
+    BitacoraKasu regresa por cada contenedor cuya terminal lo requiere (merge
+    sobre lo que ya hubiera de una corrida anterior — un reintento parcial no
+    debe perder los links de los contenedores que no se reintentan).
     """
     fallidos = []
     enviados = 0
+    links = {}
 
     referencias = (
         doda.referencias_doda.select_related('referencia')
@@ -178,14 +184,20 @@ def _push_bitacorakasu(doda, envio):
                 'idempotency_key': f'{doda.id_doda}:{contenedor.num_cont}',
             }
             try:
-                enviar_modulacion(payload)
+                respuesta = enviar_modulacion(payload)
                 enviados += 1
+                url = respuesta.get('completar_datos_url')
+                if url:
+                    links[contenedor.num_cont] = url
             except BitacoraKasuError as e:
                 fallidos.append(f'{contenedor.num_cont}: {e}')
                 logger.error(
                     '[Modulacion] Error push contenedor %s (DODA %s) a BitacoraKasu: %s',
                     contenedor.num_cont, doda.num_doda, e,
                 )
+
+    if links:
+        envio.links_completar = {**envio.links_completar, **links}
 
     if fallidos:
         _registrar_error(envio, 'push_estado', 'push: ' + '; '.join(fallidos))
