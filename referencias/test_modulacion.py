@@ -339,6 +339,21 @@ class BitacoraKasuErrorTests(TestCase):
             self.assertEqual(str(e), msg)
 
 
+class EnvioModulacionLinksCompletarTests(TestCase):
+    def test_links_completar_nace_vacio(self):
+        doda = _doda()
+        envio = EnvioModulacion.objects.create(doda=doda)
+        self.assertEqual(envio.links_completar, {})
+
+    def test_links_completar_persiste_el_dict(self):
+        doda = _doda()
+        envio = EnvioModulacion.objects.create(
+            doda=doda, links_completar={'HLXU1234567': 'https://bitacora.test/x/'},
+        )
+        envio.refresh_from_db()
+        self.assertEqual(envio.links_completar, {'HLXU1234567': 'https://bitacora.test/x/'})
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # procesar_dodas_nuevas — helpers de fixture
 # ─────────────────────────────────────────────────────────────────────────────

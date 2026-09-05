@@ -205,13 +205,14 @@ class EnvioModulacion(models.Model):
         ('ENVIADO', 'Enviado'),
         ('ERROR', 'Error'),
     ]
-    doda           = models.ForeignKey(Doda, on_delete=models.CASCADE, related_name='envios_modulacion')
-    email_estado   = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
-    push_estado    = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
-    sg_message_id  = models.CharField(max_length=100, blank=True)
-    error_detalle  = models.TextField(blank=True)
-    created_at     = models.DateTimeField(auto_now_add=True)
-    updated_at     = models.DateTimeField(auto_now=True)
+    doda            = models.ForeignKey(Doda, on_delete=models.CASCADE, related_name='envios_modulacion')
+    email_estado    = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
+    push_estado     = models.CharField(max_length=10, choices=ESTADOS, default='PENDIENTE')
+    sg_message_id   = models.CharField(max_length=100, blank=True)
+    error_detalle   = models.TextField(blank=True)
+    links_completar = models.JSONField(default=dict, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering            = ['-created_at']

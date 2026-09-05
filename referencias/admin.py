@@ -185,7 +185,7 @@ class EnvioModulacionAdmin(admin.ModelAdmin):
     list_filter = ('email_estado', 'push_estado')
     search_fields = ('doda__num_doda', 'doda__id_doda', 'sg_message_id')
     readonly_fields = ('doda', 'email_estado', 'push_estado', 'sg_message_id',
-                       'error_detalle', 'created_at', 'updated_at')
+                       'error_detalle', 'links_completar', 'created_at', 'updated_at')
     raw_id_fields = ('doda',)
     ordering = ('-created_at',)
     date_hierarchy = 'created_at'
