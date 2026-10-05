@@ -3,7 +3,7 @@ from datetime import date
 from django.db import models
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
-from referencias.models import Referencia, Contenedor, GuiaBL
+from referencias.models import Referencia, Contenedor, GuiaBL, CuentaGastos
 from referencias.glosa_data import get_datos_glosa_semana
 from referencias.cuenta_gastos_data import get_datos_cuenta_gastos_semana
 
@@ -65,7 +65,7 @@ def _proyeccion_mes(month_idx: int) -> int:
     base = (avg24 + avg25) / 2 if (avg24 + avg25) > 0 else 1
     growth = ((avg25 - avg24) / avg24) if avg24 > 0 else 0
     pred_avg = avg25 * (1 + growth)
-    seasonal = (m24[month_idx] + m25[month_idx]) / (avg24 + avg25) if base > 0 else 1.0
+    seasonal = (m24[month_idx] + m25[month_idx]) / (avg24 + avg25) if (avg24 + avg25) > 0 else 1.0
     return int(pred_avg * seasonal)
 
 
@@ -135,6 +135,26 @@ def get_datos_semana(inicio: date, fin: date) -> dict:
 
 # ── Datos para reporte mensual ───────────────────────────────────────────────
 
+def _proceso_completo_mes(inicio: date, fin: date) -> dict:
+    """Ciclo completo del mes: referencias elaboradas, pagadas con pago real
+    (num_operacion + linea_captura) y cuentas de gastos finalizadas."""
+    elaboradas = Referencia.objects.filter(
+        fecha_captura__gte=inicio, fecha_captura__lte=fin, es_rectificacion=False,
+    ).count()
+    pagadas = Referencia.objects.filter(
+        fecha_pago__gte=inicio, fecha_pago__lte=fin, es_rectificacion=False,
+        num_operacion__gt='', linea_captura__gt='',
+    ).count()
+    cg_finalizadas = CuentaGastos.objects.filter(
+        fecha_finalizacion__date__gte=inicio, fecha_finalizacion__date__lte=fin,
+    ).count()
+    return {
+        'elaboradas': elaboradas,
+        'pagadas': pagadas,
+        'cg_finalizadas': cg_finalizadas,
+    }
+
+
 def get_datos_mes(year: int, month: int) -> dict:
     _, last_day = calendar.monthrange(year, month)
     inicio = date(year, month, 1)
@@ -174,6 +194,8 @@ def get_datos_mes(year: int, month: int) -> dict:
         'nombre_mes': NOMBRES_MESES[month - 1],
         'inicio': inicio,
         'fin': fin,
+        # Proceso completo del mes
+        'proceso_completo': _proceso_completo_mes(inicio, fin),
         # Real vs proyectado
         'real': real,
         'proyectado': proyectado,

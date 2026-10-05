@@ -37,6 +37,34 @@
       </td>
     </tr>
 
+    <!-- PROCESO COMPLETO -->
+    <tr>
+      <td style="background:#ffffff;padding:24px 32px 0;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Proceso completo · {{ nombre_mes }} {{ datos.year }}</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="32%" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center;vertical-align:top;">
+              <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Elaboradas</div>
+              <div style="color:#1e293b;font-size:28px;font-weight:900;">{{ datos.proceso_completo.elaboradas }}</div>
+              <div style="color:#64748b;font-size:11px;">referencias capturadas</div>
+            </td>
+            <td width="2%"></td>
+            <td width="32%" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;text-align:center;vertical-align:top;">
+              <div style="color:#16a34a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Pagadas</div>
+              <div style="color:#14532d;font-size:28px;font-weight:900;">{{ datos.proceso_completo.pagadas }}</div>
+              <div style="color:#16a34a;font-size:11px;">con operación y línea de captura</div>
+            </td>
+            <td width="2%"></td>
+            <td width="32%" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;text-align:center;vertical-align:top;">
+              <div style="color:#2563eb;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Cuentas de gastos</div>
+              <div style="color:#1e3a8a;font-size:28px;font-weight:900;">{{ datos.proceso_completo.cg_finalizadas }}</div>
+              <div style="color:#2563eb;font-size:11px;">finalizadas en el mes</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
     <!-- REAL VS PROYECTADO -->
     <tr>
       <td style="background:#ffffff;padding:24px 32px 0;">
