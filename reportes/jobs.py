@@ -201,7 +201,14 @@ def enviar_reporte_semanal():
         raise
 
 
-def enviar_reporte_mensual():
+def enviar_reporte_mensual(force: bool = False, solo_a: list | None = None):
+    """Envía el reporte del mes anterior.
+
+    force: reenvía aunque el período ya tenga un envío exitoso. Solo correo:
+           omite WhatsApp para no repetir las notificaciones de Twilio.
+    solo_a: envío de prueba a esos correos. No registra historial ni manda
+            WhatsApp, para no marcar el período como enviado ante el cron.
+    """
     today = date.today()
     # Cubre el mes anterior
     mes = 12 if today.month == 1 else today.month - 1
@@ -211,15 +218,19 @@ def enviar_reporte_mensual():
     inicio = date(year, mes, 1)
     fin = date(year, mes, calendar.monthrange(year, mes)[1])
     nombre_mes = NOMBRES_MESES[mes - 1]
+    es_prueba = bool(solo_a)
 
     logger.info(f'[Mensual] Generando reporte {nombre_mes} {year}')
 
-    # Guard de idempotencia: si otra instancia ya completó este período, no reenviar
-    if HistorialReporte.objects.filter(tipo='mensual', periodo_inicio=inicio, exitoso=True).exists():
+    # Guard de idempotencia: si otra instancia ya completó este período, no reenviar.
+    # force lo omite para permitir el reenvío manual por consola.
+    if not force and HistorialReporte.objects.filter(
+        tipo='mensual', periodo_inicio=inicio, exitoso=True
+    ).exists():
         logger.info('[Mensual] Reporte ya enviado para este período — omitiendo duplicado.')
         return
 
-    destinatarios = _get_destinatarios('mensual')
+    destinatarios = list(solo_a) if es_prueba else _get_destinatarios('mensual')
 
     try:
         datos = get_datos_mes(year, mes)
@@ -241,6 +252,18 @@ def enviar_reporte_mensual():
         msg.attach_alternative(html, 'text/html')
         msg.send()
 
+        if es_prueba:
+            logger.info('[Mensual] Envío de prueba a %s — sin historial ni WhatsApp.', destinatarios)
+            return
+
+        # En un reenvío forzado el período ya tiene un registro exitoso y la
+        # constraint unique_historial_exitoso rechazaría el nuevo: se reemplaza
+        # por el del envío actual.
+        if force:
+            HistorialReporte.objects.filter(
+                tipo='mensual', periodo_inicio=inicio, exitoso=True
+            ).delete()
+
         # Registrar ANTES de enviar WA — la constraint única en DB garantiza que solo
         # una instancia proceda al envío WA cuando varias arrancan simultáneamente.
         try:
@@ -250,10 +273,13 @@ def enviar_reporte_mensual():
             return
 
         logger.info(f'[Mensual] Enviado a {len(destinatarios)} destinatarios.')
-        _wa_mensual(datos)
-        _wa_ia_modulo(analisis_ia, 'referencias', f'{nombre_mes} {year}')
+        # El reenvío forzado es solo correo: no repite las notificaciones de WhatsApp.
+        if not force:
+            _wa_mensual(datos)
+            _wa_ia_modulo(analisis_ia, 'referencias', f'{nombre_mes} {year}')
 
     except Exception as e:
         logger.error(f'[Mensual] Error: {e}')
-        _guardar_historial('mensual', inicio, fin, destinatarios, False, str(e))
+        if not es_prueba:
+            _guardar_historial('mensual', inicio, fin, destinatarios, False, str(e))
         raise

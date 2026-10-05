@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -5,10 +6,14 @@ from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from django.core import mail
+from django.core.management import call_command
+from django.core.management.base import CommandError
+
 from referencias.models import CuentaGastos, Referencia
 from reportes.data import NOMBRES_MESES, _proyeccion_mes, get_datos_mes
-from reportes.jobs import _wa_ia_modulo
-from reportes.models import Destinatario
+from reportes.jobs import _wa_ia_modulo, enviar_reporte_mensual
+from reportes.models import Destinatario, HistorialReporte
 
 
 @override_settings(
@@ -44,6 +49,105 @@ class WaIaModuloTests(TestCase):
         self.assertNotIn('  ', variables['1'])
         # Twilio limita cada variable; el código apunta a <= 400 chars.
         self.assertLessEqual(len(variables['1']), 400)
+
+
+@patch('reportes.jobs._wa_ia_modulo')
+@patch('reportes.jobs._wa_mensual')
+@patch('reportes.jobs.analizar_mensual', return_value='analisis de prueba')
+class ReenvioReporteMensualTests(TestCase):
+    """Reenvío manual del reporte mensual por consola, incluso si el periodo ya
+    se envió. El reenvío forzado es solo correo y reemplaza el historial."""
+
+    def _periodo(self):
+        today = date.today()
+        mes = 12 if today.month == 1 else today.month - 1
+        year = today.year - 1 if today.month == 1 else today.year
+        inicio = date(year, mes, 1)
+        fin = date(year, mes, calendar.monthrange(year, mes)[1])
+        return inicio, fin
+
+    def _historial_previo(self):
+        inicio, fin = self._periodo()
+        return HistorialReporte.objects.create(
+            tipo='mensual', periodo_inicio=inicio, periodo_fin=fin,
+            destinatarios='[]', exitoso=True,
+        )
+
+    def test_sin_force_no_reenvia_si_el_periodo_ya_se_envio(self, *mocks):
+        self._historial_previo()
+
+        enviar_reporte_mensual()
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_con_force_reenvia_aunque_el_periodo_ya_se_envio(self, *mocks):
+        self._historial_previo()
+
+        enviar_reporte_mensual(force=True)
+
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_con_force_no_manda_whatsapp(self, _ia, wa_mensual, wa_ia_modulo):
+        self._historial_previo()
+
+        enviar_reporte_mensual(force=True)
+
+        self.assertFalse(wa_mensual.called)
+        self.assertFalse(wa_ia_modulo.called)
+
+    def test_sin_force_si_manda_whatsapp(self, _ia, wa_mensual, wa_ia_modulo):
+        enviar_reporte_mensual()
+
+        self.assertTrue(wa_mensual.called)
+        self.assertTrue(wa_ia_modulo.called)
+
+    def test_con_force_reemplaza_el_historial_previo(self, *mocks):
+        previo = self._historial_previo()
+        inicio, _fin = self._periodo()
+
+        enviar_reporte_mensual(force=True)
+
+        exitosos = HistorialReporte.objects.filter(
+            tipo='mensual', periodo_inicio=inicio, exitoso=True,
+        )
+        self.assertEqual(exitosos.count(), 1)
+        self.assertNotEqual(exitosos.first().id, previo.id)
+
+    def test_solo_a_envia_unicamente_a_esos_correos(self, *mocks):
+        enviar_reporte_mensual(force=True, solo_a=['prueba@example.com'])
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['prueba@example.com'])
+
+    def test_solo_a_no_registra_historial(self, *mocks):
+        enviar_reporte_mensual(force=True, solo_a=['prueba@example.com'])
+
+        self.assertEqual(HistorialReporte.objects.count(), 0)
+
+    def test_solo_a_no_borra_el_historial_previo(self, *mocks):
+        previo = self._historial_previo()
+
+        enviar_reporte_mensual(force=True, solo_a=['prueba@example.com'])
+
+        self.assertTrue(HistorialReporte.objects.filter(id=previo.id).exists())
+
+
+class ComandoEnviarReporteTests(TestCase):
+    @patch('reportes.management.commands.enviar_reporte.enviar_reporte_mensual')
+    def test_force_y_solo_a_se_pasan_al_job(self, job):
+        call_command('enviar_reporte', 'mensual', '--force', '--solo-a', 'a@b.com')
+
+        job.assert_called_once_with(force=True, solo_a=['a@b.com'])
+
+    @patch('reportes.management.commands.enviar_reporte.enviar_reporte_mensual')
+    def test_sin_flags_invoca_el_job_sin_forzar(self, job):
+        call_command('enviar_reporte', 'mensual')
+
+        job.assert_called_once_with(force=False, solo_a=None)
+
+    def test_force_con_semanal_es_error(self):
+        with self.assertRaises(CommandError):
+            call_command('enviar_reporte', 'semanal', '--force')
 
 
 class ProyeccionMesTests(TestCase):
