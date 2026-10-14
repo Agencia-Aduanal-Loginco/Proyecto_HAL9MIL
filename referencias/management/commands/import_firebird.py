@@ -140,7 +140,7 @@ def fetch_pedimentos(cur):
             FEC_ENTR, FEC_PAGO,
             NUM_PEDI, CVE_PEDI, TIP_PEDI,
             ADU_DESP, REG_ADUA, PAT_AGEN,
-            NUM_OPER, CVE_CAPT, FIR_ELEC
+            NUM_OPER, CVE_CAPT, FIR_ELEC, PES_BRUT
         FROM SAAIO_PEDIME
         WHERE NUM_REFE IS NOT NULL
         ORDER BY NUM_REFE,
@@ -155,7 +155,7 @@ def fetch_pedimentos(cur):
          fec_entr, fec_pago,
          num_pedi, cve_pedi, tip_pedi,
          adu_desp, reg_adua, _pat_agen,
-         num_oper, cve_capt, fir_elec) = row
+         num_oper, cve_capt, fir_elec, pes_brut) = row
 
         ref = clean(num_refe, 50)
         if not ref:
@@ -168,6 +168,7 @@ def fetch_pedimentos(cur):
             'cve_impo':  clean(cve_impo, 20),
             'fec_entr':  fb_date(fec_entr),
             'fecha_pago': fb_date(fec_pago),
+            'peso_bruto':       pes_brut,
             'num_pedimento':    clean(num_pedi, 30),
             'clave_pedimento':  clean(cve_pedi, 10),
             'tipo_pedimento':   clean(tip_pedi, 10),
@@ -340,7 +341,7 @@ def import_referencias(patente, clientes, capturistas, pedime2, embar,
             cve_cliente=cve,
             nombre_cliente=nombre,
             fecha_arribo=fecha_arribo,
-            peso_bruto=embar_ref.get('peso_bruto'),
+            peso_bruto=ped.get('peso_bruto'),
             fecha_validacion=regval.get(ref),
             fecha_pago=ped.get('fecha_pago'),
             num_pedimento=ped.get('num_pedimento', ''),

@@ -254,24 +254,17 @@ def fetch_capturistas(cur):
 
 def fetch_embar(cur, refs_filter=None):
     """
-    Devuelve dict {num_refe: {'fecha_arribo': ..., 'peso_bruto': ...}}.
-    PES_BRUT (toneladas/kg del embarque) viene de CTRAO_EMBAR — misma tabla
-    y sin JOIN adicional, ya consultada aquí para fecha_arribo.
+    Devuelve dict {num_refe: {'fecha_arribo': ...}}.
     """
     rows = _fetch_rows(
         cur,
-        "SELECT NUM_REFE, FEC_ENTR, PES_BRUT FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
-        "SELECT NUM_REFE, FEC_ENTR, PES_BRUT FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
+        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
+        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
         refs_filter,
     )
     return {
         clean(r[0]): {
             'fecha_arribo': fb_date_str(r[1]),
-            # fdb devuelve decimal.Decimal para columnas NUMERIC/DECIMAL con escala
-            # (como PES_BRUT) — decimal.Decimal no es serializable por json.dumps(),
-            # así que se castea a float antes de que build_payload()/send_payload()
-            # lo metan al payload JSON.
-            'peso_bruto': float(r[2]) if r[2] is not None else None,
         }
         for r in rows
     }
@@ -286,7 +279,7 @@ def fetch_pedimentos(cur, refs_filter=None):
         cur,
         """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
                   NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
-                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC
+                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC, PES_BRUT
            FROM SAAIO_PEDIME
            WHERE NUM_REFE IS NOT NULL
            ORDER BY NUM_REFE,
@@ -294,7 +287,7 @@ def fetch_pedimentos(cur, refs_filter=None):
                     FEC_PAGO NULLS LAST""",
         """SELECT NUM_REFE, CVE_IMPO, FEC_ENTR, FEC_PAGO,
                   NUM_PEDI, CVE_PEDI, TIP_PEDI, ADU_DESP,
-                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC
+                  REG_ADUA, NUM_OPER, CVE_CAPT, FIR_ELEC, PES_BRUT
            FROM SAAIO_PEDIME
            WHERE NUM_REFE IN ({phs})
            ORDER BY NUM_REFE,
@@ -307,7 +300,7 @@ def fetch_pedimentos(cur, refs_filter=None):
     for row in rows:
         (num_refe, cve_impo, fec_entr, fec_pago,
          num_pedi, cve_pedi, tip_pedi, adu_desp,
-         reg_adua, num_oper, cve_capt, fir_elec) = row
+         reg_adua, num_oper, cve_capt, fir_elec, pes_brut) = row
         ref = clean(num_refe, 50)
         if not ref:
             continue
@@ -318,6 +311,7 @@ def fetch_pedimentos(cur, refs_filter=None):
             'cve_impo':  clean(cve_impo, 20),
             'fec_entr':  fb_date_str(fec_entr),
             'fecha_pago': fb_date_str(fec_pago),
+            'peso_bruto':       float(pes_brut) if pes_brut is not None else None,
             'num_pedimento':    clean(num_pedi, 30),
             'clave_pedimento':  clean(cve_pedi, 10),
             'tipo_pedimento':   clean(tip_pedi, 10),
@@ -528,7 +522,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
             'cve_cliente':       cve,
             'nombre_cliente':    clientes.get(cve, ''),
             'fecha_arribo':      fecha_arribo,
-            'peso_bruto':        embar_ref.get('peso_bruto'),
+            'peso_bruto':        ped.get('peso_bruto'),
             'fecha_validacion':  regval.get(ref),
             'fecha_pago':        ped.get('fecha_pago'),
             'num_pedimento':     ped.get('num_pedimento', ''),

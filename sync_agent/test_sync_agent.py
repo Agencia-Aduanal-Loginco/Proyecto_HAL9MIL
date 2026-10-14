@@ -68,16 +68,16 @@ class FetchContenedoresTipoMapeoTests(unittest.TestCase):
         self.assertEqual(result['REF001'][0]['tipo'], '')
 
 
-class FetchEmbarDecimalTests(unittest.TestCase):
+class FetchPedimentosPesoBrutoTests(unittest.TestCase):
     """El driver fdb instalado devuelve decimal.Decimal para columnas NUMERIC/DECIMAL
-    con escala (como PES_BRUT). fetch_embar() debe castear a float, no pasar el
+    con escala (como SAAIO_PEDIME.PES_BRUT). fetch_pedimentos() debe castear a float, no pasar el
     Decimal crudo, porque json.dumps() no sabe serializar Decimal."""
 
     def test_peso_bruto_decimal_is_cast_to_float(self):
         cur = _FakeCursor([
-            ('REF001', None, decimal.Decimal('12345.678')),
+            ('REF001', None, None, None, None, None, None, None, None, None, None, None, decimal.Decimal('12345.678')),
         ])
-        result = sa.fetch_embar(cur)
+        result, _ = sa.fetch_pedimentos(cur)
         self.assertIn('REF001', result)
         peso = result['REF001']['peso_bruto']
         self.assertIsInstance(peso, float)
@@ -86,9 +86,9 @@ class FetchEmbarDecimalTests(unittest.TestCase):
 
     def test_peso_bruto_none_stays_none(self):
         cur = _FakeCursor([
-            ('REF002', None, None),
+            ('REF002', None, None, None, None, None, None, None, None, None, None, None, None),
         ])
-        result = sa.fetch_embar(cur)
+        result, _ = sa.fetch_pedimentos(cur)
         self.assertIsNone(result['REF002']['peso_bruto'])
 
 
@@ -100,13 +100,13 @@ class BuildPayloadJsonSerializableTests(unittest.TestCase):
 
     def test_payload_with_peso_bruto_is_json_serializable(self):
         cur = _FakeCursor([
-            ('REF001', None, decimal.Decimal('998.500')),
+            ('REF001', None, None, None, None, None, None, None, None, None, None, None, decimal.Decimal('998.500')),
         ])
-        embar = sa.fetch_embar(cur)
+        pedimentos, all_refs = sa.fetch_pedimentos(cur)
 
         payload = sa.build_payload(
-            clientes={}, capturistas={}, embar=embar, pedimentos={},
-            all_refs={'REF001'}, pedime2={}, contenedores={}, guias={},
+            clientes={}, capturistas={}, embar={}, pedimentos=pedimentos,
+            all_refs=all_refs, pedime2={}, contenedores={}, guias={},
             partidas_count={}, proces={}, regval={},
         )
 
