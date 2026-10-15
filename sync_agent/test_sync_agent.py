@@ -105,7 +105,7 @@ class BuildPayloadJsonSerializableTests(unittest.TestCase):
         pedimentos, all_refs = sa.fetch_pedimentos(cur)
 
         payload = sa.build_payload(
-            clientes={}, capturistas={}, embar={}, pedimentos=pedimentos,
+            clientes={}, capturistas={}, pedimentos=pedimentos,
             all_refs=all_refs, pedime2={}, contenedores={}, guias={},
             partidas_count={}, proces={}, regval={},
         )
@@ -143,7 +143,7 @@ class DodasSurviveEmptyAllRefsTests(unittest.TestCase):
             'fecha_baja': None, 'referencias': [],
         }]
         payload = sa.build_payload(
-            clientes={}, capturistas={}, embar={}, pedimentos={},
+            clientes={}, capturistas={}, pedimentos={},
             all_refs=set(), pedime2={}, contenedores={}, guias={},
             partidas_count={}, proces={}, regval={}, dodas=dodas,
         )
@@ -200,7 +200,7 @@ class DodasEnviadasAparteDeLosLotesDeRefsTests(unittest.TestCase):
         chunks = [refs_sorted[i:i + chunk_size] for i in range(0, len(refs_sorted), chunk_size)]
         return [
             sa.build_payload(
-                clientes={}, capturistas={}, embar={}, pedimentos={},
+                clientes={}, capturistas={}, pedimentos={},
                 all_refs=set(chunk), pedime2={}, contenedores={}, guias={},
                 partidas_count={}, proces={}, regval={},
             )
@@ -211,7 +211,9 @@ class DodasEnviadasAparteDeLosLotesDeRefsTests(unittest.TestCase):
         lotes = sa._chunk_list(dodas, doda_chunk_size)
         return [
             sa.build_payload(
-                {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+                clientes={}, capturistas={}, pedimentos={},
+                all_refs=set(), pedime2={}, contenedores={}, guias={},
+                partidas_count={}, proces={}, regval={},
                 dodas=lote, no_notificar=no_notificar,
             )
             for lote in lotes
@@ -246,7 +248,7 @@ class DodasEnviadasAparteDeLosLotesDeRefsTests(unittest.TestCase):
 
     def test_no_notificar_default_false(self):
         payload = sa.build_payload(
-            clientes={}, capturistas={}, embar={}, pedimentos={},
+            clientes={}, capturistas={}, pedimentos={},
             all_refs=set(), pedime2={}, contenedores={}, guias={},
             partidas_count={}, proces={}, regval={},
         )

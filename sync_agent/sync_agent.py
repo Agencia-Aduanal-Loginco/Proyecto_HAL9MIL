@@ -252,22 +252,6 @@ def fetch_capturistas(cur):
     return {clean(r[0]).upper(): clean(r[1], 150) for r in cur.fetchall()}
 
 
-def fetch_embar(cur, refs_filter=None):
-    """
-    Devuelve dict {num_refe: {'fecha_arribo': ...}}.
-    """
-    rows = _fetch_rows(
-        cur,
-        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IS NOT NULL",
-        "SELECT NUM_REFE, FEC_ENTR FROM CTRAO_EMBAR WHERE NUM_REFE IN ({phs})",
-        refs_filter,
-    )
-    return {
-        clean(r[0]): {
-            'fecha_arribo': fb_date_str(r[1]),
-        }
-        for r in rows
-    }
 
 
 def fetch_pedimentos(cur, refs_filter=None):
@@ -504,7 +488,7 @@ def _chunk_list(items, size):
 # ─────────────────────────────────────────────────────────────────────────────
 # Construcción del payload
 # ─────────────────────────────────────────────────────────────────────────────
-def build_payload(clientes, capturistas, embar, pedimentos,
+def build_payload(clientes, capturistas, pedimentos,
                   all_refs, pedime2, contenedores, guias, partidas_count, proces, regval,
                   dodas=None, no_notificar=False):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
@@ -514,8 +498,7 @@ def build_payload(clientes, capturistas, embar, pedimentos,
         ped          = pedimentos.get(ref, {})
         cve          = ped.get('cve_impo', '')
         cve_capt     = ped.get('cve_capturista', '')
-        embar_ref    = embar.get(ref, {})
-        fecha_arribo = embar_ref.get('fecha_arribo') or ped.get('fec_entr')
+        fecha_arribo = ped.get('fec_entr')
         refs_list.append({
             'num_refe':          ref,
             'prefijo':           prefijo,
@@ -744,7 +727,6 @@ def main():
         log.info('Extrayendo datos de CASA.GDB...')
         clientes     = fetch_clientes(cur)
         capturistas  = fetch_capturistas(cur)
-        embar        = fetch_embar(cur, refs_filter)
         pedimentos, all_refs = fetch_pedimentos(cur, refs_filter)
         pedime2      = fetch_pedime2(cur, refs_filter)
         contenedores = fetch_contenedores(cur, refs_filter)
@@ -812,7 +794,7 @@ def main():
             # Los DODAs NO van pegados a estos lotes de refs — se mandan aparte,
             # en sus propias tandas, una vez que todos los lotes de refs de este
             # run ya se enviaron y confirmaron (ver enviar_dodas_en_lotes()).
-            payload   = build_payload(clientes, capturistas, embar, pedimentos,
+            payload   = build_payload(clientes, capturistas, pedimentos,
                                       chunk_set, pedime2, contenedores, guias, partidas, proces, regval)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
                      f'{len(payload["contenedores"])} conts | {len(payload["guias"])} guías')
