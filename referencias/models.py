@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from decimal import Decimal
 from django.db import models
 
 
@@ -27,6 +28,10 @@ class Referencia(models.Model):
     nombre_cliente   = models.CharField(max_length=255, blank=True, db_index=True)
     fecha_arribo     = models.DateField(null=True, blank=True)
     peso_bruto       = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)  # CTRAO_EMBAR.PES_BRUT (toneladas)
+
+    @property
+    def peso_kg(self):
+        return self.peso_bruto * Decimal('1000') if self.peso_bruto is not None else None
     fecha_validacion = models.DateField(null=True, blank=True)
     fecha_pago       = models.DateField(null=True, blank=True, db_index=True)
     num_pedimento     = models.CharField(max_length=30, blank=True, db_index=True)
