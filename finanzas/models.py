@@ -16,6 +16,26 @@ class ConfiguracionFiscal(models.Model):
     cert_path = models.CharField(max_length=500)
     key_path = models.CharField(max_length=500)
     activa = models.BooleanField(default=True)
+    cuenta_bancos_default = models.ForeignKey(
+        'CuentaContable', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='config_bancos_default',
+        verbose_name='Cuenta bancos default'
+    )
+    cuenta_anticipos_clientes = models.ForeignKey(
+        'CuentaContable', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='config_anticipos_clientes',
+        verbose_name='Cuenta anticipos clientes'
+    )
+    cuenta_proveedores = models.ForeignKey(
+        'CuentaContable', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='config_proveedores',
+        verbose_name='Cuenta proveedores'
+    )
+    cuenta_gastos_varios = models.ForeignKey(
+        'CuentaContable', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='config_gastos_varios',
+        verbose_name='Cuenta gastos varios'
+    )
 
     class Meta:
         verbose_name = 'Configuración Fiscal'

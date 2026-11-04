@@ -12,6 +12,12 @@ class ConfiguracionFiscalAdmin(admin.ModelAdmin):
     list_display = ('patente', 'rfc', 'razon_social', 'regimen_fiscal', 'activa')
     list_filter = ('activa', 'regimen_fiscal')
     search_fields = ('patente', 'rfc', 'razon_social')
+    raw_id_fields = (
+        'cuenta_bancos_default',
+        'cuenta_anticipos_clientes',
+        'cuenta_proveedores',
+        'cuenta_gastos_varios',
+    )
 
 
 @admin.register(CatalogoSAT)
