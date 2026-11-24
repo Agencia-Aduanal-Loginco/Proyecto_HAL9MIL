@@ -381,6 +381,35 @@
     </tr>
     {% endif %}
 
+    <!-- GLOSA IA (expediente, Jev y Claude) -->
+    {% if datos.glosa_ia and datos.glosa_ia.documentos_subidos > 0 %}
+    {% with g=datos.glosa_ia %}
+    <tr>
+      <td style="background:#ffffff;padding:24px 32px 0;">
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;">
+          <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">Glosa IA</div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
+            <tr>
+              <td style="padding:4px;"><div style="background:#f8fafc;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#64748b;text-transform:uppercase;">Documentos</div><div style="font-size:20px;font-weight:800;color:#1e293b;">{{ g.documentos_subidos }}</div><div style="font-size:10px;color:#94a3b8;">{{ g.expedientes }} expediente{{ g.expedientes|pluralize }}</div></div></td>
+              <td style="padding:4px;"><div style="background:#f0fdf4;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#64748b;text-transform:uppercase;">Visto bueno</div><div style="font-size:20px;font-weight:800;color:#14532d;">{{ g.aprobadas }}</div><div style="font-size:10px;color:#94a3b8;">{{ g.rechazadas }} rechazo{{ g.rechazadas|pluralize }}</div></div></td>
+              <td style="padding:4px;"><div style="background:#fef2f2;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#64748b;text-transform:uppercase;">Con discrepancias</div><div style="font-size:20px;font-weight:800;color:#991b1b;">{{ g.con_discrepancias }}</div></div></td>
+              <td style="padding:4px;"><div style="background:#eff6ff;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#64748b;text-transform:uppercase;">Precisión Jev</div><div style="font-size:20px;font-weight:800;color:#1e3a8a;">{% if g.precision_jev.pct is not None %}{{ g.precision_jev.pct }}%{% else %}-{% endif %}</div><div style="font-size:10px;color:#94a3b8;">{{ g.precision_jev.aciertos }}/{{ g.precision_jev.total }} sin corregir</div></div></td>
+            </tr>
+          </table>
+          {% if g.top_discrepancias %}
+          <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Discrepancias más frecuentes</div>
+          <div style="font-size:12px;color:#334155;margin-bottom:10px;">{% for d in g.top_discrepancias %}{{ d.codigo }} ({{ d.total }}){% if not forloop.last %} · {% endif %}{% endfor %}</div>
+          {% endif %}
+          {% if g.precision_jev.confusiones %}
+          <div style="font-size:12px;color:#64748b;margin-bottom:10px;">Correcciones de tipo: {% for c in g.precision_jev.confusiones %}{{ c.jev }} a {{ c.final }} ({{ c.total }}){% if not forloop.last %} · {% endif %}{% endfor %}</div>
+          {% endif %}
+          <div style="font-size:11px;color:#94a3b8;">Claude: {{ g.uso.claude_input_tokens }} tokens entrada / {{ g.uso.claude_output_tokens }} salida{% if g.uso.costo_usd %} · ${{ g.uso.costo_usd }} USD{% endif %} · {{ g.uso.extracciones_reutilizadas }} lectura{{ g.uso.extracciones_reutilizadas|pluralize }} reutilizada{{ g.uso.extracciones_reutilizadas|pluralize }}</div>
+        </div>
+      </td>
+    </tr>
+    {% endwith %}
+    {% endif %}
+
     <!-- CUENTA DE GASTOS -->
     {% if datos.cuenta_gastos and datos.cuenta_gastos.pedimentos_pagados > 0 %}
     <tr>

@@ -1,6 +1,7 @@
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import sys
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,6 +23,7 @@ INSTALLED_APPS = [
     'django_apscheduler',
     'core',
     'referencias',
+    'glosa',
     'reportes',
     'whatsapp',
     'clientes',
@@ -61,12 +63,9 @@ WSGI_APPLICATION = 'hal9mil.wsgi.application'
 # ── Base de datos ─────────────────────────────────────────────────────────────
 # En producción se usa DBURL (PostgreSQL en DigitalOcean).
 # En desarrollo local, si no hay DBURL, cae a SQLite.
+db_url = os.getenv('DBURL') or f'sqlite:///{BASE_DIR / "db.sqlite3"}'
 DATABASES = {
-    'default': dj_database_url.config(
-        env='DBURL',
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=600,
-    )
+    'default': dj_database_url.parse(db_url, conn_max_age=600)
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -107,6 +106,19 @@ LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Identidad de la agencia (usada en asuntos y plantillas de correo) ────────
 NOMBRE_AGENCIA = os.getenv('NOMBRE_AGENCIA', 'Loginco Corporativo')
+GLOSA_NOMBRE_AGENCIA = os.getenv('GLOSA_NOMBRE_AGENCIA', 'Loginco')
+
+# ── Glosa IA (app glosa) ─────────────────────────────────────────────────────
+# Jev (clasificación) lee JEV_AI_API_KEY / TYPESAFE_API_KEY, JEV_API_URL y
+# JEV_MODEL directo del entorno. Claude (extracción) usa ANTHROPIC_API_KEY,
+# IA_HABILITADA e IA_MODELO_EXTRACCION. Costos opcionales por millón de tokens:
+# IA_COSTO_ENTRADA_USD_MTOK / IA_COSTO_SALIDA_USD_MTOK.
+GLOSA_PROCESAMIENTO_ASINCRONO = os.getenv('GLOSA_PROCESAMIENTO_ASINCRONO', 'True').lower() in ('true', '1', 'yes')
+GLOSA_MAX_MB = int(os.getenv('GLOSA_MAX_MB', '25'))
+GLOSA_MINUTOS_ATORADO = int(os.getenv('GLOSA_MINUTOS_ATORADO', '10'))
+# Las pruebas procesan en línea (sin hilos) para verificar el resultado.
+if len(sys.argv) > 1 and sys.argv[1] == 'test':
+    GLOSA_PROCESAMIENTO_ASINCRONO = False
 
 # ── Email (SendGrid SMTP) ─────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

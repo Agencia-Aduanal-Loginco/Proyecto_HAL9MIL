@@ -1,0 +1,637 @@
+{% extends "base.html" %}
+{% load glosa_extras %}
+{% block title %}Glosa Automática JEV IA · {{ ref.num_refe }} · HAL9MIL{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm text-slate-500">
+    <a href="{% url 'glosa' %}" class="hover:text-sky-600">Glosa</a>
+    <span>/</span>
+    <a href="{% url 'detalle' ref.num_refe %}" class="hover:text-sky-600">Referencia {{ ref.num_refe }}</a>
+    <span>/</span>
+    <span class="text-slate-800 font-mono font-semibold">Glosa Automática JEV IA</span>
+  </div>
+
+  <!-- Header -->
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex items-center justify-between">
+    <div>
+      <span class="text-xs uppercase tracking-wide font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded">JEV IA System One</span>
+      <h1 class="text-2xl font-bold text-slate-800 font-mono mt-1">Expediente y Glosa Automática · {{ ref.num_refe }}</h1>
+      <p class="text-xs text-slate-500 mt-0.5">Pedimento: <span class="font-mono font-medium text-slate-700">{{ ref.num_pedimento|default:"-" }}</span> · Cliente: {{ ref.nombre_cliente|default:"-" }}</p>
+    </div>
+    <div>
+      {% if aaalac_habilitado and not is_aprobado %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="consultar_aaalac" value="1">
+        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Consultar AAALAC Fonatrac API
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if en_proceso %}
+  <div class="bg-sky-50 border border-sky-300 rounded-xl p-4 flex items-center gap-3" id="aviso-procesando">
+    <svg class="w-5 h-5 text-sky-600 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+    <p class="text-sm text-sky-800">Hay documentos clasificándose y leyéndose con IA. Esta página se actualiza sola cada 8 segundos.</p>
+  </div>
+  <script>setTimeout(function () { window.location.reload(); }, 8000);</script>
+  {% endif %}
+
+  <!-- Locked Banner if Aprobado -->
+  {% if is_aprobado %}
+  <div class="bg-emerald-50 border-2 border-emerald-400 rounded-xl p-4">
+    <div class="flex items-center gap-3">
+      <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      <div>
+        <h3 class="text-sm font-bold text-emerald-800">Expediente Aprobado (Visto Bueno Concedido)</h3>
+        <p class="text-xs text-emerald-700 mt-0.5">Este expediente ha sido aprobado por {% if resultado.aprobado_por %}{{ resultado.aprobado_por.get_short_name|default:resultado.aprobado_por.username }}{% else %}Glosador{% endif %} el {{ resultado.aprobado_en|date:"d/m/Y H:i" }}. Las modificaciones y subidas están bloqueadas a menos que se reabra.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Glosador Approval Panel -->
+  {% if es_glosador %}
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+    <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+      <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Panel de Control Glosador (Visto Bueno)
+    </h2>
+
+    {% if is_aprobado %}
+    <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <p class="text-xs font-semibold text-slate-700">Estado: <span class="text-emerald-600 font-bold">APROBADO</span></p>
+        <p class="text-xs text-slate-500 mt-0.5">Para modificar este expediente, debe reabrirlo indicando un motivo.</p>
+      </div>
+      <form method="post" action="{% url 'glosa:glosa_reabrir' ref.num_refe %}" class="flex items-center gap-2">
+        {% csrf_token %}
+        <input type="text" name="comentario" placeholder="Motivo de reapertura (requerido)" required class="text-xs border border-slate-300 rounded px-3 py-1.5 w-64 bg-white">
+        <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors">
+          Reabrir Glosa
+        </button>
+      </form>
+    </div>
+    {% else %}
+    <div class="flex flex-wrap items-center gap-3">
+      <form method="post" action="{% url 'glosa:glosa_aprobar' ref.num_refe %}">
+        {% csrf_token %}
+        <button type="submit" {% if resultado.estado_revision != 'EN_REVISION' or en_proceso %}disabled title="Solo se aprueba una glosa EN REVISIÓN sin documentos en proceso"{% endif %}
+                class="px-4 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          Dar Visto Bueno (Aprobar)
+        </button>
+      </form>
+      <button type="button" onclick="document.getElementById('modal-rechazar').showModal()" class="px-4 py-2 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+        Rechazar Glosa
+      </button>
+    </div>
+
+    {% if resultado.comentario_glosador %}
+    <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+      <strong class="font-semibold">Comentario del glosador:</strong> {{ resultado.comentario_glosador }}
+    </div>
+    {% endif %}
+
+    <!-- Modal Rechazar -->
+    <dialog id="modal-rechazar" class="rounded-2xl p-0 shadow-2xl w-[400px] max-w-[92vw] border border-slate-200 backdrop:bg-slate-900/50">
+      <div class="p-6 space-y-4">
+        <h3 class="text-sm font-bold text-slate-800">Rechazar Glosa</h3>
+        <form method="post" action="{% url 'glosa:glosa_rechazar' ref.num_refe %}" class="space-y-3">
+          {% csrf_token %}
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Comentario de rechazo (requerido):</label>
+            <textarea name="comentario" rows="3" required placeholder="Indique los motivos del rechazo..." class="w-full text-xs border border-slate-300 rounded-lg p-2"></textarea>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="document.getElementById('modal-rechazar').close()" class="px-3 py-1.5 text-xs border rounded-lg">Cancelar</button>
+            <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg">Confirmar Rechazo</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Bloqueante Banner -->
+  {% with datos=resultado.datos_comparacion %}
+  {% if datos.bloqueante %}
+  <div class="bg-red-50 border-2 border-red-400 rounded-xl p-4">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <div>
+        <h3 class="text-sm font-bold text-red-800">Bloqueante: Referencia/Pedimento no coinciden</h3>
+        <p class="text-sm text-red-700 mt-1">
+          Esta pre-forma pertenece a <strong class="font-mono">{{ datos.bloqueante.preforma }}</strong>,
+          no a <strong class="font-mono">{{ datos.bloqueante.referencia }}</strong>.
+        </p>
+        <p class="text-xs text-red-600 mt-1">No se puede continuar con la glosa hasta corregir o reemplazar el documento.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Subdivision Notice Banner -->
+  {% if datos.subdivision and datos.subdivision.detectada %}
+  <div class="bg-amber-50 border-2 border-amber-400 rounded-xl p-4">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-6a1 1 0 10-2 0 1 1 0 002 0zm-1 5a1 1 0 00-1 1v3a1 1 0 002 0V10a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <div>
+        <h3 class="text-sm font-bold text-amber-800">Subdivisión Detectada</h3>
+        <p class="text-sm text-amber-700 mt-1">
+          Pedimento relacionado: <strong class="font-mono">{{ datos.subdivision.pedimento_relacionado }}</strong>.
+          Los valores de peso pueden variar por subdivisión; revise manualmente.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Status summary (AAALAC solo si está configurado) -->
+  <div class="grid {% if aaalac_habilitado %}grid-cols-2{% else %}grid-cols-1{% endif %} gap-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 space-y-1">
+      <h2 class="text-xs uppercase tracking-wide font-semibold text-slate-400 mb-2">Estado de Revisión JEV IA</h2>
+      <span class="inline-flex px-3 py-1 text-xs font-bold rounded-full
+        {% if resultado.estado_revision == 'APROBADO' %}bg-emerald-100 text-emerald-700
+        {% elif resultado.estado_revision == 'RECHAZADO' or resultado.estado_revision == 'DISCREPANCIAS_DETECTADAS' %}bg-red-100 text-red-700
+        {% elif resultado.estado_revision == 'EN_REVISION' %}bg-purple-100 text-purple-700
+        {% else %}bg-amber-100 text-amber-800{% endif %}">
+        {{ resultado.get_estado_revision_display }}
+      </span>
+      {% if resultado.comentario_glosador %}
+      <p class="text-xs text-slate-600 mt-1">Comentario: {{ resultado.comentario_glosador }}</p>
+      {% endif %}
+      <p class="text-xs text-slate-400 mt-2">Actualizado: {{ resultado.actualizado_en|date:"d/m/Y H:i" }}</p>
+    </div>
+    {% if aaalac_habilitado %}
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+      <h2 class="text-xs uppercase tracking-wide font-semibold text-slate-400 mb-2">ETA / Fondeo AAALAC Fonatrac</h2>
+      <p class="text-lg font-mono font-bold text-slate-800">{{ resultado.eta_aaalac|default:"No consultado" }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Annotated Pre-forma PDF Download Banner -->
+  {% if preforma %}
+  <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h3 class="text-xs font-bold text-indigo-900">Pro-forma activa e Informe Anotado (v{{ resultado.datos_comparacion.version|default:1 }})</h3>
+      <p class="text-[11px] text-indigo-700 font-mono mt-0.5">{{ preforma.archivo.name }}</p>
+    </div>
+    <a href="{% url 'glosa:preforma_anotada' preforma.pk %}" target="_blank" class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Descargar Pre-forma Anotada (PDF)
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Discrepancias detectadas -->
+  {% with datos=resultado.datos_comparacion %}
+  {% if datos.discrepancias and not datos.bloqueante %}
+  <div class="bg-red-50 border border-red-200 rounded-xl p-5 space-y-2">
+    <h2 class="text-sm font-bold text-red-800">Discrepancias detectadas ({{ datos.discrepancias|length }})</h2>
+    <ul class="list-disc pl-5 space-y-1 text-sm text-red-700">
+      {% for d in datos.discrepancias %}
+      <li>{{ d.mensaje|default:d }}</li>
+      {% endfor %}
+    </ul>
+    <p class="text-xs text-red-600 font-medium pt-1">Utilice los botones de "Corregir / Reemplazar" en el expediente documental inferior para subsanar cada discrepancia.</p>
+  </div>
+  {% endif %}
+  {% if datos.advertencias and not datos.bloqueante %}
+  <div class="bg-yellow-50 border border-yellow-300 rounded-xl p-5 space-y-2">
+    <h2 class="text-sm font-bold text-yellow-800">Advertencias ({{ datos.advertencias|length }})</h2>
+    <ul class="list-disc pl-5 space-y-1 text-sm text-yellow-800">
+      {% for a in datos.advertencias %}
+      <li>{{ a.mensaje|default:a }}</li>
+      {% endfor %}
+    </ul>
+    <p class="text-xs text-yellow-700 font-medium pt-1">Las advertencias no bloquean el visto bueno; revíselas antes de aprobar.</p>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Cross-Validation Rules Table -->
+  {% with datos=resultado.datos_comparacion %}
+  {% if datos.reglas %}
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+    <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+      <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Reglas de Cruce de Datos (v{{ datos.version|default:1 }})
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50">
+            <th class="pb-3 px-4">Campo</th>
+            <th class="pb-3 px-4">Valor Consenso</th>
+            <th class="pb-3 px-4 text-center">Pre-forma</th>
+            <th class="pb-3 px-4 text-center">B/L</th>
+            <th class="pb-3 px-4 text-center">Factura</th>
+            <th class="pb-3 px-4 text-center">Lista Empaque</th>
+            <th class="pb-3 px-4 text-center">CASA</th>
+            <th class="pb-3 px-4">Estado</th>
+            <th class="pb-3 px-4">Detalle / Mensaje</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for regla in datos.reglas %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3 font-mono font-medium text-slate-700">{{ regla.campo }}</td>
+            <td class="px-4 py-3 font-mono text-slate-800 max-w-xs truncate">{{ regla.valor_consenso|default:"-" }}</td>
+            {% for fuente_key in "PREFORMA,BL,FACTURA,LISTA_EMPAQUE,CASA"|split:"," %}
+            {% with f=regla.fuentes|find_fuente:fuente_key %}
+            <td class="px-4 py-3 text-center">
+              {% if f %}
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-mono rounded font-semibold
+                  {% if f.coincide %}bg-emerald-100 text-emerald-700{% else %}bg-red-100 text-red-700{% endif %}"
+                      title="{{ f.valor }} (doc #{{ f.documento_id|default:'N/A' }})">
+                  {% if f.coincide %}OK{% else %}DISC{% endif %}
+                </span>
+              {% else %}
+                <span class="text-slate-300 text-[10px]">-</span>
+              {% endif %}
+            </td>
+            {% endwith %}
+            {% endfor %}
+            <td class="px-4 py-3">
+              {% with est=regla.estado %}
+              <span class="inline-flex items-center px-2 py-1 text-[10px] font-semibold rounded-full
+                {% if est == 'OK' %}bg-emerald-100 text-emerald-700
+                {% elif est == 'DISCREPANCIA' %}bg-red-100 text-red-700
+                {% elif est == 'ERROR_LECTURA' %}bg-amber-100 text-amber-800
+                {% elif est == 'REVISAR_SUBDIVISION' %}bg-amber-100 text-amber-800
+                {% elif est == 'FALTA_DATO' %}bg-slate-100 text-slate-600
+                {% elif est == 'SIN_CRUCE' %}bg-slate-100 text-slate-500
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ est }}
+              </span>
+              {% endwith %}
+            </td>
+            <td class="px-4 py-3 text-slate-600 text-xs max-w-md">{{ regla.mensaje|default:"-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if datos.partidas %}
+    <!-- Cruce por partida -->
+    <div class="space-y-2 pt-2">
+      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cruce por partida ({{ datos.partidas|length }})</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50">
+              <th class="pb-3 px-4">Sec</th>
+              <th class="pb-3 px-4">Descripción</th>
+              <th class="pb-3 px-4 text-right">Cant. pre-forma</th>
+              <th class="pb-3 px-4 text-center">Factura</th>
+              <th class="pb-3 px-4 text-center">Lista Empaque</th>
+              <th class="pb-3 px-4 text-center">Importe</th>
+              <th class="pb-3 px-4 text-center">NOM</th>
+              <th class="pb-3 px-4 text-center">Permiso</th>
+              <th class="pb-3 px-4">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for fila in datos.partidas %}
+            <tr class="hover:bg-slate-50 align-top">
+              <td class="px-4 py-3 font-mono font-medium text-slate-700">{{ fila.sec }}</td>
+              <td class="px-4 py-3 text-slate-800 max-w-xs">
+                <div class="text-xs">{{ fila.descripcion|default:"-" }}</div>
+                <div class="text-[10px] text-slate-400 font-mono">
+                  {% if fila.fraccion %}{{ fila.fraccion }}{% endif %}{% if fila.modelo %} · {{ fila.modelo }}{% endif %}
+                </div>
+                {% if fila.grupo %}
+                <div class="text-[10px] text-slate-500 mt-0.5" title="Partidas con la misma descripción se comparan juntas contra factura y lista de empaque.">Grupo: {{ fila.grupo }}</div>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-mono text-[11px] text-slate-700 text-right">{{ fila.cantidad_umc|default:"-" }}</td>
+              <td class="px-4 py-3 text-center">{% include "glosa/_celda_partida.html" with c=fila.factura %}</td>
+              <td class="px-4 py-3 text-center">{% include "glosa/_celda_partida.html" with c=fila.lista_empaque %}</td>
+              <td class="px-4 py-3 text-center">{% include "glosa/_celda_partida.html" with c=fila.importe %}</td>
+              <td class="px-4 py-3 text-center">{% include "glosa/_celda_partida.html" with c=fila.nom %}</td>
+              <td class="px-4 py-3 text-center">{% include "glosa/_celda_partida.html" with c=fila.permiso %}</td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-1 text-[10px] font-semibold rounded-full
+                  {% if fila.estado == 'OK' %}bg-emerald-100 text-emerald-700
+                  {% elif fila.estado == 'DISCREPANCIA' %}bg-red-100 text-red-700
+                  {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                  {{ fila.estado }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-slate-400">Importe: arriba el valor de la pre-forma convertido a moneda de factura, abajo el de la factura. Cantidades de grupo son la suma de las partidas del grupo.</p>
+    </div>
+    {% endif %}
+
+    <!-- Detailed Sources Breakdown -->
+    <div class="mt-6 space-y-4">
+      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Desglose Detallado por Fuente</h3>
+      {% for regla in datos.reglas %}
+      {% if regla.fuentes %}
+      <details class="group bg-slate-50 rounded-lg p-4 border border-slate-200">
+        <summary class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+          <svg class="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <span class="font-mono">{{ regla.campo }}</span> - {{ regla.fuentes|length }} fuente{{ regla.fuentes|length|pluralize }}
+        </summary>
+        <div class="mt-3 space-y-2">
+          {% for f in regla.fuentes %}
+          <div class="flex items-center gap-3 text-[11px] font-mono bg-white rounded p-2 border border-slate-200">
+            <span class="px-2 py-0.5 text-[10px] font-semibold rounded
+              {% if f.fuente == 'PREFORMA' %}bg-sky-100 text-sky-700
+              {% elif f.fuente == 'BL' %}bg-purple-100 text-purple-700
+              {% elif f.fuente == 'FACTURA' %}bg-sky-100 text-sky-700
+              {% elif f.fuente == 'LISTA_EMPAQUE' %}bg-amber-100 text-amber-700
+              {% elif f.fuente == 'CASA' %}bg-emerald-100 text-emerald-700
+              {% else %}bg-slate-200 text-slate-700{% endif %}">
+              {{ f.fuente }}
+            </span>
+            <span class="text-slate-700 truncate flex-1">{{ f.valor }}</span>
+            <span class="px-2 py-0.5 text-[10px] font-semibold rounded
+              {% if f.coincide %}bg-emerald-100 text-emerald-700{% else %}bg-red-100 text-red-700{% endif %}">
+              {% if f.coincide %}Coincide{% else %}Difiere{% endif %}
+            </span>
+            <span class="px-2 py-0.5 text-[10px] font-semibold rounded
+              {% if f.valido %}bg-emerald-100 text-emerald-700{% else %}bg-red-100 text-red-700{% endif %}">
+              {% if f.valido %}Válido{% else %}Inválido{% endif %}
+            </span>
+            <span class="text-slate-400 text-[10px]">doc #{{ f.documento_id|default:'N/A' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% elif resultado.estado_revision != 'PENDIENTE' %}
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 text-center text-slate-500">
+    <p>No hay reglas de cruce disponibles. Suba una Pro-forma para iniciar la validación.</p>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Two parts: Upload (Drag & Drop / Button) + Expediente Viewer -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Part 1: Upload Card (Locked if Aprobado) -->
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+      <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Subir Documento al Expediente
+      </h2>
+      {% if is_aprobado %}
+      <p class="text-xs text-slate-400 italic">Expediente aprobado. Subida de nuevos documentos bloqueada.</p>
+      {% else %}
+      <form method="post" enctype="multipart/form-data" class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento (o Auto JEV IA):</label>
+          <select name="tipo_documento" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white text-slate-700">
+            <option value="">Auto-etiquetar con JEV IA</option>
+            {% for code, label in tipo_choices %}
+              <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-sky-400 transition-colors cursor-pointer bg-slate-50/50" onclick="document.getElementById('file-input').click()">
+          <svg class="mx-auto h-10 w-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          <p class="text-xs text-slate-600 mt-2 font-medium">Arrastra archivos aquí o <span class="text-sky-600 underline">busca en tu equipo</span></p>
+          <p class="text-[10px] text-slate-400 mt-1">PDF, JPG, PNG, XML o TXT. Puede elegir varios a la vez (máx. {{ max_mb }} MB c/u).</p>
+          <input id="file-input" type="file" name="archivo" multiple accept="{{ extensiones }}" class="hidden" onchange="this.form.submit()">
+        </div>
+        <button type="submit" class="w-full py-2 bg-sky-600 text-white rounded-lg text-xs font-semibold hover:bg-sky-700 transition-colors">
+          Subir al Expediente
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- Part 2: Expediente Viewer -->
+    <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+      <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Expediente Documental ({{ documentos|length }})
+      </h2>
+
+      {% if documentos %}
+      <div class="space-y-3">
+        {% for doc in documentos %}
+        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="space-y-1.5 flex-1 pr-4">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 text-xs font-bold rounded font-mono
+                  {% if doc.tipo_documento == 'FACTURA' %}bg-sky-100 text-sky-700
+                  {% elif doc.tipo_documento == 'BL' %}bg-purple-100 text-purple-700
+                  {% elif doc.tipo_documento == 'LISTA_EMPAQUE' %}bg-amber-100 text-amber-700
+                  {% elif doc.tipo_documento == 'PREFORMA' %}bg-indigo-100 text-indigo-700
+                  {% else %}bg-slate-200 text-slate-700{% endif %}">
+                  {{ doc.get_tipo_documento_display }}
+                </span>
+                {% if doc.estado_clasificacion == 'MANUAL' %}
+                  <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono">Manual</span>
+                {% elif doc.confianza_ia is not None %}
+                  <span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono">Probabilidad: {{ doc.confianza_ia }}</span>
+                {% endif %}
+                {% if doc.en_proceso %}
+                  <span class="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded font-semibold">Procesando...</span>
+                {% elif doc.procesamiento_estado == 'ERROR' %}
+                  <span class="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold" title="{{ doc.procesamiento_error }}">Error al procesar</span>
+                {% endif %}
+                {% if doc.requiere_revision and not doc.en_proceso %}
+                  <span class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-semibold"
+                        title="{% if doc.estado_clasificacion == 'ERROR' %}{{ doc.clasificacion_ia.error }}{% elif doc.estado_clasificacion == 'SIN_IA' %}Jev IA no configurado{% else %}Jev IA con baja certeza{% endif %}">
+                    Revisar tipo
+                  </span>
+                {% endif %}
+              </div>
+              <p class="text-xs font-mono text-slate-700 truncate max-w-sm">{{ doc.archivo.name }}</p>
+
+              <!-- Manual Type Override Form (Disabled if Aprobado) -->
+              {% if not is_aprobado and not doc.en_proceso %}
+              <form method="post" action="{% url 'glosa:documento_actualizar' doc.pk %}" class="flex items-center gap-2 pt-1">
+                {% csrf_token %}
+                <select name="tipo_documento" class="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white text-slate-700">
+                  {% for code, label in tipo_choices %}
+                    <option value="{{ code }}" {% if doc.tipo_documento == code %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-800 text-white rounded hover:bg-slate-900 transition-colors">
+                  Cambiar Tipo
+                </button>
+              </form>
+              {% endif %}
+
+              {% with meta=doc.datos_extraidos.meta %}
+              {% if meta %}
+                <div class="text-[10px] space-y-1 pt-1">
+                  {% if meta.estado == 'OK' %}
+                    <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">Datos extraídos</span>
+                  {% elif meta.estado == 'REVISION' %}
+                    <span class="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-semibold">Datos extraídos: revisar</span>
+                    <ul class="list-disc list-inside text-amber-800">
+                      {% for adv in meta.advertencias %}<li>{{ adv }}</li>{% endfor %}
+                    </ul>
+                  {% elif meta.estado == 'ERROR' %}
+                    <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold" title="{{ meta.error }}">Extracción fallida</span>
+                  {% elif meta.estado == 'SIN_IA' %}
+                    <span class="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Extracción desactivada</span>
+                  {% endif %}
+                  {% if meta.reutilizado_de %}
+                    <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded" title="Mismo archivo ya leído en el documento #{{ meta.reutilizado_de }}">Lectura reutilizada</span>
+                  {% elif meta.uso %}
+                    <span class="text-slate-400 font-mono" title="Tokens de Claude">{{ meta.uso.input_tokens }} / {{ meta.uso.output_tokens }} tokens{% if meta.uso.costo_usd %} · ${{ meta.uso.costo_usd }} USD{% endif %}</span>
+                  {% endif %}
+                  {% if meta.estado == 'OK' or meta.estado == 'REVISION' %}
+                    <details>
+                      <summary class="cursor-pointer text-slate-500">Ver datos extraídos</summary>
+                      <pre class="text-slate-600 bg-white border border-slate-200 p-2 rounded mt-1 overflow-x-auto">{{ doc.datos_extraidos|pprint }}</pre>
+                    </details>
+                  {% endif %}
+                </div>
+              {% elif doc.datos_extraidos %}
+                <p class="text-[10px] text-slate-500 font-mono">Extraído: {{ doc.datos_extraidos|pprint }}</p>
+              {% endif %}
+              {% endwith %}
+            </div>
+
+            <div class="flex flex-col items-end gap-2">
+              <a href="{{ doc.archivo.url }}" target="_blank" class="px-3 py-1.5 text-xs font-medium bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                Ver PDF
+              </a>
+              {% if not is_aprobado and not doc.en_proceso %}
+              <button type="button" onclick="document.getElementById('modal-reemplazar-{{ doc.pk }}').showModal()" class="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors">
+                Corregir / Reemplazar
+              </button>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Document Versioning History -->
+          {% if doc.versiones_anteriores.all %}
+          <details class="mt-2 text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-3">
+            <summary class="cursor-pointer font-medium text-slate-700">Historial de versiones anteriores ({{ doc.versiones_anteriores.count }})</summary>
+            <div class="mt-2 space-y-2">
+              {% for ant in doc.versiones_anteriores.all %}
+              <div class="flex items-center justify-between text-[11px] font-mono bg-slate-50 p-2 rounded border border-slate-200">
+                <div>
+                  <span class="font-semibold text-slate-600">Versión anterior:</span>
+                  <a href="{{ ant.archivo.url }}" target="_blank" class="text-sky-600 underline ml-1">{{ ant.archivo.name }}</a>
+                  {% if ant.motivo_reemplazo %}
+                  <p class="text-slate-600 mt-0.5">Motivo: {{ ant.motivo_reemplazo }}</p>
+                  {% endif %}
+                  <p class="text-[10px] text-slate-400 mt-0.5">Reemplazado el {{ ant.reemplazado_en|date:"d/m/Y H:i" }} por {{ ant.subido_por.get_short_name|default:ant.subido_por.username|default:"Sistema" }}</p>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </details>
+          {% endif %}
+
+          <!-- Modal Reemplazar Documento -->
+          {% if not is_aprobado %}
+          <dialog id="modal-reemplazar-{{ doc.pk }}" class="rounded-2xl p-0 shadow-2xl w-[420px] max-w-[92vw] border border-slate-200 backdrop:bg-slate-900/50">
+            <div class="p-6 space-y-4">
+              <h3 class="text-sm font-bold text-slate-800">Reemplazar / Corregir Documento</h3>
+              <p class="text-xs text-slate-500 font-mono">{{ doc.get_tipo_documento_display }} - {{ doc.archivo.name }}</p>
+              <form method="post" action="{% url 'glosa:documento_reemplazar' doc.pk %}" enctype="multipart/form-data" class="space-y-3">
+                {% csrf_token %}
+                <div>
+                  <label class="block text-xs font-medium text-slate-700 mb-1">Nuevo archivo PDF (reemplazo):</label>
+                  <input type="file" name="archivo" required accept="{{ extensiones }}" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-700 mb-1">Motivo del reemplazo / corrección:</label>
+                  <textarea name="motivo" rows="3" required placeholder="Describa el motivo de la corrección o reemplazo..." class="w-full text-xs border border-slate-300 rounded-lg p-2"></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                  <button type="button" onclick="document.getElementById('modal-reemplazar-{{ doc.pk }}').close()" class="px-3 py-1.5 text-xs border rounded-lg">Cancelar</button>
+                  <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-sky-600 text-white rounded-lg">Subir Reemplazo</button>
+                </div>
+              </form>
+            </div>
+          </dialog>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-12 border-2 border-dashed border-slate-100 rounded-xl">
+        <p class="text-xs text-slate-400">No hay documentos en el expediente de esta referencia.</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Audit Trail History Log (GlosaEvento) -->
+  <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+    <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+      <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Historial de Auditoría y Eventos de Glosa ({{ eventos|length }})
+    </h2>
+    {% if eventos %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-left text-slate-500 uppercase border-b border-slate-200 bg-slate-50">
+            <th class="p-2.5">Fecha / Hora</th>
+            <th class="p-2.5">Tipo de Evento</th>
+            <th class="p-2.5">Usuario</th>
+            <th class="p-2.5">Estado Resultante</th>
+            <th class="p-2.5">Comentario / Discrepancias</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-mono">
+          {% for ev in eventos %}
+          <tr class="hover:bg-slate-50">
+            <td class="p-2.5 text-slate-600">{{ ev.creado_en|date:"d/m/Y H:i" }}</td>
+            <td class="p-2.5 font-semibold text-slate-800">{{ ev.get_tipo_display }}</td>
+            <td class="p-2.5 text-slate-600">{{ ev.usuario.get_short_name|default:ev.usuario.username|default:"Sistema" }}</td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold
+                {% if ev.estado_resultante == 'APROBADO' %}bg-emerald-100 text-emerald-700
+                {% elif ev.estado_resultante == 'RECHAZADO' or ev.estado_resultante == 'DISCREPANCIAS_DETECTADAS' %}bg-red-100 text-red-700
+                {% elif ev.estado_resultante == 'EN_REVISION' %}bg-purple-100 text-purple-700
+                {% else %}bg-amber-100 text-amber-800{% endif %}">
+                {{ ev.estado_resultante }}
+              </span>
+            </td>
+            <td class="p-2.5 text-slate-600 font-sans">
+              {% if ev.comentario %}<p>{{ ev.comentario }}</p>{% endif %}
+              {% if ev.discrepancias %}
+                <ul class="list-disc pl-4 text-red-600 text-[11px] mt-1">
+                  {% for d in ev.discrepancias %}
+                  <li>{{ d.mensaje|default:d }}</li>
+                  {% endfor %}
+                </ul>
+              {% elif not ev.comentario %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-xs text-slate-400">No hay eventos registrados en el historial de auditoría.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

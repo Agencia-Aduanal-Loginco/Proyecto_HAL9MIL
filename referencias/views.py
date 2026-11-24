@@ -5,7 +5,10 @@ from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import (
+    Avg, Case, CharField, Count, DurationField, ExpressionWrapper, F, IntegerField, OuterRef, Q,
+    Subquery, Value, When,
+)
 from django.db.models.functions import Coalesce, Now, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -14,7 +17,64 @@ from django.views.decorators.http import require_POST
 
 from .glosa_data import analyze_notas
 from .models import CuentaGastos, GlosaRegistro, Referencia
+from glosa.models import DocumentoReferencia
 from .predictor import predecir_pago
+
+
+# Constantes de estado Glosa IA (portadas de Reiki)
+GLOSA_IA_SIN = 'sin'
+GLOSA_IA_PENDIENTE = 'pendiente'
+GLOSA_IA_REVISION = 'revision'
+GLOSA_IA_APROBADA = 'aprobada'
+GLOSA_IA_DISCREPANCIAS = 'discrepancias'
+GLOSA_IA_FILTROS = [
+    (GLOSA_IA_SIN, 'Sin glosa IA'),
+    (GLOSA_IA_PENDIENTE, 'Pendiente'),
+    (GLOSA_IA_REVISION, 'En revisión'),
+    (GLOSA_IA_APROBADA, 'Aprobada'),
+    (GLOSA_IA_DISCREPANCIAS, 'Discrepancias'),
+]
+
+
+ESTADOS_CLASIFICACION_REVISION = ('REVISION', 'SIN_IA', 'ERROR')
+
+
+def _anotar_glosa_ia(qs):
+    """Anota glosa_ia_docs (documentos activos) y glosa_ia_estado (GLOSA_IA_*).
+
+    Usa Subquery (sin GROUP BY en el queryset principal) para no duplicar
+    conteos con el distinct() de la búsqueda. No se usa estado_revision solo:
+    glosa_ia_detalle crea el resultado como PENDIENTE con solo abrir la página,
+    aunque no haya documentos.
+    """
+    from glosa.models import GlosaAutomaticaResultado
+
+    docs_count = (
+        DocumentoReferencia.objects
+        .filter(referencia=OuterRef('pk'), activo=True)
+        .order_by()
+        .values('referencia')
+        .annotate(c=Count('id'))
+        .values('c')
+    )
+    estado_revision = (
+        GlosaAutomaticaResultado.objects
+        .filter(referencia=OuterRef('pk'))
+        .values('estado_revision')[:1]
+    )
+    return qs.annotate(
+        glosa_ia_docs=Coalesce(Subquery(docs_count, output_field=IntegerField()), Value(0)),
+        glosa_ia_resultado=Subquery(estado_revision, output_field=CharField()),
+    ).annotate(
+        glosa_ia_estado=Case(
+            When(glosa_ia_docs=0, then=Value(GLOSA_IA_SIN)),
+            When(glosa_ia_resultado='APROBADO', then=Value(GLOSA_IA_APROBADA)),
+            When(glosa_ia_resultado='DISCREPANCIAS_DETECTADAS', then=Value(GLOSA_IA_DISCREPANCIAS)),
+            When(glosa_ia_resultado__in=['EN_REVISION', 'RECHAZADO'], then=Value(GLOSA_IA_REVISION)),
+            default=Value(GLOSA_IA_PENDIENTE),
+            output_field=CharField(),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +385,10 @@ def detalle(request, num_refe):
     )
     glosa_activa = ref.glosas.filter(fecha_conclusion__isnull=True).first()
 
+    from glosa.models import GlosaAutomaticaResultado
+    glosa_ia_docs = ref.documentos_glosa.filter(activo=True).count()
+    glosa_ia_resultado = GlosaAutomaticaResultado.objects.filter(referencia=ref).first()
+
     return render(request, 'referencias/detalle.html', {
         'ref': ref,
         'cuenta_gastos': cuenta_gastos,
@@ -333,6 +397,8 @@ def detalle(request, num_refe):
         'glosa_activa': glosa_activa,
         'en_ventana_glosa': en_ventana_glosa,
         'necesita_glosa': necesita_glosa,
+        'glosa_ia_docs': glosa_ia_docs,
+        'glosa_ia_resultado': glosa_ia_resultado,
     })
 
 
@@ -530,6 +596,7 @@ def glosa(request):
             output_field=DurationField(),
         ),
     )
+    qs = _anotar_glosa_ia(qs)
 
     # Búsqueda
     q = request.GET.get('q', '').strip()
@@ -546,6 +613,13 @@ def glosa(request):
     patente = request.GET.get('patente', '')
     if patente:
         qs = qs.filter(patente=patente)
+
+    # Filtro Glosa IA (?ia=); un valor inválido se ignora
+    filtro_ia = request.GET.get('ia', '').strip()
+    if filtro_ia in dict(GLOSA_IA_FILTROS):
+        qs = qs.filter(glosa_ia_estado=filtro_ia)
+    else:
+        filtro_ia = ''
 
     # Ordenamiento
     orden = request.GET.get('orden', '-fecha_arribo')
@@ -566,10 +640,25 @@ def glosa(request):
         .order_by('-total')
     )
 
+    # KPIs Glosa IA sobre la ventana completa sin búsqueda (respetando patente)
+    base_ia_qs = _anotar_glosa_ia(base_qs)
+    if patente:
+        base_ia_qs = base_ia_qs.filter(patente=patente)
+    ia_counts = dict(
+        base_ia_qs.order_by()
+        .values('glosa_ia_estado')
+        .annotate(n=Count('id'))
+        .values_list('glosa_ia_estado', 'n')
+    )
+    glosa_ia_kpis = [
+        {'clave': clave, 'label': label, 'total': ia_counts.get(clave, 0)}
+        for clave, label in GLOSA_IA_FILTROS
+    ]
+
     paginador = Paginator(qs, 50)
     pagina    = paginador.get_page(request.GET.get('page', 1))
 
-    # Cargar registros de glosa para la página actual (3 queries adicionales)
+    # Cargar registros de glosa para la página actual (queries adicionales)
     ref_ids = [ref.id for ref in pagina]
 
     # Glosa activa (abierta) por referencia
@@ -598,21 +687,39 @@ def glosa(request):
         .values_list('referencia_id', 'n')
     )
 
+    # Conteo de documentos por revisar tipo por referencia
+    revisar_map = dict(
+        DocumentoReferencia.objects.filter(
+            referencia_id__in=ref_ids,
+            activo=True,
+            clasificacion_ia__estado__in=ESTADOS_CLASIFICACION_REVISION
+        )
+        .values('referencia_id')
+        .annotate(c=Count('id'))
+        .values_list('referencia_id', 'c')
+    )
+
     for ref in pagina:
         ref.glosa_reg   = active_map.get(ref.id)
         ref.last_glosa  = last_concluded_map.get(ref.id)
         ref.glosa_count = counts.get(ref.id, 0)
+        ref.glosa_ia_docs_revision = revisar_map.get(ref.id, 0)
 
     ctx = {
         'page':           pagina,
         'q':              q,
         'filtro_patente': patente,
+        'filtro_ia':      filtro_ia,
         'orden':          orden,
         'total':          qs.count(),
         'por_patente':    list(por_patente),
         'mes_actual':     meses_nombres[month - 1],
         'mes_anterior':   meses_nombres[prev_month - 1],
         'año':            year,
+        'glosa_ia_filtros': GLOSA_IA_FILTROS,
+        'glosa_ia_kpis':  glosa_ia_kpis,
+        'kpi_ia_total':   sum(ia_counts.values()),
+        'kpi_ia':         {k['clave']: k['total'] for k in glosa_ia_kpis},
     }
     return render(request, 'referencias/glosa.html', ctx)
 
@@ -1232,9 +1339,18 @@ def glosa_dashboard(request):
         'mes_actual':          meses_nombres[month - 1],
         'mes_anterior':        meses_nombres[prev_month - 1],
         'año':                 year,
+        'glosa_ia_mes':        _glosa_ia_mes(year, month),
         **nota_analysis,
     }
     return render(request, 'referencias/glosa_dashboard.html', ctx)
+
+
+def _glosa_ia_mes(year, month):
+    """Glosa IA del mes en curso: documentos, precisión de Jev y uso de IA."""
+    from glosa.metricas import get_datos_glosa_ia_semana
+    inicio = date(year, month, 1)
+    fin = date(year, month, cal.monthrange(year, month)[1])
+    return get_datos_glosa_ia_semana(inicio, fin)
 
 
 # ---------------------------------------------------------------------------
@@ -1278,6 +1394,10 @@ def sla_capturistas(request):
         qs.values('nombre_capturista')
         .annotate(
             total=Count('id'),
+            # Refs que entran en cada promedio (Avg ignora NULLs)
+            n_val=Count('id', filter=Q(fecha_captura__isnull=False,
+                                       fecha_validacion__isnull=False)),
+            n_pago=Count('id', filter=Q(fecha_captura__isnull=False)),
             avg_cap_val=Avg(
                 ExpressionWrapper(F('fecha_validacion') - F('fecha_captura'),
                                   output_field=DurationField()),
@@ -1334,6 +1454,8 @@ def sla_capturistas(request):
         capturistas.append({
             'nombre':     nombre,
             'total':      total,
+            'n_val':      row['n_val'],
+            'n_pago':     row['n_pago'],
             'rect':       rect,
             'con_glosa':  con_glosa,
             'avg_cv':     avg_cv,

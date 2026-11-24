@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
 from referencias.models import Referencia, Contenedor, GuiaBL, CuentaGastos
+from glosa.metricas import get_datos_glosa_ia_semana
 from referencias.glosa_data import get_datos_glosa_semana
 from referencias.cuenta_gastos_data import get_datos_cuenta_gastos_semana
 
@@ -129,6 +130,7 @@ def get_datos_semana(inicio: date, fin: date) -> dict:
         'avg_dias_captura_validacion': avg_cap_val,
         'n_captura_validacion': n_cap_val,
         'glosa': get_datos_glosa_semana(inicio, fin),
+        'glosa_ia': get_datos_glosa_ia_semana(inicio, fin),
         'cuenta_gastos': get_datos_cuenta_gastos_semana(inicio, fin),
     }
 

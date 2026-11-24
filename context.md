@@ -275,6 +275,9 @@ CVE_CONT_TIPO = {
 | `/glosa/concluir/<pk>/` | `glosa_concluir` | POST — concluir glosa activa con nota |
 | `/glosa/revertir/<pk>/` | `glosa_revertir` | POST — eliminar glosa activa (staff only, pk=Referencia) |
 | `/glosa/eliminar/<pk>/` | `glosa_eliminar` | POST — eliminar cualquier GlosaRegistro (staff only, pk=GlosaRegistro) |
+| `/referencias/<num_refe>/glosa-ia/` | `glosa:glosa_ia_detalle` | Expediente y glosa IA (GET; POST sube archivos) |
+| `/referencias/<num_refe>/glosa-ia/aprobar/` · `rechazar/` · `reabrir/` | `glosa:glosa_aprobar` … | POST — solo grupo Glosador |
+| `/glosa-ia/documentos/<id>/actualizar/` · `reemplazar/` · `preforma-anotada/` | `glosa:documento_*`, `glosa:preforma_anotada` | Cambio de tipo, reemplazo, PDF anotado |
 | `/cuenta-gastos/` | `cuenta_gastos` | Lista operativa de cuenta de gastos |
 | `/cuenta-gastos/dashboard/` | `cuenta_gastos_dashboard` | Estadísticas de cuenta de gastos |
 | `/cuenta-gastos/finalizar/<pk>/` | `cuenta_gastos_finalizar` | POST — finalizar cuenta de gastos |
@@ -332,6 +335,56 @@ Gestión operativa de pedimentos pendientes de firma electrónica y pago. La lis
 
 ---
 
+## App de Glosa IA (`glosa/`)
+
+Expediente documental por referencia y glosa automática. Spec:
+`docs/superpowers/specs/2026-11-23-glosa-automatica-ia-port-design.md` (port desde Reiki).
+
+| Paso | Quién |
+|---|---|
+| Clasificar tipo de documento | Jev / TypeSafe System One (`services_jev_ia.py`); respaldo por palabras clave |
+| Leer valores | Claude con JSON outputs por tipo (`services_extraccion.py`) |
+| Decidir discrepancias | Python determinista (`services_cruce.py`, `services_cruce_partidas.py`) |
+
+### Modelos (`glosa/models.py`)
+
+- `DocumentoReferencia`: archivo (Spaces privado), `tipo_documento`, `clasificacion_ia`,
+  `datos_extraidos` (`meta` con estado, advertencias y uso de tokens), versiones
+  (`activo`, `reemplazado_por`), `subido_por`, `hash_sha256`, `procesamiento_estado`
+  (`PENDIENTE`/`PROCESANDO`/`LISTO`/`ERROR`).
+- `GlosaAutomaticaResultado` (OneToOne con Referencia): `estado_revision`
+  (`PENDIENTE`, `EN_REVISION`, `APROBADO`, `RECHAZADO`, `DISCREPANCIAS_DETECTADAS`),
+  `datos_comparacion` (reglas, discrepancias, advertencias, partidas), aprobador.
+- `GlosaEvento`: historial (`SUBIDA`, `REEMPLAZO`, `CAMBIO_TIPO`, `CRUCE`, `RECHAZO`,
+  `APROBACION`, `REAPERTURA`).
+
+### Flujo
+
+1. Cualquier usuario sube uno o varios archivos (PDF, JPG, PNG, XML, TXT; máx. `GLOSA_MAX_MB`).
+   Duplicados por hash se descartan.
+2. Clasificación y extracción corren en un hilo (`services_procesamiento.py`); la página se
+   recarga sola. Documentos atorados los retoma el job `glosa_reprocesar_atorados` (cada 5 min)
+   o `python manage.py glosa_reprocesar`.
+3. El cruce compara pre-forma (o CASA) contra B/L, factura, lista de empaque, certificados y
+   permisos, y contra CASA (guía/B/L, contenedores, número de partidas). Nunca pone `APROBADO`.
+4. Solo el grupo `Glosador` (o superusuario) da visto bueno (desde `EN_REVISION`, cruce limpio,
+   sin documentos en proceso), rechaza o reabre. El visto bueno concluye el `GlosaRegistro`
+   abierto (que se abre a mano en `/glosa/`).
+5. Pre-forma anotada en PDF con página resumen y marcas rojas; encabezado
+   `GLOSA_NOMBRE_AGENCIA - Patente <patente>`.
+
+> Peso: `Referencia.peso_bruto` está en **toneladas**; el cruce usa `ref.peso_kg`.
+> Pre-forma Loginco: los modelos van en "OBSERVACIONES A NIVEL PARTIDA"
+> (`modelos_observaciones`), no en la columna MODELO.
+
+### Métricas (`glosa/metricas.py`)
+
+Precisión de Jev (tipo que conserva el documento), tokens/costo de Claude, lecturas
+reutilizadas y discrepancias más frecuentes. Se muestran en `/glosa/dashboard/` (mes) y en el
+reporte semanal (`datos.glosa_ia`).
+
+---
+
 ## App de Cuenta de Gastos (`referencias/`)
 
 Registra la finalización de la cuenta de gastos de cada referencia pagada.
@@ -364,6 +417,7 @@ Genera y envía reportes HTML por correo usando SendGrid. WhatsApp vía Twilio C
 |---|---|---|
 | `reporte_semanal` | Lunes 07:00 CST | Reporte de la semana anterior |
 | `reporte_mensual` | Día 1 del mes 07:00 CST | Reporte del mes anterior |
+| `glosa_reprocesar_atorados` | Cada 5 minutos | Retoma documentos de glosa IA atorados en PENDIENTE/PROCESANDO |
 
 ### `reportes/data.py` — Funciones de datos
 
@@ -449,6 +503,7 @@ WhatsApp ←→ Twilio ──POST /whatsapp/webhook/──→ Django
 | `mes` | KPIs del mes en curso |
 | `sync` | Estado de la última sincronización por patente |
 | `refs LCRR mayo` | Total de referencias por patente y mes |
+| `glosa LCRR0881/26` | Estado de la glosa IA, discrepancias y advertencias |
 
 ---
 
@@ -551,6 +606,12 @@ El agente persiste el timestamp del último sync exitoso en `last_sync.json`. En
 | `TWILIO_WHATSAPP_FROM` | Número Twilio remitente (`+14155238886` sandbox o número aprobado) |
 | `TWILIO_WHATSAPP_TO_ADMIN` | Número WhatsApp del administrador (E.164) |
 | `TWILIO_WHATSAPP_ALLOWED_NUMBERS` | Números autorizados para el bot (separados por coma) |
+| `JEV_AI_API_KEY` | API key de Jev (TypeSafe System One) para clasificar documentos de glosa IA |
+| `IA_MODELO_EXTRACCION` | Modelo de Claude para extracción (default `claude-sonnet-5-5`) |
+| `GLOSA_NOMBRE_AGENCIA` | Encabezado de la pre-forma anotada (default `Loginco`) |
+| `GLOSA_PROCESAMIENTO_ASINCRONO`, `GLOSA_MAX_MB`, `GLOSA_MINUTOS_ATORADO` | Glosa IA: hilo de procesamiento (default `True`), tamaño máximo por archivo (25), minutos para reprocesar atorados (10) |
+| `IA_COSTO_ENTRADA_USD_MTOK`, `IA_COSTO_SALIDA_USD_MTOK` | Opcional: precio por millón de tokens para mostrar costo de la glosa IA |
+| `AAALAC_API_URL`, `AAALAC_API_KEY` | Opcional: consulta ETA AAALAC Fonatrac (oculta si no hay key) |
 | `TWILIO_CONTENT_SID_SEMANAL` | SID de la plantilla aprobada para reporte semanal (`HXebb6fc66f8fd89388a6800411a53e9b8`) |
 | `DEBUG` | `False` en producción |
 | `ALLOWED_HOSTS` | Dominio asignado por DO |

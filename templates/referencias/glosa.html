@@ -77,10 +77,10 @@
 
   <!-- ── Filtros ──────────────────────────────────────────────── -->
   <form method="get" class="bg-white rounded-xl border border-slate-200 shadow-sm">
-    <div class="flex items-end gap-3 px-4 py-3">
+    <div class="flex items-end gap-3 px-4 py-3 flex-wrap">
 
       <!-- Búsqueda con icono embebido -->
-      <div class="flex-1">
+      <div class="flex-1 min-w-[200px]">
         <label for="id_q" class="block text-xs font-medium text-slate-500 mb-1.5">Buscar</label>
         <div class="relative">
           <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400"
@@ -96,7 +96,7 @@
       </div>
 
       <!-- Patente -->
-      <div class="w-48">
+      <div class="w-44">
         <label for="id_patente" class="block text-xs font-medium text-slate-500 mb-1.5">Patente</label>
         <select id="id_patente" name="patente"
           class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white
@@ -109,9 +109,23 @@
         </select>
       </div>
 
+      <!-- Filtro Glosa IA -->
+      <div class="w-48">
+        <label for="id_ia" class="block text-xs font-medium text-slate-500 mb-1.5">Glosa IA</label>
+        <select id="id_ia" name="ia"
+          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white
+                 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400
+                 transition-shadow duration-150">
+          <option value="">Todos los estados IA</option>
+          {% for val, label in glosa_ia_filtros %}
+          <option value="{{ val }}" {% if filtro_ia == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
       <!-- Botones -->
       <div class="flex items-center gap-2 pb-px">
-        {% if q or filtro_patente %}
+        {% if q or filtro_patente or filtro_ia %}
         <a href="{% url 'glosa' %}"
            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-500
                   border border-slate-200 rounded-lg
@@ -139,6 +153,40 @@
     </div>
   </form>
 
+  <!-- ── KPIs Glosa IA ────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <a href="?{% if filtro_patente %}patente={{ filtro_patente }}&{% endif %}{% if q %}q={{ q }}&{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if not filtro_ia %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider block">Total ventana</span>
+      <span class="text-lg font-bold text-slate-800 tabular-nums mt-0.5 block">{{ kpi_ia_total }}</span>
+    </a>
+    <a href="?ia=sin{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if filtro_ia == 'sin' %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider block">Sin glosa IA</span>
+      <span class="text-lg font-bold text-slate-600 tabular-nums mt-0.5 block">{{ kpi_ia.sin }}</span>
+    </a>
+    <a href="?ia=pendiente{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if filtro_ia == 'pendiente' %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-blue-600 uppercase tracking-wider block">Pendiente</span>
+      <span class="text-lg font-bold text-blue-700 tabular-nums mt-0.5 block">{{ kpi_ia.pendiente }}</span>
+    </a>
+    <a href="?ia=revision{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if filtro_ia == 'revision' %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-purple-600 uppercase tracking-wider block">En revisión</span>
+      <span class="text-lg font-bold text-purple-700 tabular-nums mt-0.5 block">{{ kpi_ia.revision }}</span>
+    </a>
+    <a href="?ia=aprobada{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if filtro_ia == 'aprobada' %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-emerald-600 uppercase tracking-wider block">Aprobada</span>
+      <span class="text-lg font-bold text-emerald-700 tabular-nums mt-0.5 block">{{ kpi_ia.aprobada }}</span>
+    </a>
+    <a href="?ia=discrepancias{% if filtro_patente %}&patente={{ filtro_patente }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="bg-white p-3 rounded-xl border {% if filtro_ia == 'discrepancias' %}border-amber-400 ring-1 ring-amber-400{% else %}border-slate-200 hover:border-slate-300{% endif %} shadow-sm transition-all duration-150">
+      <span class="text-[11px] font-medium text-red-600 uppercase tracking-wider block">Discrepancias</span>
+      <span class="text-lg font-bold text-red-700 tabular-nums mt-0.5 block">{{ kpi_ia.discrepancias }}</span>
+    </a>
+  </div>
+
   <!-- ── Tabla ────────────────────────────────────────────────── -->
   <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
     <div class="overflow-x-auto">
@@ -150,7 +198,7 @@
             {# Macro: sort header con flecha activa/inactiva #}
             {% with sort_field="num_refe" label="Referencia" align="left" %}
             <th class="px-4 py-2.5 text-left">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == sort_field %}-{% endif %}{{ sort_field }}&patente={{ filtro_patente }}"
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == sort_field %}-{% endif %}{{ sort_field }}&patente={{ filtro_patente }}&ia={{ filtro_ia }}"
                  class="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
                         hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
                 {{ label }}
@@ -172,7 +220,7 @@
             {% endwith %}
 
             <th class="px-4 py-2.5 text-center">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'patente' %}-{% endif %}patente&patente={{ filtro_patente }}"
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'patente' %}-{% endif %}patente&patente={{ filtro_patente }}&ia={{ filtro_ia }}"
                  class="inline-flex items-center justify-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
                         hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
                 Patente
@@ -190,7 +238,7 @@
             </th>
 
             <th class="px-4 py-2.5 text-right">
-              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}"
+              <a href="?{% if q %}q={{ q }}&{% endif %}orden={% if orden == 'fecha_arribo' %}-{% endif %}fecha_arribo&patente={{ filtro_patente }}&ia={{ filtro_ia }}"
                  class="inline-flex items-center justify-end gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider
                         hover:text-slate-800 cursor-pointer transition-colors duration-150 select-none">
                 F. Arribo
@@ -227,6 +275,9 @@
             </th>
             <th class="px-4 py-2.5 text-left">
               <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</span>
+            </th>
+            <th class="px-4 py-2.5 text-left">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Glosa IA</span>
             </th>
             <th class="px-4 py-2.5 text-left">
               <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Acciones</span>
@@ -377,6 +428,35 @@
                     </span>
                   {% endif %}
                 </div>
+              {% endif %}
+            </td>
+
+            <!-- Glosa IA -->
+            <td class="px-4 py-2.5">
+              <a href="{% url 'glosa:glosa_ia_detalle' ref.num_refe %}"
+                 class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-150
+                   {% if ref.glosa_ia_estado == 'aprobada' %}bg-emerald-100 text-emerald-700 hover:bg-emerald-200
+                   {% elif ref.glosa_ia_estado == 'discrepancias' %}bg-red-100 text-red-700 hover:bg-red-200
+                   {% elif ref.glosa_ia_estado == 'revision' %}bg-purple-100 text-purple-700 hover:bg-purple-200
+                   {% elif ref.glosa_ia_estado == 'pendiente' %}bg-blue-100 text-blue-700 hover:bg-blue-200
+                   {% else %}bg-slate-100 text-slate-500 hover:bg-slate-200{% endif %}">
+                <span class="w-1.5 h-1.5 rounded-full
+                  {% if ref.glosa_ia_estado == 'aprobada' %}bg-emerald-500
+                  {% elif ref.glosa_ia_estado == 'discrepancias' %}bg-red-500
+                  {% elif ref.glosa_ia_estado == 'revision' %}bg-purple-500
+                  {% elif ref.glosa_ia_estado == 'pendiente' %}bg-blue-500
+                  {% else %}bg-slate-400{% endif %}"></span>
+                {% if ref.glosa_ia_estado == 'aprobada' %}Aprobada
+                {% elif ref.glosa_ia_estado == 'discrepancias' %}Discrepancias
+                {% elif ref.glosa_ia_estado == 'revision' %}En revisión
+                {% elif ref.glosa_ia_estado == 'pendiente' %}Pendiente
+                {% else %}Sin glosa IA{% endif %}
+                {% if ref.glosa_ia_docs %}<span class="tabular-nums opacity-80">· {{ ref.glosa_ia_docs }} doc{{ ref.glosa_ia_docs|pluralize }}</span>{% endif %}
+              </a>
+              {% if ref.glosa_ia_docs_revision %}
+              <span class="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded mt-1" title="Documentos que requieren revisión de tipo">
+                {{ ref.glosa_ia_docs_revision }} por revisar tipo
+              </span>
               {% endif %}
             </td>
 
@@ -656,7 +736,7 @@
       <div class="flex items-center gap-1">
 
         {% if page.has_previous %}
-        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.previous_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.previous_page_number }}&patente={{ filtro_patente }}&ia={{ filtro_ia }}&orden={{ orden }}"
            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium
                   border border-slate-200 rounded-lg text-slate-600
                   hover:bg-white hover:border-slate-300 hover:text-slate-800
@@ -673,7 +753,7 @@
             <span class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold
                          bg-amber-500 text-white rounded-lg tabular-nums min-w-[34px]">{{ num }}</span>
           {% elif num > page.number|add:'-3' and num < page.number|add:'3' %}
-            <a href="?{% if q %}q={{ q }}&{% endif %}page={{ num }}&patente={{ filtro_patente }}&orden={{ orden }}"
+            <a href="?{% if q %}q={{ q }}&{% endif %}page={{ num }}&patente={{ filtro_patente }}&ia={{ filtro_ia }}&orden={{ orden }}"
                class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium
                       border border-slate-200 rounded-lg text-slate-600
                       hover:bg-white hover:border-slate-300 hover:text-slate-800
@@ -684,7 +764,7 @@
         {% endfor %}
 
         {% if page.has_next %}
-        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.next_page_number }}&patente={{ filtro_patente }}&orden={{ orden }}"
+        <a href="?{% if q %}q={{ q }}&{% endif %}page={{ page.next_page_number }}&patente={{ filtro_patente }}&ia={{ filtro_ia }}&orden={{ orden }}"
            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium
                   border border-slate-200 rounded-lg text-slate-600
                   hover:bg-white hover:border-slate-300 hover:text-slate-800

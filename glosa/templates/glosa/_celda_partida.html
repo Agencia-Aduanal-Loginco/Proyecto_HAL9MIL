@@ -1,0 +1,14 @@
+{% if c %}
+<div class="flex flex-col items-center gap-0.5">
+  {% if c.preforma %}<span class="text-[10px] text-slate-400 font-mono" title="Valor de la pre-forma (suma del grupo o importe en moneda de factura)">{{ c.preforma }}</span>{% endif %}
+  <span class="font-mono text-[11px] text-slate-700">{{ c.valor|default:"—" }}</span>
+  <span class="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-mono rounded font-semibold
+    {% if c.estado == 'OK' %}bg-emerald-100 text-emerald-700
+    {% elif c.estado == 'DISC' %}bg-red-100 text-red-700
+    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+    {% if c.estado == 'OK' %}OK{% elif c.estado == 'DISC' %}DISC{% else %}SIN PAREJA{% endif %}
+  </span>
+</div>
+{% else %}
+<span class="text-slate-300 text-[10px]">—</span>
+{% endif %}

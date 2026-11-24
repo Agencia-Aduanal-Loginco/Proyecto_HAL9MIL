@@ -304,6 +304,31 @@
   </div>
   {% endif %}
 
+  <!-- Glosa IA del mes -->
+  {% if glosa_ia_mes.documentos_subidos %}
+  {% with g=glosa_ia_mes %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-slate-700">Glosa IA · {{ mes_actual }} {{ año }}</h2>
+      <a href="{% url 'glosa' %}?ia=discrepancias" class="text-xs text-sky-600 hover:underline">Ver expedientes con discrepancias</a>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="bg-slate-50 rounded-lg p-3"><p class="text-[11px] text-slate-400 uppercase">Documentos</p><p class="text-lg font-bold text-slate-800 tabular-nums">{{ g.documentos_subidos }}</p><p class="text-[11px] text-slate-400">{{ g.expedientes }} expediente{{ g.expedientes|pluralize }}</p></div>
+      <div class="bg-emerald-50 rounded-lg p-3"><p class="text-[11px] text-slate-400 uppercase">Visto bueno</p><p class="text-lg font-bold text-emerald-700 tabular-nums">{{ g.aprobadas }}</p><p class="text-[11px] text-slate-400">{{ g.rechazadas }} rechazo{{ g.rechazadas|pluralize }} · {{ g.reaperturas }} reapertura{{ g.reaperturas|pluralize }}</p></div>
+      <div class="bg-red-50 rounded-lg p-3"><p class="text-[11px] text-slate-400 uppercase">Con discrepancias</p><p class="text-lg font-bold text-red-700 tabular-nums">{{ g.con_discrepancias }}</p></div>
+      <div class="bg-sky-50 rounded-lg p-3" title="Documentos que conservan el tipo que eligió Jev"><p class="text-[11px] text-slate-400 uppercase">Precisión Jev</p><p class="text-lg font-bold text-sky-700 tabular-nums">{% if g.precision_jev.pct is not None %}{{ g.precision_jev.pct }}%{% else %}-{% endif %}</p><p class="text-[11px] text-slate-400">{{ g.precision_jev.aciertos }}/{{ g.precision_jev.total }} sin corregir</p></div>
+      <div class="bg-violet-50 rounded-lg p-3" title="Tokens de Claude en la extracción"><p class="text-[11px] text-slate-400 uppercase">Uso de Claude</p><p class="text-lg font-bold text-violet-700 tabular-nums">{% if g.uso.costo_usd %}${{ g.uso.costo_usd }}{% else %}{{ g.uso.claude_input_tokens|add:g.uso.claude_output_tokens }} tok{% endif %}</p><p class="text-[11px] text-slate-400">{{ g.uso.extracciones_reutilizadas }} lectura{{ g.uso.extracciones_reutilizadas|pluralize }} reutilizada{{ g.uso.extracciones_reutilizadas|pluralize }}</p></div>
+    </div>
+    {% if g.top_discrepancias or g.precision_jev.confusiones %}
+    <div class="grid lg:grid-cols-2 gap-4 mt-4 text-xs text-slate-600">
+      {% if g.top_discrepancias %}<div><p class="font-semibold text-slate-500 uppercase mb-1">Discrepancias más frecuentes</p>{% for d in g.top_discrepancias %}<span class="inline-block bg-red-50 text-red-700 font-mono rounded px-2 py-0.5 mr-1 mb-1">{{ d.codigo }} · {{ d.total }}</span>{% endfor %}</div>{% endif %}
+      {% if g.precision_jev.confusiones %}<div><p class="font-semibold text-slate-500 uppercase mb-1">Tipos corregidos a mano</p>{% for c in g.precision_jev.confusiones %}<span class="inline-block bg-amber-50 text-amber-800 font-mono rounded px-2 py-0.5 mr-1 mb-1">{{ c.jev }} a {{ c.final }} · {{ c.total }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endwith %}
+  {% endif %}
+
   <!-- Panel de análisis de notas -->
   {% if notas_count > 0 %}
   <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">

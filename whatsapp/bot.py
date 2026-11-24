@@ -23,7 +23,8 @@ def handle_command(text: str) -> str:
             "• `ref LCRR0881/26` — Buscar referencia\n"
             "• `ped 7000001` — Buscar por pedimento\n"
             "• `cont CMAU5662811` — Buscar por contenedor\n"
-            "• `bl SEL0702970` — Buscar por guía BL\n\n"
+            "• `bl SEL0702970` — Buscar por guía BL\n"
+            "• `glosa LCRR0881/26` — Estado de la glosa IA\n\n"
             "*Estadísticas*\n"
             "• `hoy` — Referencias pagadas hoy\n"
             "• `mes` — KPIs del mes en curso\n"
@@ -40,6 +41,9 @@ def handle_command(text: str) -> str:
 
     if cmd_lower == 'sync':
         return _cmd_sync()
+
+    if cmd_lower.startswith('glosa '):
+        return _cmd_glosa(cmd[6:].strip())
 
     if cmd_lower.startswith('refs '):
         return _cmd_refs(cmd_lower[5:])
@@ -243,3 +247,47 @@ def _cmd_refs(args: str):
     nombre_mes = [k for k, v in MESES.items() if v == mes][0].capitalize()
     prefijo = PATENTE_PREFIJO[patente]
     return f"📦 *{prefijo} — {nombre_mes} {año}*\n\nReferencias pagadas: *{total}*"
+
+
+# ── Glosa IA ──────────────────────────────────────────────────────────────────
+
+ESTADOS_GLOSA_IA = {
+    'PENDIENTE': 'Pendiente',
+    'EN_REVISION': 'En revisión (lista para visto bueno)',
+    'APROBADO': 'Aprobada',
+    'RECHAZADO': 'Rechazada',
+    'DISCREPANCIAS_DETECTADAS': 'Con discrepancias',
+}
+
+
+def _cmd_glosa(query: str) -> str:
+    from glosa.models import GlosaAutomaticaResultado
+
+    r = Referencia.objects.filter(num_refe__iexact=query).first()
+    if r is None:
+        return f"No se encontró la referencia *{query}*. Usa el número exacto, p. ej. `glosa LCRR0881/26`."
+
+    docs = r.documentos_glosa.filter(activo=True).count()
+    resultado = GlosaAutomaticaResultado.objects.filter(referencia=r).first()
+    if not docs:
+        return f"*{r.num_refe}*: sin documentos en el expediente de glosa IA."
+
+    datos = (resultado.datos_comparacion if resultado else None) or {}
+    estado = ESTADOS_GLOSA_IA.get(resultado.estado_revision if resultado else 'PENDIENTE', 'Pendiente')
+    lineas = [f"*{r.num_refe}* · Glosa IA", f"Estado: {estado}", f"Documentos: {docs}"]
+    if resultado and resultado.estado_revision == 'APROBADO' and resultado.aprobado_por:
+        lineas.append(f"Visto bueno: {resultado.aprobado_por.get_username()}")
+    if resultado and resultado.comentario_glosador:
+        lineas.append(f"Comentario: {resultado.comentario_glosador[:200]}")
+
+    discrepancias = [d for d in datos.get('discrepancias') or [] if isinstance(d, dict)]
+    if discrepancias:
+        lineas.append(f"\nDiscrepancias ({len(discrepancias)}):")
+        for d in discrepancias[:5]:
+            lineas.append(f"• {d.get('mensaje') or d.get('codigo')}"[:220])
+        if len(discrepancias) > 5:
+            lineas.append(f"... y {len(discrepancias) - 5} más")
+    advertencias = datos.get('advertencias') or []
+    if advertencias:
+        lineas.append(f"Advertencias: {len(advertencias)}")
+    return '\n'.join(lineas)

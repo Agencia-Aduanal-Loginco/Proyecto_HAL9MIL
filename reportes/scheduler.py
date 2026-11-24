@@ -73,8 +73,18 @@ def start():
         jobstore='default',
     )
 
+    from glosa.jobs import reprocesar_documentos_atorados
+    scheduler.add_job(
+        reprocesar_documentos_atorados,
+        trigger='interval',
+        minutes=5,
+        id='glosa_reprocesar_atorados',
+        replace_existing=True,
+        jobstore='default',
+    )
+
     try:
         scheduler.start()
-        logger.info('APScheduler iniciado: semanal (lun 7am) + mensual (día 1, 7am) + comisiones (día 1, 6am) + cobranza (diario 8am).')
+        logger.info('APScheduler iniciado: semanal (lun 7am) + mensual (día 1, 7am) + comisiones (día 1, 6am) + cobranza (diario 8am) + glosa IA atorados (cada 5 min).')
     except Exception as e:
         logger.error(f'Error al iniciar APScheduler: {e}')

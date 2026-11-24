@@ -139,6 +139,7 @@
             <!-- Avg Cap→Val -->
             <td class="px-4 py-3 text-right tabular-nums">
               {% if c.avg_cv is not None %}
+                <span class="text-xs text-slate-500 mr-2" title="Referencias validadas">{{ c.n_val }} val.</span>
                 <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
                   {% if c.avg_cv > 10 %}bg-red-100 text-red-700
                   {% elif c.avg_cv >= 5 %}bg-amber-100 text-amber-700
@@ -153,6 +154,7 @@
             <!-- Avg Cap→Pago -->
             <td class="px-4 py-3 text-right tabular-nums">
               {% if c.avg_cp is not None %}
+                <span class="text-xs text-slate-500 mr-2" title="Referencias pagadas">{{ c.n_pago }} pag.</span>
                 <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
                   {% if c.nivel_cp == 'rojo' %}bg-red-100 text-red-700
                   {% elif c.nivel_cp == 'amarillo' %}bg-amber-100 text-amber-700
@@ -176,6 +178,7 @@
 
             <!-- % Con glosa -->
             <td class="px-4 py-3 text-right tabular-nums">
+              <span class="text-xs text-slate-500 mr-2" title="Referencias con al menos una glosa">{{ c.con_glosa }} refs</span>
               <span class="inline-flex justify-center items-center min-w-[3.5rem] px-2.5 py-0.5 rounded-full text-xs font-semibold
                 {% if c.nivel_glosa == 'rojo' %}bg-red-100 text-red-700
                 {% elif c.nivel_glosa == 'amarillo' %}bg-amber-100 text-amber-700
