@@ -302,5 +302,64 @@ class FetchDodasIncrementalTests(unittest.TestCase):
         self.assertEqual(out[0]['baj_doda'], '')
 
 
+class _MultiQueryFakeCursor:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.call_idx = 0
+        self.executed_queries = []
+        self.last_sql = ''
+        self.last_params = None
+
+    def execute(self, sql, params=None):
+        self.last_sql = sql
+        self.last_params = params
+        self.executed_queries.append((sql, params))
+
+    def fetchall(self):
+        if self.call_idx < len(self.responses):
+            rows = self.responses[self.call_idx]
+            self.call_idx += 1
+            return rows
+        return []
+
+
+class FetchAvisosCruceTests(unittest.TestCase):
+    """Pruebas para fetch_avisos_cruce y normalización de contenedores en SAAIO_CRUCEDVE."""
+
+    def test_fetch_avisos_cruce_full_sync_y_normalizacion(self):
+        # 3 consultas: cruce, cruced, crucedve
+        cur = _MultiQueryFakeCursor([
+            # 1. SAAIO_CRUCE
+            [(56820, 'AVC510408202200000056820', '1627', None, None, 'TAG1', 'GAF1', 'PLACA1')],
+            # 2. SAAIO_CRUCED
+            [(56820, 1, 'LCLF0353/26', '6001234', 'ABC010101XYZ')],
+            # 3. SAAIO_CRUCEDVE (con espacios y guiones en num_cont)
+            [(56820, 1, 'mscu 1234-567', 'SL998877')],
+        ])
+        res = sa.fetch_avisos_cruce(cur, since_dt=None)
+        self.assertEqual(len(res), 1)
+        aviso = res[0]
+        self.assertEqual(aviso['id_cruce'], 56820)
+        self.assertEqual(aviso['acuse_avc'], 'AVC510408202200000056820')
+        self.assertEqual(aviso['placa'], 'PLACA1')
+
+        self.assertEqual(len(aviso['referencias']), 1)
+        self.assertEqual(aviso['referencias'][0]['num_refe'], 'LCLF0353/26')
+        self.assertEqual(aviso['referencias'][0]['rfc_importador'], 'ABC010101XYZ')
+
+        self.assertEqual(len(aviso['contenedores']), 1)
+        self.assertEqual(aviso['contenedores'][0]['num_cont'], 'MSCU1234567')  # Normalizado
+        self.assertEqual(aviso['contenedores'][0]['candado'], 'SL998877')
+        self.assertIn('FEC_VIGAVC >= CURRENT_DATE', cur.executed_queries[0][0])
+
+    def test_fetch_avisos_cruce_incremental(self):
+        cur = _MultiQueryFakeCursor([[], [], []])
+        since = _dt.datetime(2026, 11, 24, 10, 0, 0)
+        res = sa.fetch_avisos_cruce(cur, since_dt=since)
+        self.assertEqual(res, [])
+        self.assertIn('FEC_EMIAVC >= ?', cur.executed_queries[0][0])
+        self.assertEqual(cur.executed_queries[0][1], (since,))
+
+
 if __name__ == '__main__':
     unittest.main()

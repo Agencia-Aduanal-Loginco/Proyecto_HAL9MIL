@@ -72,6 +72,7 @@ REQUEST_TIMEOUT = _getint('opciones', 'request_timeout', 120)
 MAX_RETRIES     = _getint('opciones', 'max_retries',     2)
 CHUNK_SIZE      = _getint('opciones', 'chunk_size',      500)
 DODA_CHUNK_SIZE = _getint('opciones', 'doda_chunk_size', 100)
+AVC_CHUNK_SIZE  = _getint('opciones', 'avc_chunk_size',  100)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -480,6 +481,85 @@ def fetch_dodas(cur, since_dt=None):
             entry['referencias'].append({'num_refe': ref, 'cons_id': int(cons_id)})
     return list(dodas.values())
 
+
+def fetch_avisos_cruce(cur, since_dt=None):
+    """Extrae avisos de cruce (AVC) y sus relaciones en tres consultas."""
+    base_where = "c.ACUSE_AVC IS NOT NULL"
+    if since_dt:
+        filtro = f"{base_where} AND c.FEC_EMIAVC >= ?"
+        params = (since_dt,)
+    else:
+        filtro = f"{base_where} AND c.FEC_VIGAVC >= CURRENT_DATE"
+        params = ()
+
+    # 1. Encabezado
+    sql_cruce = f"""
+        SELECT c.ID_CRUCE, c.ACUSE_AVC, c.PATENTE, c.FEC_EMIAVC, c.FEC_VIGAVC,
+               c.TAG_CRUCE, c.GAF_CRUCE, c.NUM_PLACA
+        FROM SAAIO_CRUCE c
+        WHERE {filtro}
+    """
+    cur.execute(sql_cruce, params)
+    avisos_map = {}
+    for row in cur.fetchall():
+        id_cruce = row[0]
+        avisos_map[id_cruce] = {
+            "id_cruce": int(id_cruce) if id_cruce is not None else None,
+            "acuse_avc": clean(row[1]),
+            "patente": clean(row[2]),
+            "fecha_emision": fb_datetime_str(row[3]),
+            "fecha_vigencia": fb_datetime_str(row[4]),
+            "tag": clean(row[5]),
+            "gafete": clean(row[6]),
+            "placa": clean(row[7]),
+            "referencias": [],
+            "contenedores": []
+        }
+
+    if not avisos_map:
+        return []
+
+    ids = list(avisos_map.keys())
+    for chunk_ids in [ids[i:i+500] for i in range(0, len(ids), 500)]:
+        placeholders = ','.join(['?'] * len(chunk_ids))
+
+        # 2. Referencias amparadas
+        sql_cd = f"""
+            SELECT cd.ID_CRUCE, cd.CONS_ID, cd.NUM_REFE, cd.NUM_PEDI, cd.RFC_AVC
+            FROM SAAIO_CRUCED cd
+            WHERE cd.ID_CRUCE IN ({placeholders})
+        """
+        cur.execute(sql_cd, chunk_ids)
+        for cd_row in cur.fetchall():
+            id_cruce = cd_row[0]
+            if id_cruce in avisos_map:
+                avisos_map[id_cruce]["referencias"].append({
+                    "cons_id": int(cd_row[1]) if cd_row[1] is not None else 0,
+                    "num_refe": clean(cd_row[2], 50),
+                    "num_pedimento": clean(cd_row[3], 30),
+                    "rfc_importador": clean(cd_row[4], 20),
+                })
+
+        # 3. Contenedores y candados
+        sql_ve = f"""
+            SELECT ve.ID_CRUCE, ve.CONS_CONT, ve.NUM_CONT, ve.NUM_CAN1
+            FROM SAAIO_CRUCEDVE ve
+            WHERE ve.ID_CRUCE IN ({placeholders})
+        """
+        cur.execute(sql_ve, chunk_ids)
+        for ve_row in cur.fetchall():
+            id_cruce = ve_row[0]
+            if id_cruce in avisos_map:
+                num_cont_raw = clean(ve_row[2], 20)
+                num_cont_norm = num_cont_raw.replace(' ', '').replace('-', '').upper()
+                avisos_map[id_cruce]["contenedores"].append({
+                    "cons_cont": int(ve_row[1]) if ve_row[1] is not None else 0,
+                    "num_cont": num_cont_norm,
+                    "candado": clean(ve_row[3], 64),
+                })
+
+    return list(avisos_map.values())
+
 def _chunk_list(items, size):
     """Trocea items en sublistas de a lo más `size` elementos, preservando orden."""
     return [items[i:i + size] for i in range(0, len(items), size)]
@@ -490,7 +570,7 @@ def _chunk_list(items, size):
 # ─────────────────────────────────────────────────────────────────────────────
 def build_payload(clientes, capturistas, pedimentos,
                   all_refs, pedime2, contenedores, guias, partidas_count, proces, regval,
-                  dodas=None, no_notificar=False):
+                  dodas=None, avisos_cruce=None, no_notificar=False):
     prefijo   = PATENTE_PREFIJO.get(PATENTE, PATENTE)
     refs_list = []
 
@@ -544,6 +624,7 @@ def build_payload(clientes, capturistas, pedimentos,
         'contenedores': conts_list,
         'guias':        guias_list,
         'dodas':        dodas or [],
+        'avisos_cruce': avisos_cruce or [],
         'no_notificar': no_notificar,
     }
 
@@ -614,6 +695,27 @@ def enviar_dodas_en_lotes(dodas, no_notificar, totales):
             dodas=lote, no_notificar=no_notificar,
         )
         log.info(f'  Tanda DODA {idx}/{len(lotes)}: {len(lote)} DODAs')
+        resp = send_payload(payload)
+        totales['creadas']      += resp.get('creadas', 0)
+        totales['actualizadas'] += resp.get('actualizadas', 0)
+        totales['errores']      += resp.get('errores', 0)
+        for detalle in resp.get('error_detalle', []):
+            log.warning(f'  ERROR DETALLE: {detalle}')
+
+
+def enviar_avisos_en_lotes(avisos, no_notificar, totales):
+    """Envía los Avisos de Cruce (AVC) en tandas propias."""
+    if not avisos:
+        return
+    lotes = _chunk_list(avisos, AVC_CHUNK_SIZE)
+    log.info(f'Enviando {len(avisos)} Aviso(s) de Cruce en {len(lotes)} tanda(s) de hasta '
+             f'{AVC_CHUNK_SIZE} (no_notificar={no_notificar})...')
+    for idx, lote in enumerate(lotes, 1):
+        payload = build_payload(
+            {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+            avisos_cruce=lote, no_notificar=no_notificar,
+        )
+        log.info(f'  Tanda AVC {idx}/{len(lotes)}: {len(lote)} AVCs')
         resp = send_payload(payload)
         totales['creadas']      += resp.get('creadas', 0)
         totales['actualizadas'] += resp.get('actualizadas', 0)
@@ -735,6 +837,7 @@ def main():
         proces       = fetch_proces(cur, refs_filter)
         regval       = fetch_regval(cur, refs_filter)
         dodas        = fetch_dodas(cur, since_dt=last_sync_dt)
+        avisos_cruce = fetch_avisos_cruce(cur, since_dt=last_sync_dt)
 
     except Exception as e:
         log.error(f'Error al extraer datos de Firebird: {e}')
@@ -745,7 +848,7 @@ def main():
     n_conts    = sum(len(v) for v in contenedores.values())
     n_guias    = sum(len(v) for v in guias.values())
     n_partidas = sum(partidas.values())
-    log.info(f'Extraídos: {len(all_refs)} referencias | {n_partidas} partidas | {n_conts} contenedores | {n_guias} guías BL | {len(dodas)} DODAs')
+    log.info(f'Extraídos: {len(all_refs)} referencias | {n_partidas} partidas | {n_conts} contenedores | {n_guias} guías BL | {len(dodas)} DODAs | {len(avisos_cruce)} AVCs')
 
     if args.dry_run:
         log.info('[DRY-RUN] Extracción OK, no se envía payload.')
@@ -753,25 +856,25 @@ def main():
         return 0
 
     if not all_refs:
-        if dodas:
-            # No hay referencias con pedimentos en el filtro, pero sí hay DODAs
-            # pendientes (fetch_dodas() no depende de all_refs — ver su docstring).
-            # Enviarlos en tandas en vez de descartarlos silenciosamente.
+        if dodas or avisos_cruce:
             log.info('Sin referencias con pedimentos en el filtro, pero hay '
-                     f'{len(dodas)} DODA(s) pendiente(s) — enviando solo DODAs.')
-            totales_dodas = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
+                     f'{len(dodas)} DODA(s) y {len(avisos_cruce)} AVC(s) pendiente(s) — enviando.')
+            totales_extras = {'creadas': 0, 'actualizadas': 0, 'errores': 0}
             try:
-                enviar_dodas_en_lotes(dodas, es_primera_vez, totales_dodas)
-                errores = totales_dodas['errores']
+                if dodas:
+                    enviar_dodas_en_lotes(dodas, es_primera_vez, totales_extras)
+                if avisos_cruce:
+                    enviar_avisos_en_lotes(avisos_cruce, es_primera_vez, totales_extras)
+                errores = totales_extras['errores']
                 if errores == 0:
                     state[PATENTE] = datetime.datetime.now().isoformat()
                     save_last_sync(state)
                 else:
                     log.warning(
-                        f'{errores} error(es) al enviar DODAs — last_sync.json NO actualizado.'
+                        f'{errores} error(es) al enviar extras — last_sync.json NO actualizado.'
                     )
             except Exception as e:
-                log.error(f'Error al enviar DODAs a Django: {e}')
+                log.error(f'Error al enviar extras a Django: {e}')
                 return 1
             log.info('══════════════════════════════════════════════════════════')
             return 0
@@ -791,9 +894,7 @@ def main():
     try:
         for idx, chunk_refs in enumerate(chunks, 1):
             chunk_set = set(chunk_refs)
-            # Los DODAs NO van pegados a estos lotes de refs — se mandan aparte,
-            # en sus propias tandas, una vez que todos los lotes de refs de este
-            # run ya se enviaron y confirmaron (ver enviar_dodas_en_lotes()).
+            # Los DODAs y AVCs NO van pegados a estos lotes de refs — se mandan aparte.
             payload   = build_payload(clientes, capturistas, pedimentos,
                                       chunk_set, pedime2, contenedores, guias, partidas, proces, regval)
             log.info(f'  Lote {idx}/{n_chunks}: {len(payload["referencias"])} refs | '
@@ -805,10 +906,10 @@ def main():
             for detalle in resp.get('error_detalle', []):
                 log.warning(f'  ERROR DETALLE: {detalle}')
 
-        # Todas las refs/contenedores/guías de este run ya están comprometidos
-        # en la BD — recién ahora es seguro mandar los DODAs (ver docstring de
-        # enviar_dodas_en_lotes()).
-        enviar_dodas_en_lotes(dodas, es_primera_vez, totales)
+        if dodas:
+            enviar_dodas_en_lotes(dodas, es_primera_vez, totales)
+        if avisos_cruce:
+            enviar_avisos_en_lotes(avisos_cruce, es_primera_vez, totales)
 
         elapsed = time.time() - t0
         log.info(
