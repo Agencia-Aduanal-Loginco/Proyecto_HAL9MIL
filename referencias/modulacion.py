@@ -7,6 +7,7 @@ Ninguna falla de email o de push debe interrumpir el procesamiento del resto
 de las DODAs — cada una se procesa de forma aislada.
 """
 import base64
+import hashlib
 import io
 import logging
 
@@ -140,7 +141,7 @@ def _enviar_email_modulacion(doda, destinatario, envio):
 
 
 def _push_bitacorakasu(doda, envio):
-    """POST a BitacoraKasu por cada contenedor de las referencias del DODA.
+    """POST a BitacoraKasu por cada expediente de extracción (es_kasu=True) del DODA.
 
     Un fallo en un contenedor no aborta los demás. Si algún POST falla, el
     push_estado general queda en ERROR con el detalle de los que fallaron;
@@ -152,61 +153,90 @@ def _push_bitacorakasu(doda, envio):
     sobre lo que ya hubiera de una corrida anterior — un reintento parcial no
     debe perder los links de los contenedores que no se reintentan).
     """
+    from .models import ExpedienteExtraccion
+    from .sync_views import _recalcular_expedientes
+
     fallidos = []
     enviados = 0
     links = {}
 
-    referencias = (
-        doda.referencias_doda.select_related('referencia')
-        .prefetch_related('referencia__contenedores')
+    _recalcular_expedientes()
+    expedientes = (
+        ExpedienteExtraccion.objects.filter(doda=doda, es_kasu=True)
+        .select_related('referencia', 'contenedor', 'aviso_contenedor__aviso')
         .all()
     )
-    for doda_ref in referencias:
-        referencia = doda_ref.referencia
-        if referencia is None:
+    for exp in expedientes:
+        referencia = exp.referencia
+        contenedor = exp.contenedor
+        if referencia is None or contenedor is None:
             continue
-        for contenedor in referencia.contenedores.all():
-            payload = {
-                'agencia': AGENCIA,
-                'terminal_portuaria': doda.terminal_nombre,
-                'tipo_contenedor': contenedor.tipo,
-                # peso_toneladas es requerido por BitacoraKasu (ver
-                # REQUIRED_FIELDS en su views_api.py) — si Firebird no trae
-                # peso_bruto, mandar '' hace que el push falle y la DODA
-                # quede en ERROR para siempre. Se manda '0' para que el
-                # registro sí entre y el personal de Kasu lo detecte y
-                # verifique el dato manualmente.
-                'peso_toneladas': (
-                    str(referencia.peso_bruto) if referencia.peso_bruto is not None else '0'
-                ),
-                'contenedor': contenedor.num_cont,
-                'cliente': referencia.nombre_cliente,
-                'num_pedimento': referencia.num_pedimento,
-                'num_doda': doda.num_doda,
-                'fecha_doda': doda.fecha_doda.strftime('%Y-%m-%d') if doda.fecha_doda else '',
-                # Clave de idempotencia estable para que BitacoraKasu pueda
-                # distinguir un reenvío genuino de un duplicado: el retry
-                # ocurre a nivel de DODA completa (reintentar_envio), así
-                # que si 1 de 5 contenedores falla, los 5 se re-postean.
-                'idempotency_key': f'{doda.id_doda}:{contenedor.num_cont}',
-            }
-            try:
-                respuesta = enviar_modulacion(payload)
-                enviados += 1
-                # enviar_modulacion sólo lanza BitacoraKasuError por errores
-                # HTTP/transporte/JSON-inválido — un 2xx con body JSON válido
-                # pero no-dict (p.ej. `true` o una lista) no cae ahí. El push
-                # ya fue exitoso; si el body no tiene forma de dict, sólo se
-                # omite la captura del link (no hay completar_datos_url que leer).
-                url = respuesta.get('completar_datos_url') if isinstance(respuesta, dict) else None
-                if url:
-                    links[contenedor.num_cont] = url
-            except BitacoraKasuError as e:
-                fallidos.append(f'{contenedor.num_cont}: {e}')
-                logger.error(
-                    '[Modulacion] Error push contenedor %s (DODA %s) a BitacoraKasu: %s',
-                    contenedor.num_cont, doda.num_doda, e,
-                )
+        aviso_cont = exp.aviso_contenedor
+        aviso = aviso_cont.aviso if aviso_cont else None
+
+        placa = aviso.num_placa if aviso else ''
+        tag_cruce = aviso.tag_cruce if aviso else ''
+        gafete_operador = aviso.gafete if aviso else ''
+        candado = aviso_cont.candado if aviso_cont else ''
+        acuse_avc = aviso.acuse_avc if aviso else ''
+        fecha_vigencia_avc = aviso.fecha_vigencia.strftime('%Y-%m-%d') if (aviso and aviso.fecha_vigencia) else ''
+        id_cruce = str(aviso.id_cruce) if (aviso and aviso.id_cruce is not None) else ''
+
+        hash_str = f"{placa}:{tag_cruce}:{gafete_operador}:{candado}"
+        hash_datos_avc = hashlib.sha256(hash_str.encode('utf-8')).hexdigest()[:12]
+
+        idempotency_key = f"{exp.clave}:{exp.estado_documental}:{id_cruce}:{hash_datos_avc}"
+
+        payload = {
+            'agencia': AGENCIA,
+            'terminal_portuaria': doda.terminal_nombre,
+            'tipo_contenedor': contenedor.tipo,
+            # peso_toneladas es requerido por BitacoraKasu (ver
+            # REQUIRED_FIELDS en su views_api.py) — si Firebird no trae
+            # peso_bruto, mandar '' hace que el push falle y la DODA
+            # quede en ERROR para siempre. Se manda '0' para que el
+            # registro sí entre y el personal de Kasu lo detecte y
+            # verifique el dato manualmente.
+            'peso_toneladas': (
+                str(referencia.peso_bruto) if referencia.peso_bruto is not None else '0'
+            ),
+            'peso_kg': int(referencia.peso_kg) if referencia.peso_kg is not None else 0,
+            'peso_confirmado': referencia.peso_bruto is not None,
+            'contenedor': contenedor.num_cont,
+            'cliente': referencia.nombre_cliente,
+            'cliente_clave': referencia.cve_cliente,
+            'cliente_rfc': exp.rfc_importador,
+            'num_refe': referencia.num_refe,
+            'num_pedimento': referencia.num_pedimento,
+            'num_doda': doda.num_doda,
+            'fecha_doda': doda.fecha_doda.strftime('%Y-%m-%d') if doda.fecha_doda else '',
+            'clave_expediente': exp.clave,
+            'estado_documental': exp.estado_documental,
+            'acuse_avc': acuse_avc,
+            'fecha_vigencia_avc': fecha_vigencia_avc,
+            'placa': placa,
+            'tag_cruce': tag_cruce,
+            'gafete_operador': gafete_operador,
+            'candado': candado,
+            'idempotency_key': idempotency_key,
+        }
+        try:
+            respuesta = enviar_modulacion(payload)
+            enviados += 1
+            # enviar_modulacion sólo lanza BitacoraKasuError por errores
+            # HTTP/transporte/JSON-inválido — un 2xx con body JSON válido
+            # pero no-dict (p.ej. `true` o una lista) no cae ahí. El push
+            # ya fue exitoso; si el body no tiene forma de dict, sólo se
+            # omite la captura del link (no hay completar_datos_url que leer).
+            url = respuesta.get('completar_datos_url') if isinstance(respuesta, dict) else None
+            if url:
+                links[contenedor.num_cont] = url
+        except BitacoraKasuError as e:
+            fallidos.append(f'{contenedor.num_cont}: {e}')
+            logger.error(
+                '[Modulacion] Error push contenedor %s (DODA %s) a BitacoraKasu: %s',
+                contenedor.num_cont, doda.num_doda, e,
+            )
 
     if links:
         envio.links_completar = {**envio.links_completar, **links}
@@ -215,11 +245,11 @@ def _push_bitacorakasu(doda, envio):
         _registrar_error(envio, 'push_estado', 'push: ' + '; '.join(fallidos))
         return False
     if enviados == 0:
-        _registrar_error(envio, 'push_estado', 'push: sin contenedores para enviar')
+        _registrar_error(envio, 'push_estado', 'push: sin expedientes Kasu para enviar')
         return False
 
     envio.push_estado = 'ENVIADO'
-    logger.info('[Modulacion] Push BitacoraKasu DODA %s: %s contenedor(es) enviados',
+    logger.info('[Modulacion] Push BitacoraKasu DODA %s: %s expediente(s) enviados',
                 doda.num_doda, enviados)
     return True
 

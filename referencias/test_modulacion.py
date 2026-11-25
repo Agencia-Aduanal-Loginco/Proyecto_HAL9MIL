@@ -370,11 +370,11 @@ def _contenedor(referencia, num_cont, tipo='40HC'):
 
 
 def _doda(id_doda=5001, num_doda='DODA-0001', cve_capt='CAPT01',
-         terminal_nombre='TERMINAL PORTUARIA UNO', fecha_doda=None):
+         terminal_nombre='TERMINAL PORTUARIA UNO', fecha_doda=None, cve_caat='3B74'):
     if fecha_doda is None:
         fecha_doda = timezone.make_aware(datetime(2026, 3, 15))
     return Doda.objects.create(
-        id_doda=id_doda, num_doda=num_doda, patente='1656', cve_caat='CAAT01',
+        id_doda=id_doda, num_doda=num_doda, patente='1656', cve_caat=cve_caat,
         cve_capt=cve_capt, terminal_nombre=terminal_nombre, fecha_doda=fecha_doda,
     )
 
@@ -444,14 +444,16 @@ class ProcesarDodasNuevasTests(TestCase):
             self.assertEqual(p['num_pedimento'], '26 1656 1234567')
             self.assertEqual(p['num_doda'], 'DODA-0001')
             self.assertEqual(p['fecha_doda'], '2026-03-15')
-            # Clave de idempotencia estable "id_doda:num_cont" — el receptor
-            # de BitacoraKasu debe poder distinguir un reenvío genuino (mismo
-            # contenedor reintentado) de un duplicado, dado que el retry es
-            # a nivel de DODA completa (si 1 de 5 contenedores falla, los 5
-            # se re-postean).
-            self.assertEqual(
-                p['idempotency_key'], f'{self.doda.id_doda}:{p["contenedor"]}'
-            )
+            # Clave de idempotencia extendida "{clave_expediente}:{estado_documental}:{id_cruce}:{hash_datos_avc}"
+            clave_exp = f'{self.referencia.num_refe}:{p["contenedor"]}'
+            self.assertEqual(p['clave_expediente'], clave_exp)
+            self.assertEqual(p['estado_documental'], 'FALTA_AVC')
+            self.assertEqual(p['peso_kg'], 12500)
+            self.assertEqual(p['placa'], '')
+            self.assertEqual(p['tag_cruce'], '')
+            self.assertEqual(p['gafete_operador'], '')
+            self.assertEqual(p['candado'], '')
+            self.assertTrue(p['idempotency_key'].startswith(f'{clave_exp}:FALTA_AVC::'))
 
         self.doda.refresh_from_db()
         self.assertIsNotNone(self.doda.notificado_en)
@@ -1351,20 +1353,23 @@ class ReintentarModulacionFiltroAnioTests(TestCase):
 
     def setUp(self):
         self.perfil = _perfil()
-        self.referencia = _referencia()
-        self.cont1 = _contenedor(self.referencia, 'HLXU1234567', '40HC')
+        self.referencia_2026 = _referencia(num_refe='LCRR2026/26')
+        self.cont_2026 = _contenedor(self.referencia_2026, 'HLXU202601', '40HC')
 
         self.doda_2026 = _doda(
             id_doda=6001, num_doda='DODA-2026',
             fecha_doda=timezone.make_aware(datetime(2026, 1, 10)),
         )
-        _doda_referencia(self.doda_2026, self.referencia, cons_id=1)
+        _doda_referencia(self.doda_2026, self.referencia_2026, cons_id=1)
+
+        self.referencia_2025 = _referencia(num_refe='LCRR2025/25')
+        self.cont_2025 = _contenedor(self.referencia_2025, 'HLXU202501', '40HC')
 
         self.doda_2025 = _doda(
             id_doda=6002, num_doda='DODA-2025',
             fecha_doda=timezone.make_aware(datetime(2025, 11, 20)),
         )
-        _doda_referencia(self.doda_2025, self.referencia, cons_id=2)
+        _doda_referencia(self.doda_2025, self.referencia_2025, cons_id=1)
 
     def _run_command(self, *extra_args):
         from io import StringIO
