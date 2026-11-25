@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, sync_views
+from . import views, sync_views, eventos_views
 
 urlpatterns = [
     path('',                             views.dashboard,          name='dashboard'),
@@ -19,4 +19,5 @@ urlpatterns = [
     path('cuenta-gastos/finalizar/<int:pk>/', views.cuenta_gastos_finalizar,  name='cuenta_gastos_finalizar'),
     path('sla/capturistas/',             views.sla_capturistas,    name='sla_capturistas'),
     path('api/sync/',                    sync_views.sync_endpoint, name='api_sync'),
+    path('api/integracion/eventos-contenedor/', eventos_views.eventos_contenedor_api, name='api_eventos_contenedor'),
 ]

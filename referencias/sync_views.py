@@ -40,7 +40,11 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from .models import Referencia, Contenedor, GuiaBL, LogSync, Doda, DodaReferencia, PATENTE_PREFIJO
+from .models import (
+    Referencia, Contenedor, GuiaBL, LogSync, Doda, DodaReferencia,
+    AvisoCruce, AvisoCruceReferencia, AvisoCruceContenedor, ExpedienteExtraccion,
+    PATENTE_PREFIJO
+)
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +89,7 @@ def sync_endpoint(request):
     contenedores = body.get('contenedores', [])
     guias        = body.get('guias', [])
     dodas        = body.get('dodas', [])
+    avisos_cruce = body.get('avisos_cruce', [])
     no_notificar = bool(body.get('no_notificar', False))
 
     if not isinstance(referencias, list):
@@ -99,6 +104,8 @@ def sync_endpoint(request):
             _upsert_contenedores(contenedores, stats, error_msgs)
             _upsert_guias(guias, stats, error_msgs)
             dodas_creadas = _upsert_dodas(dodas, stats, error_msgs)
+            _upsert_avisos_cruce(avisos_cruce, stats, error_msgs)
+            _recalcular_expedientes()
             if dodas_creadas and no_notificar:
                 # Bootstrap: mismo comportamiento que --no-notificar en el
                 # management command import_firebird — marca las DODAs nuevas
@@ -354,3 +361,157 @@ def _upsert_guias(guias, stats, error_msgs):
         except Exception as e:
             stats['errores'] += 1
             error_msgs.append(f'guia {numero_guia}: {e}')
+
+
+def _upsert_avisos_cruce(avisos_cruce, stats, error_msgs):
+    for item in avisos_cruce:
+        id_cruce = item.get('id_cruce')
+        if id_cruce in (None, ''):
+            continue
+        try:
+            id_cruce = int(id_cruce)
+            defaults = {
+                'acuse_avc': str(item.get('acuse_avc', ''))[:64],
+                'patente': str(item.get('patente', ''))[:10],
+                'fecha_emision': _parse_dt(item.get('fecha_emision')),
+                'fecha_vigencia': _parse_dt(item.get('fecha_vigencia')),
+                'tag_cruce': str(item.get('tag', item.get('tag_cruce', '')))[:64],
+                'gafete': str(item.get('gafete', ''))[:64],
+                'num_placa': str(item.get('placa', item.get('num_placa', '')))[:32],
+            }
+            aviso, created = AvisoCruce.objects.update_or_create(
+                id_cruce=id_cruce,
+                defaults=defaults,
+            )
+            AvisoCruceReferencia.objects.filter(aviso=aviso).delete()
+            AvisoCruceContenedor.objects.filter(aviso=aviso).delete()
+
+            for ref_item in item.get('referencias', []):
+                cons_id = ref_item.get('cons_id')
+                if cons_id in (None, ''):
+                    continue
+                num_refe = str(ref_item.get('num_refe', '')).strip()[:32]
+                num_pedimento = str(ref_item.get('num_pedimento', '')).strip()[:32]
+                rfc_importador = str(ref_item.get('rfc_importador', '')).strip()[:32]
+                ref_obj = Referencia.objects.filter(num_refe=num_refe).first()
+                AvisoCruceReferencia.objects.create(
+                    aviso=aviso,
+                    cons_id=int(cons_id),
+                    num_refe=num_refe,
+                    num_pedimento=num_pedimento,
+                    rfc_importador=rfc_importador,
+                    referencia=ref_obj,
+                )
+
+            for cont_item in item.get('contenedores', []):
+                cons_cont = cont_item.get('cons_cont')
+                if cons_cont in (None, ''):
+                    continue
+                num_cont = str(cont_item.get('num_cont', '')).strip()[:32]
+                candado = str(cont_item.get('candado', cont_item.get('num_can1', '')))[:64]
+                ref_ids = AvisoCruceReferencia.objects.filter(aviso=aviso, referencia__isnull=False).values_list('referencia_id', flat=True)
+                contenedor_obj = Contenedor.objects.filter(num_cont=num_cont, referencia_id__in=ref_ids).first()
+                if not contenedor_obj:
+                    contenedor_obj = Contenedor.objects.filter(num_cont=num_cont).first()
+
+                AvisoCruceContenedor.objects.create(
+                    aviso=aviso,
+                    cons_cont=int(cons_cont),
+                    num_cont=num_cont,
+                    candado=candado,
+                    contenedor=contenedor_obj,
+                )
+        except Exception as e:
+            stats['errores'] += 1
+            error_msgs.append(f'aviso cruce {id_cruce}: {e}')
+            log.warning(f'Error upsert aviso cruce {id_cruce}: {e}')
+
+
+def _recalcular_expedientes():
+    now = timezone.now()
+    for ac in AvisoCruceContenedor.objects.filter(contenedor__isnull=True):
+        ref_ids = ac.aviso.referencias_amparadas.filter(referencia__isnull=False).values_list('referencia_id', flat=True)
+        cont = Contenedor.objects.filter(num_cont=ac.num_cont, referencia_id__in=ref_ids).first()
+        if not cont:
+            cont = Contenedor.objects.filter(num_cont=ac.num_cont).first()
+        if cont:
+            ac.contenedor = cont
+            ac.save(update_fields=['contenedor'])
+
+    for contenedor in Contenedor.objects.select_related('referencia').all():
+        referencia = contenedor.referencia
+        if not referencia:
+            continue
+        num_refe = referencia.num_refe
+        num_cont = contenedor.num_cont
+        clave = f"{num_refe}:{num_cont}"
+
+        doda_ref = DodaReferencia.objects.filter(
+            num_refe=num_refe,
+            doda__fecha_baja__isnull=True,
+            doda__baj_doda=''
+        ).select_related('doda').order_by('-doda__fecha_doda', '-doda__id_doda').first()
+        doda_obj = doda_ref.doda if doda_ref else None
+
+        candidatos = AvisoCruceContenedor.objects.filter(
+            num_cont=num_cont,
+            aviso__referencias_amparadas__num_refe=num_refe
+        ).select_related('aviso').distinct()
+
+        aviso_cont_obj = None
+        estado_avc = 'FALTA_AVC'
+
+        if candidatos.exists():
+            vigentes = []
+            vencidos = []
+            for ac in candidatos:
+                aviso = ac.aviso
+                if aviso.fecha_vigencia and aviso.fecha_vigencia < now:
+                    vencidos.append(ac)
+                else:
+                    vigentes.append(ac)
+
+            if vigentes:
+                vigentes.sort(key=lambda x: (x.aviso.fecha_emision or timezone.datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+                aviso_cont_obj = vigentes[0]
+                estado_avc = 'COMPLETO'
+            elif vencidos:
+                vencidos.sort(key=lambda x: (x.aviso.fecha_emision or timezone.datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+                aviso_cont_obj = vencidos[0]
+                estado_avc = 'AVC_VENCIDO'
+
+        has_doda = doda_obj is not None
+        has_avc = aviso_cont_obj is not None and estado_avc == 'COMPLETO'
+        is_vencido = estado_avc == 'AVC_VENCIDO'
+
+        if is_vencido:
+            estado_documental = 'AVC_VENCIDO'
+        elif has_doda and has_avc:
+            estado_documental = 'COMPLETO'
+        elif has_doda and not has_avc:
+            estado_documental = 'FALTA_AVC'
+        elif not has_doda and has_avc:
+            estado_documental = 'FALTA_DODA'
+        else:
+            estado_documental = 'FALTA_AVC'
+
+        es_kasu = has_doda and doda_obj.cve_caat == getattr(settings, 'CVE_CAAT_KASU', '3B74')
+
+        rfc_importador = ''
+        if aviso_cont_obj:
+            av_ref = aviso_cont_obj.aviso.referencias_amparadas.filter(num_refe=num_refe).first()
+            if av_ref and av_ref.rfc_importador:
+                rfc_importador = av_ref.rfc_importador
+
+        ExpedienteExtraccion.objects.update_or_create(
+            clave=clave,
+            defaults={
+                'referencia': referencia,
+                'contenedor': contenedor,
+                'doda': doda_obj,
+                'aviso_contenedor': aviso_cont_obj,
+                'rfc_importador': rfc_importador,
+                'estado_documental': estado_documental,
+                'es_kasu': es_kasu,
+            }
+        )
