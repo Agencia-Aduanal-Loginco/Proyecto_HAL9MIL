@@ -51,6 +51,7 @@ Se mantienen todos los campos actuales (Kasu los exige) y se agregan:
 | `clave_expediente` | `ExpedienteExtraccion.clave` (`"{num_refe}:{num_cont}"`). Kasu deduplica por aquí |
 | `estado_documental` | `FALTA_AVC`, `FALTA_DODA`, `COMPLETO`, `AVC_VENCIDO`, `CANCELADO` |
 | `acuse_avc`, `fecha_vigencia_avc` | Del AVC, si ya existe |
+| `placa`, `tag_cruce`, `gafete_operador`, `candado` | Del AVC que lista el contenedor (`SAAIO_CRUCE` y `SAAIO_CRUCEDVE`); ver punto 4 del spec del AVC |
 | `peso_kg` | Entero, de `Referencia.peso_bruto` (`SAAIO_PEDIME.PES_BRUT`) |
 | `peso_confirmado` | `False` cuando Firebird no trae peso |
 | `cliente_rfc` | `rfc_importador` del expediente |
@@ -59,7 +60,10 @@ Se mantienen todos los campos actuales (Kasu los exige) y se agregan:
 
 - Se empuja cuando nace el expediente y cada vez que cambia su `estado_documental`. Kasu
   actualiza la misma modulación.
-- `idempotency_key` pasa a ser `"{clave_expediente}:{estado_documental}"`.
+- También se empuja cuando cambian placa, tag, gafete o candado del AVC.
+- `idempotency_key` pasa a ser
+  `"{clave_expediente}:{estado_documental}:{id_cruce}:{hash_datos_avc}"` (definida en el
+  punto 4 del spec del AVC).
 
 ### 2. Unidad del peso: kilos
 
