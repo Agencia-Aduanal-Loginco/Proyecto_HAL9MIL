@@ -226,3 +226,100 @@ class EnvioModulacion(models.Model):
 
     def __str__(self):
         return f'{self.doda} | email={self.email_estado} push={self.push_estado}'
+
+
+class AvisoCruce(models.Model):
+    id_cruce = models.IntegerField(unique=True, db_index=True)
+    acuse_avc = models.CharField(max_length=64, db_index=True)
+    patente = models.CharField(max_length=10, db_index=True)
+    fecha_emision = models.DateTimeField(null=True, blank=True)
+    fecha_vigencia = models.DateTimeField(null=True, blank=True)
+    tag_cruce = models.CharField(max_length=64, blank=True)
+    gafete = models.CharField(max_length=64, blank=True)
+    num_placa = models.CharField(max_length=32, blank=True)
+    sincronizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Aviso de Cruce'
+        verbose_name_plural = 'Avisos de Cruce'
+
+    def __str__(self):
+        return f'{self.acuse_avc} (Patente {self.patente})'
+
+
+class AvisoCruceReferencia(models.Model):
+    aviso = models.ForeignKey(AvisoCruce, on_delete=models.CASCADE, related_name='referencias_amparadas')
+    cons_id = models.IntegerField()
+    num_refe = models.CharField(max_length=32, db_index=True)
+    num_pedimento = models.CharField(max_length=32, blank=True)
+    rfc_importador = models.CharField(max_length=32, blank=True)
+    referencia = models.ForeignKey(Referencia, on_delete=models.SET_NULL, null=True, blank=True, related_name='avisos_cruce')
+
+    class Meta:
+        unique_together = ('aviso', 'cons_id')
+        verbose_name = 'Aviso de Cruce - Referencia'
+        verbose_name_plural = 'Avisos de Cruce - Referencias'
+
+    def __str__(self):
+        return f'{self.aviso.acuse_avc} -> Ref {self.num_refe}'
+
+
+class AvisoCruceContenedor(models.Model):
+    aviso = models.ForeignKey(AvisoCruce, on_delete=models.CASCADE, related_name='contenedores_listados')
+    cons_cont = models.IntegerField()
+    num_cont = models.CharField(max_length=32, db_index=True)
+    candado = models.CharField(max_length=64, blank=True)
+    contenedor = models.ForeignKey(Contenedor, on_delete=models.SET_NULL, null=True, blank=True, related_name='avisos_cruce')
+
+    class Meta:
+        unique_together = ('aviso', 'cons_cont')
+        verbose_name = 'Aviso de Cruce - Contenedor'
+        verbose_name_plural = 'Avisos de Cruce - Contenedores'
+
+    def __str__(self):
+        return f'{self.aviso.acuse_avc} -> Cont {self.num_cont}'
+
+
+class ExpedienteExtraccion(models.Model):
+    ESTADOS = [
+        ('FALTA_AVC', 'Falta AVC'),
+        ('FALTA_DODA', 'Falta DODA'),
+        ('COMPLETO', 'Completo'),
+        ('AVC_VENCIDO', 'AVC Vencido'),
+        ('CANCELADO', 'Cancelado'),
+    ]
+    clave = models.CharField(max_length=64, unique=True, db_index=True)  # "{num_refe}:{num_cont}"
+    referencia = models.ForeignKey(Referencia, on_delete=models.CASCADE, related_name='expedientes_extraccion')
+    contenedor = models.ForeignKey(Contenedor, on_delete=models.CASCADE, related_name='expedientes_extraccion')
+    doda = models.ForeignKey(Doda, on_delete=models.SET_NULL, null=True, blank=True, related_name='expedientes_extraccion')
+    aviso_contenedor = models.ForeignKey(AvisoCruceContenedor, on_delete=models.SET_NULL, null=True, blank=True, related_name='expedientes_extraccion')
+    rfc_importador = models.CharField(max_length=32, blank=True)
+    estado_documental = models.CharField(max_length=32, choices=ESTADOS, default='FALTA_AVC', db_index=True)
+    es_kasu = models.BooleanField(default=False)
+    notificado_completo_en = models.DateTimeField(null=True, blank=True)
+    push_kasu_estado = models.CharField(max_length=32, default='PENDIENTE')
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Expediente de Extracción'
+        verbose_name_plural = 'Expedientes de Extracción'
+
+    def __str__(self):
+        return f'{self.clave} [{self.estado_documental}]'
+
+
+class EventoContenedor(models.Model):
+    expediente = models.ForeignKey(ExpedienteExtraccion, on_delete=models.CASCADE, related_name='eventos')
+    evento_id = models.CharField(max_length=128, unique=True, db_index=True)
+    tipo = models.CharField(max_length=64, db_index=True)
+    ocurrido_en = models.DateTimeField()
+    datos = models.JSONField(default=dict)
+    registrado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Evento de Contenedor'
+        verbose_name_plural = 'Eventos de Contenedor'
+        ordering = ['-ocurrido_en']
+
+    def __str__(self):
+        return f'{self.expediente.clave} - {self.tipo} ({self.ocurrido_en})'

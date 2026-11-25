@@ -9,7 +9,11 @@ from django.utils import timezone
 
 from decimal import Decimal
 
-from .models import Contenedor, CuentaGastos, Referencia, Doda, DodaReferencia
+from .models import (
+    AvisoCruce, AvisoCruceContenedor, AvisoCruceReferencia,
+    Contenedor, CuentaGastos, ExpedienteExtraccion, EventoContenedor,
+    Referencia, Doda, DodaReferencia
+)
 from .sync_views import _upsert_contenedores, _upsert_dodas, _upsert_referencias
 
 
@@ -637,3 +641,77 @@ class UpsertContenedoresTipoActualizaTests(TestCase):
 
         cont_original.refresh_from_db()
         self.assertEqual(cont_original.tipo, '40HC')
+
+
+class AvisoCruceModelsTests(TestCase):
+    def setUp(self):
+        self.ref = Referencia.objects.create(
+            num_refe='LCRR2000/26', patente='1656', prefijo='LCRR',
+        )
+        self.cont = Contenedor.objects.create(
+            referencia=self.ref, num_cont='HLXU1234567', tipo='40HC',
+        )
+        self.doda = Doda.objects.create(
+            id_doda=9999, num_doda='DODA-9999', patente='1656',
+        )
+
+    def test_crear_aviso_cruce_y_relaciones(self):
+        aviso = AvisoCruce.objects.create(
+            id_cruce=12345,
+            acuse_avc='AVC-001',
+            patente='1656',
+        )
+        self.assertEqual(str(aviso), 'AVC-001 (Patente 1656)')
+
+        ref_asoc = AvisoCruceReferencia.objects.create(
+            aviso=aviso,
+            cons_id=1,
+            num_refe='LCRR2000/26',
+            referencia=self.ref,
+        )
+        self.assertEqual(str(ref_asoc), 'AVC-001 -> Ref LCRR2000/26')
+
+        cont_asoc = AvisoCruceContenedor.objects.create(
+            aviso=aviso,
+            cons_cont=1,
+            num_cont='HLXU1234567',
+            contenedor=self.cont,
+        )
+        self.assertEqual(str(cont_asoc), 'AVC-001 -> Cont HLXU1234567')
+
+        exp = ExpedienteExtraccion.objects.create(
+            clave='LCRR2000/26:HLXU1234567',
+            referencia=self.ref,
+            contenedor=self.cont,
+            doda=self.doda,
+            aviso_contenedor=cont_asoc,
+            estado_documental='COMPLETO',
+        )
+        self.assertEqual(str(exp), 'LCRR2000/26:HLXU1234567 [COMPLETO]')
+
+        evento = EventoContenedor.objects.create(
+            expediente=exp,
+            evento_id='EV-001',
+            tipo='MODULACION',
+            ocurrido_en=timezone.now(),
+            datos={'resultado': 'verde'},
+        )
+        self.assertIn('MODULACION', str(evento))
+
+    def test_id_cruce_unico(self):
+        AvisoCruce.objects.create(id_cruce=555, acuse_avc='AVC-555', patente='1656')
+        with self.assertRaises(IntegrityError):
+            AvisoCruce.objects.create(id_cruce=555, acuse_avc='AVC-556', patente='1656')
+
+    def test_aviso_cruce_referencia_unique(self):
+        aviso = AvisoCruce.objects.create(id_cruce=556, acuse_avc='AVC-556', patente='1656')
+        AvisoCruceReferencia.objects.create(aviso=aviso, cons_id=1, num_refe='REF1')
+        with self.assertRaises(IntegrityError):
+            AvisoCruceReferencia.objects.create(aviso=aviso, cons_id=1, num_refe='REF2')
+
+    def test_aviso_cruce_contenedor_unique(self):
+        aviso = AvisoCruce.objects.create(id_cruce=557, acuse_avc='AVC-557', patente='1656')
+        AvisoCruceContenedor.objects.create(aviso=aviso, cons_cont=1, num_cont='CONT1')
+        with self.assertRaises(IntegrityError):
+            AvisoCruceContenedor.objects.create(aviso=aviso, cons_cont=1, num_cont='CONT2')
+
