@@ -350,7 +350,8 @@ class FetchAvisosCruceTests(unittest.TestCase):
         self.assertEqual(len(aviso['contenedores']), 1)
         self.assertEqual(aviso['contenedores'][0]['num_cont'], 'MSCU1234567')  # Normalizado
         self.assertEqual(aviso['contenedores'][0]['candado'], 'SL998877')
-        self.assertIn('FEC_VIGAVC >= CURRENT_DATE', cur.executed_queries[0][0])
+        self.assertIn('FEC_VIGAVC >= ?', cur.executed_queries[0][0])
+        self.assertEqual(len(cur.executed_queries[0][1]), 1)
 
     def test_fetch_avisos_cruce_incremental(self):
         cur = _MultiQueryFakeCursor([[], [], []])

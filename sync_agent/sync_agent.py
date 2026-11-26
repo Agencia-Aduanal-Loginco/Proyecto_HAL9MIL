@@ -489,12 +489,13 @@ def fetch_avisos_cruce(cur, since_dt=None):
         filtro = f"{base_where} AND c.FEC_EMIAVC >= ?"
         params = (since_dt,)
     else:
-        filtro = f"{base_where} AND c.FEC_VIGAVC >= CURRENT_DATE"
-        params = ()
+        today_str = datetime.date.today().strftime('%Y-%m-%d')
+        filtro = f"{base_where} AND c.FEC_VIGAVC >= ?"
+        params = (today_str,)
 
     # 1. Encabezado
     sql_cruce = f"""
-        SELECT c.ID_CRUCE, c.ACUSE_AVC, c.PATENTE, c.FEC_EMIAVC, c.FEC_VIGAVC,
+        SELECT c.ID_CRUCE, c.ACUSE_AVC, c.PAT_AGEN, c.FEC_EMIAVC, c.FEC_VIGAVC,
                c.TAG_CRUCE, c.GAF_CRUCE, c.NUM_PLACA
         FROM SAAIO_CRUCE c
         WHERE {filtro}
