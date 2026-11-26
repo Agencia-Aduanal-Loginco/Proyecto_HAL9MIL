@@ -692,7 +692,7 @@ def enviar_dodas_en_lotes(dodas, no_notificar, totales):
              f'{DODA_CHUNK_SIZE} (no_notificar={no_notificar})...')
     for idx, lote in enumerate(lotes, 1):
         payload = build_payload(
-            {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+            {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
             dodas=lote, no_notificar=no_notificar,
         )
         log.info(f'  Tanda DODA {idx}/{len(lotes)}: {len(lote)} DODAs')
@@ -713,7 +713,7 @@ def enviar_avisos_en_lotes(avisos, no_notificar, totales):
              f'{AVC_CHUNK_SIZE} (no_notificar={no_notificar})...')
     for idx, lote in enumerate(lotes, 1):
         payload = build_payload(
-            {}, {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
+            {}, {}, {}, set(), {}, {}, {}, {}, {}, {},
             avisos_cruce=lote, no_notificar=no_notificar,
         )
         log.info(f'  Tanda AVC {idx}/{len(lotes)}: {len(lote)} AVCs')
