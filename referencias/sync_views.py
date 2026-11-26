@@ -105,7 +105,28 @@ def sync_endpoint(request):
             _upsert_guias(guias, stats, error_msgs)
             dodas_creadas = _upsert_dodas(dodas, stats, error_msgs)
             _upsert_avisos_cruce(avisos_cruce, stats, error_msgs)
-            _recalcular_expedientes()
+
+            affected_refs = set()
+            for item in referencias:
+                if r := str(item.get('num_refe', '')).strip():
+                    affected_refs.add(r)
+            for item in contenedores:
+                if r := str(item.get('num_refe', '')).strip():
+                    affected_refs.add(r)
+            for item in dodas:
+                for ref_item in item.get('referencias', []):
+                    if r := str(ref_item.get('num_refe', '')).strip():
+                        affected_refs.add(r)
+            for item in avisos_cruce:
+                for ref_item in item.get('referencias', []):
+                    if r := str(ref_item.get('num_refe', '')).strip():
+                        affected_refs.add(r)
+                id_cruce = item.get('id_cruce')
+                if id_cruce:
+                    db_refs = AvisoCruceReferencia.objects.filter(aviso__id_cruce=id_cruce).values_list('num_refe', flat=True)
+                    affected_refs.update(db_refs)
+
+            _recalcular_expedientes(affected_refs if affected_refs else None)
             if dodas_creadas and no_notificar:
                 # Bootstrap: mismo comportamiento que --no-notificar en el
                 # management command import_firebird — marca las DODAs nuevas
@@ -427,9 +448,12 @@ def _upsert_avisos_cruce(avisos_cruce, stats, error_msgs):
             log.warning(f'Error upsert aviso cruce {id_cruce}: {e}')
 
 
-def _recalcular_expedientes():
+def _recalcular_expedientes(num_refes=None):
     now = timezone.now()
-    for ac in AvisoCruceContenedor.objects.filter(contenedor__isnull=True):
+    ac_qs = AvisoCruceContenedor.objects.filter(contenedor__isnull=True)
+    if num_refes is not None:
+        ac_qs = ac_qs.filter(aviso__referencias_amparadas__num_refe__in=num_refes)
+    for ac in ac_qs:
         ref_ids = ac.aviso.referencias_amparadas.filter(referencia__isnull=False).values_list('referencia_id', flat=True)
         cont = Contenedor.objects.filter(num_cont=ac.num_cont, referencia_id__in=ref_ids).first()
         if not cont:
@@ -438,7 +462,11 @@ def _recalcular_expedientes():
             ac.contenedor = cont
             ac.save(update_fields=['contenedor'])
 
-    for contenedor in Contenedor.objects.select_related('referencia').all():
+    cont_qs = Contenedor.objects.select_related('referencia').all()
+    if num_refes is not None:
+        cont_qs = cont_qs.filter(referencia__num_refe__in=num_refes)
+
+    for contenedor in cont_qs:
         referencia = contenedor.referencia
         if not referencia:
             continue
